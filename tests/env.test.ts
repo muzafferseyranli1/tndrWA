@@ -63,6 +63,18 @@ test("PUBLIC_BASE_URL: sondaki / atılır, üretimde https zorunlu", () => {
   assert.throws(() => loadEnv({ ...valid, NODE_ENV: "production", PUBLIC_BASE_URL: "http://x.example.com" }), EnvError);
 });
 
+test("WAHA ayarları: üçü birlikte yoksa kapalı, yarımsa hata, tam olunca yüklenir", () => {
+  assert.equal(loadEnv(valid).waha, null);
+  assert.throws(() => loadEnv({ ...valid, WAHA_URL: "https://w.example.com" }), (err: unknown) => {
+    assert.ok(err instanceof EnvError);
+    assert.ok(err.problems.some((p) => p.includes("WAHA_API_KEY")));
+    return true;
+  });
+  const env = loadEnv({ ...valid, WAHA_URL: "https://w.example.com/", WAHA_API_KEY: "k", WAHA_WEBHOOK_HMAC_KEY: "h" });
+  assert.deepEqual(env.waha, { url: "https://w.example.com", apiKey: "k", hmacKey: "h" });
+  assert.throws(() => loadEnv({ ...valid, WAHA_URL: "w.example.com", WAHA_API_KEY: "k", WAHA_WEBHOOK_HMAC_KEY: "h" }), EnvError);
+});
+
 test("otomatik eşitleme yalnızca açıkça 'true' ise açılır", () => {
   assert.equal(loadEnv(valid).metaAutoSync, false);
   assert.equal(loadEnv({ ...valid, META_AUTO_SYNC: "true" }).metaAutoSync, true);

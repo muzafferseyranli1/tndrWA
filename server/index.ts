@@ -9,6 +9,9 @@ import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
 import { metaRouter } from "./routes/meta";
 import { brandsRouter } from "./routes/brands";
+import { purgeOldWebhookEvents, webhooksRouter } from "./routes/webhooks";
+import { whatsappRouter } from "./routes/whatsapp";
+import { WahaClient } from "./services/waha";
 import { bootstrapBrands } from "./services/brands";
 import { SyncCoordinator, refreshExpiredSoldOut } from "./services/meta-sync";
 import path from "node:path";
@@ -52,6 +55,9 @@ async function main() {
   // Yüklenen ürün görselleri herkese açık (Meta çeker). Dosya adları rastgele ek içerir, listeleme kapalı.
   app.use("/uploads", express.static(path.resolve(env.uploadDir), { index: false, dotfiles: "deny", maxAge: "30d", immutable: true }));
 
+  // WAHA webhook: oturum çerezi yok, HMAC imzasıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
+  app.use("/api/webhooks", webhooksRouter(db, env));
+
   app.use(requireAuth(env.sessionSecret));
   app.use("/api/auth", authRouter(env));
 
@@ -63,6 +69,7 @@ async function main() {
   app.use("/api/products", productsRouter(db, onChange));
   app.use("/api/categories", categoriesRouter(db));
   app.use("/api/meta", metaRouter(db, coordinator));
+  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
@@ -75,6 +82,11 @@ async function main() {
       })
       .catch((err) => logger.error({ err }, "tükendi işareti temizlenemedi"));
   }, 60_000);
+  // Kişisel veri içeren ham webhook olaylarını 14 gün sonra sil (açılışta ve saatte bir)
+  const purge = () => purgeOldWebhookEvents(db).then((n) => n > 0 && logger.info(`${n} eski webhook olayı silindi`)).catch((err) => logger.error({ err }, "eski olaylar silinemedi"));
+  void purge();
+  const purgeTimer = setInterval(purge, 60 * 60 * 1000);
+  logger.info(`WhatsApp (WAHA): ${env.waha ? "ayarlı" : "kapalı (WAHA ayarları eksik)"}`);
   logger.info(`Meta eşitleme: ${env.meta ? (env.metaAutoSync ? "açık, otomatik" : "açık, elle") : "kapalı (Meta ayarları eksik)"}`);
 
   app.all("*", (req, res) => handle(req, res));
@@ -85,6 +97,7 @@ async function main() {
 
   const shutdown = () => {
     clearInterval(expiryTimer);
+    clearInterval(purgeTimer);
     coordinator.stop();
     server.close(() => {
       db.$disconnect().finally(() => process.exit(0));

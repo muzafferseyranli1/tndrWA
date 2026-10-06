@@ -70,6 +70,23 @@ model Product {
   @@index([brandId, groupKey])
 }
 
+// WAHA'dan gelen ham olaylar (mesajlar, oturum durumu). İçerikte müşteri telefon numarası ve mesaj metni bulunur:
+// KVKK gereği düzenli silinir (sunucu 14 günden eski olayları temizler).
+model WebhookEvent {
+  id          Int      @id @default(autoincrement())
+  receivedAt  DateTime @default(now())
+  // WAHA'nın istek kimliği: yeniden denemelerde aynı olay iki kez kaydedilmesin
+  requestId   String?  @unique
+  session     String
+  event       String
+  // Mesaj olaylarında WhatsApp mesaj türü (chat, order, product...); diğerlerinde boş
+  messageType String?
+  body        String
+
+  @@index([receivedAt])
+  @@index([session, event])
+}
+
 // Ayar anahtar/değer deposu (mesaj şablonları vb. ileride burada tutulacak).
 model Setting {
   key       String   @id

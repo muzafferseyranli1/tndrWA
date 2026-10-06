@@ -10,6 +10,14 @@ export interface MetaEnv {
   baseUrl: string;
 }
 
+export interface WahaEnv {
+  /** WAHA adresi, örn. https://waha-tndrwa.derinsoft.com.tr */
+  url: string;
+  apiKey: string;
+  /** Webhook imzası için ortak gizli anahtar (WAHA'daki WHATSAPP_HOOK_HMAC_KEY ile aynı) */
+  hmacKey: string;
+}
+
 export interface Env {
   nodeEnv: "development" | "production" | "test";
   port: number;
@@ -25,6 +33,8 @@ export interface Env {
   meta: MetaEnv | null;
   /** true ise panelde yapılan değişiklikler birkaç saniye içinde otomatik Meta'ya gider. */
   metaAutoSync: boolean;
+  /** WAHA ayarları eksikse null: panel çalışır, WhatsApp sayfası "ayar eksik" der, webhook kabul edilmez. */
+  waha: WahaEnv | null;
 }
 
 export class EnvError extends Error {
@@ -89,6 +99,18 @@ export function loadEnv(source: Source = process.env): Env {
     problems.push(`Meta ayarları yarım: ${missing.join(", ")} eksik`);
   }
 
+  // WAHA: adres, API anahtarı ve webhook anahtarı birlikte tanımlı olmalı; hiçbiri yoksa özellik kapalıdır.
+  const wahaKeys = ["WAHA_URL", "WAHA_API_KEY", "WAHA_WEBHOOK_HMAC_KEY"] as const;
+  const wahaSet = wahaKeys.filter((k) => source[k]?.trim());
+  let waha: WahaEnv | null = null;
+  if (wahaSet.length === wahaKeys.length) {
+    const url = source.WAHA_URL!.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\/[^\s/]+/.test(url)) problems.push("WAHA_URL http(s):// ile başlamalı");
+    waha = { url, apiKey: source.WAHA_API_KEY!.trim(), hmacKey: source.WAHA_WEBHOOK_HMAC_KEY!.trim() };
+  } else if (wahaSet.length > 0) {
+    problems.push(`WAHA ayarları yarım: ${wahaKeys.filter((k) => !source[k]?.trim()).join(", ")} eksik`);
+  }
+
   const publicRaw = source.PUBLIC_BASE_URL?.trim();
   let publicBaseUrl: string | null = null;
   if (publicRaw) {
@@ -112,5 +134,6 @@ export function loadEnv(source: Source = process.env): Env {
     publicBaseUrl,
     meta,
     metaAutoSync: source.META_AUTO_SYNC?.trim().toLowerCase() === "true",
+    waha,
   };
 }
