@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  // Meta kataloğundaki retailer_id; oluşturulduktan sonra DEĞİŞMEZ
+  retailerId  String   @unique
+  name        String
+  description String   @default("")
+  // Liste fiyatı (kuruş). Nakit/kart indirimi sipariş anında uygulanır, burada tutulmaz.
+  priceKurus  Int
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+  imagePath   String?
+  // ACTIVE | PASSIVE (PASSIVE: katalogda hiç görünmez)
+  status      String   @default("ACTIVE")
+  // Bu ana kadar "bugün tükendi" (sonraki sabah otomatik açılır)
+  soldOutUntil DateTime?
+  sortOrder   Int      @default(0)
+  // Meta eşitleme durumu (Aşama 2b'de kullanılacak)
+  metaId        String?
+  // Ürün şu an Meta kataloğunda mı (silme/oluşturma kararı için)
+  onMeta        Boolean  @default(false)
+  metaSyncState String   @default("PENDING") // PENDING | SYNCED | ERROR
+  metaError     String?
+  metaSyncedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+}
+
+// Ayar anahtar/değer deposu (mesaj şablonları vb. ileride burada tutulacak).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,97 @@
+import express from "express";
+import next from "next";
+import { EnvError, loadEnv } from "./lib/env";
+import { logger } from "./lib/logger";
+import { db } from "./lib/db";
+import { requireAuth } from "./middleware/require-auth";
+import { authRouter } from "./routes/auth";
+import { categoriesRouter, productsRouter } from "./routes/products";
+import { imagesRouter } from "./routes/images";
+import { metaRouter } from "./routes/meta";
+import { MetaCatalogClient } from "./services/meta-catalog";
+import { SyncCoordinator, refreshExpiredSoldOut } from "./services/meta-sync";
+import path from "node:path";
+
+async function main() {
+  let env;
+  try {
+    env = loadEnv();
+  } catch (err) {
+    // Eksik yapılandırmada sessizce devam etme: açık hata ile dur.
+    console.error(err instanceof EnvError ? err.message : err);
+    process.exit(1);
+  }
+
+  const dev = env.nodeEnv !== "production";
+  const nextApp = next({ dev, dir: process.cwd() });
+  const handle = nextApp.getRequestHandler();
+  await nextApp.prepare();
+
+  const app = express();
+  app.disable("x-powered-by");
+  app.set("trust proxy", 1); // Traefik arkasında gerçek istemci IP'si
+
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "same-origin");
+    next();
+  });
+
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await db.$queryRaw`SELECT 1`;
+      res.json({ ok: true });
+    } catch (err) {
+      logger.error({ err }, "sağlık kontrolü: veritabanı yanıt vermedi");
+      res.status(503).json({ ok: false });
+    }
+  });
+
+  // Yüklenen ürün görselleri herkese açık (Meta çeker). Dosya adları rastgele ek içerir, listeleme kapalı.
+  app.use("/uploads", express.static(path.resolve(env.uploadDir), { index: false, dotfiles: "deny", maxAge: "30d", immutable: true }));
+
+  app.use(requireAuth(env.sessionSecret));
+  app.use("/api/auth", authRouter(env));
+
+  const coordinator = new SyncCoordinator(db, env.meta ? new MetaCatalogClient(env.meta) : null, env.publicBaseUrl, env.metaAutoSync);
+  const onChange = () => coordinator.trigger();
+  app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
+  app.use("/api/products", productsRouter(db, onChange));
+  app.use("/api/categories", categoriesRouter(db));
+  app.use("/api/meta", metaRouter(db, coordinator));
+
+  // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
+  const expiryTimer = setInterval(() => {
+    refreshExpiredSoldOut(db, new Date())
+      .then((n) => {
+        if (n > 0) {
+          logger.info(`${n} ürünün "bugün tükendi" işareti kaldırıldı`);
+          coordinator.trigger();
+        }
+      })
+      .catch((err) => logger.error({ err }, "tükendi işareti temizlenemedi"));
+  }, 60_000);
+  logger.info(`Meta eşitleme: ${coordinator.blockers().length ? "kapalı (" + coordinator.blockers().join("; ") + ")" : env.metaAutoSync ? "açık, otomatik" : "açık, elle"}`);
+
+  app.all("*", (req, res) => handle(req, res));
+
+  const server = app.listen(env.port, () => {
+    logger.info(`tndrWA http://localhost:${env.port} (${env.nodeEnv}) üzerinde çalışıyor`);
+  });
+
+  const shutdown = () => {
+    clearInterval(expiryTimer);
+    coordinator.stop();
+    server.close(() => {
+      db.$disconnect().finally(() => process.exit(0));
+    });
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

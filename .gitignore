@@ -1,0 +1,24 @@
+# Gizli değerler: asla commit edilmez
+.env
+.env.*
+!.env.example
+
+# Bağımlılıklar ve derleme çıktıları
+node_modules/
+.next/
+.next-e2e/
+dist/
+build/
+
+# Yüklenen ürün görselleri (kalıcı volume'de tutulur)
+uploads/
+
+# Loglar, sistem dosyaları
+*.log
+.DS_Store
+Thumbs.db
+
+# Yerel SQLite dosyaları
+*.db
+*.db-journal
+*.tsbuildinfo
