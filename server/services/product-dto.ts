@@ -21,6 +21,7 @@ export function toProductDto(p: ProductWithCategory, now: Date = new Date()): Pr
     soldOutUntil: p.soldOutUntil ? p.soldOutUntil.toISOString() : null,
     availability: availabilityOf({ status, soldOutUntil: p.soldOutUntil }, now),
     sortOrder: p.sortOrder,
+    onMeta: p.onMeta,
     metaSyncState: p.metaSyncState as ProductDto["metaSyncState"],
     metaError: p.metaError,
     metaSyncedAt: p.metaSyncedAt ? p.metaSyncedAt.toISOString() : null,

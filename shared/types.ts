@@ -19,6 +19,7 @@ export interface ProductDto {
   soldOutUntil: string | null;
   availability: Availability;
   sortOrder: number;
+  onMeta: boolean;
   metaSyncState: "PENDING" | "SYNCED" | "ERROR";
   metaError: string | null;
   metaSyncedAt: string | null;

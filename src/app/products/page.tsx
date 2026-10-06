@@ -128,7 +128,11 @@ export default function ProductsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{p.name}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${badge[p.availability].cls}`}>{badge[p.availability].text}</span>
-                        <span title={p.metaError ?? ""} className={`rounded-full px-2 py-0.5 text-xs ${metaBadge[p.metaSyncState].cls}`}>{metaBadge[p.metaSyncState].text}</span>
+                        {p.metaSyncState === "SYNCED" && !p.onMeta ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">Meta: katalogda yok</span>
+                        ) : (
+                          <span title={p.metaError ?? ""} className={`rounded-full px-2 py-0.5 text-xs ${metaBadge[p.metaSyncState].cls}`}>{metaBadge[p.metaSyncState].text}</span>
+                        )}
                       </div>
                       {p.metaError && <p className="text-xs text-red-600">{p.metaError}</p>}
                       <p className="truncate text-sm text-slate-500">{p.description || "Açıklama yok"}</p>
