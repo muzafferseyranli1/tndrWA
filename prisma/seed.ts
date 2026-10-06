@@ -94,6 +94,11 @@ const MENU: { category: string; items: Seed[] }[] = [
 ];
 
 async function main() {
+  // --if-empty: yalnızca ürün tablosu boşsa yükle (sunucuda ilk açılış). Sonradan silinen/değişen ürünler geri gelmez.
+  if (process.argv.includes("--if-empty") && (await db.product.count()) > 0) {
+    console.log("Seed atlandı: veritabanında zaten ürün var.");
+    return;
+  }
   let created = 0;
   let updated = 0;
   for (const [catIndex, group] of MENU.entries()) {
