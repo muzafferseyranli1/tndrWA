@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { WahaClient } from "../server/services/waha";
-import { isDiscoveryEvent } from "../server/routes/webhooks";
+import { compactForLog, isDiscoveryEvent } from "../server/routes/webhooks";
 
 const cfg = { url: "https://waha.example.test", apiKey: "k", hmacKey: "h" };
 
@@ -65,4 +65,13 @@ test("keşif günlüğü: sipariş mesajı türü ve JSON anahtarı yakalanır, 
   // şifreli geçmiş verisi: rastgele harf dizileri, JSON anahtarı değil
   assert.equal(isDiscoveryEvent("engine.event", null, '{"initialHistBootstrapInlinePayload":"eAHtnXt8E9W2xorderQ4hcartfoo9catalog"}'), false);
   assert.equal(isDiscoveryEvent("session.status", null, '{"order":1}'), false);
+});
+
+test("günlük kısaltma: uzun base64 küçük resim çıkar, sipariş alanları kalır", () => {
+  const raw = JSON.stringify({ event: "engine.event", payload: { data: { Message: { orderMessage: { orderID: "123", itemCount: 2, thumbnail: "A".repeat(5000), totalAmount1000: 200000 } } } } });
+  const out = compactForLog(raw);
+  assert.ok(out.length < 400, `kısalmalı, uzunluk ${out.length}`);
+  assert.ok(out.includes('"orderID":"123"') && out.includes('"itemCount":2') && out.includes('"totalAmount1000":200000'));
+  assert.ok(out.includes("<5000 karakter>"));
+  assert.equal(compactForLog("json degil".repeat(2000), 50).length, 50);
 });

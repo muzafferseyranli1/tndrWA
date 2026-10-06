@@ -26,6 +26,24 @@ const DISCOVERY_TYPE = /order|product|catalog|cart/i;
 // Ham metinde yalnızca JSON ANAHTARI olarak geçen eşleşmeler sayılır ("orderMessage": ...). Şifreli base64 verideki rastgele harf dizileri sayılmaz.
 const DISCOVERY_KEY = /"[A-Za-z_]*(order|product|catalog|cart)[A-Za-z_]*"\s*:/i;
 
+/**
+ * Günlük için küçültür: 200 karakterden uzun metinleri (base64 küçük resim, şifreli veri) kısaltır,
+ * böylece siparişin asıl alanları kesilmeden okunabilir. JSON değilse düz kırpar.
+ */
+export function compactForLog(rawText: string, maxChars = 8000): string {
+  const shrink = (v: unknown): unknown => {
+    if (typeof v === "string") return v.length > 200 ? `<${v.length} karakter>` : v;
+    if (Array.isArray(v)) return v.map(shrink);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, shrink(x)]));
+    return v;
+  };
+  try {
+    return JSON.stringify(shrink(JSON.parse(rawText))).slice(0, maxChars);
+  } catch {
+    return rawText.slice(0, maxChars);
+  }
+}
+
 /** Sipariş/ürün/katalog olayı mı (günlüğe ham içerik yazılsın mı)? */
 export function isDiscoveryEvent(event: string, messageType: string | null, rawText: string): boolean {
   if (messageType && DISCOVERY_TYPE.test(messageType)) return true;
@@ -71,7 +89,7 @@ export function webhooksRouter(db: PrismaClient, env: Env): Router {
     logger.info({ event, session, messageType }, "WAHA olayı alındı");
     // Sipariş/ürün/katalog mesajlarının biçimini keşfetmek için ham içerik günlüğe de (kısaltılmış) yazılır
     if (isDiscoveryEvent(event, messageType, text)) {
-      logger.info({ event, session, messageType, raw: text.slice(0, 6000) }, "WAHA keşif: sipariş/katalog olayı");
+      logger.info({ event, session, messageType, raw: compactForLog(text) }, "WAHA keşif: sipariş/katalog olayı");
     }
     res.json({ ok: true });
   });
