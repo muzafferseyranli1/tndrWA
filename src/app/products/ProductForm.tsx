@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useBrands } from "@/lib/brand";
 import ImageUploader from "@/components/ImageUploader";
 import type { CategoryDto, ProductDto } from "@shared/types";
 
@@ -10,23 +11,29 @@ const input = "w-full rounded-lg border border-slate-300 px-3 py-2 outline-none 
 
 export default function ProductForm({ product: initial }: { product?: ProductDto }) {
   const router = useRouter();
+  const { brand: selectedBrand, brands } = useBrands();
   const [product, setProduct] = useState<ProductDto | undefined>(initial);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [categoryId, setCategoryId] = useState<number | "">(product?.categoryId ?? "");
+  const [categoryId, setCategoryId] = useState<number | "">(initial?.categoryId ?? "");
   const [newCategory, setNewCategory] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Düzenlemede ürünün kendi markası, yeni üründe üstte seçili marka
+  const brandId = product?.brandId ?? selectedBrand?.id;
+  const brandName = brands?.find((b) => b.id === brandId)?.name;
+
   useEffect(() => {
-    api<CategoryDto[]>("/api/categories")
+    if (brandId === undefined) return;
+    api<CategoryDto[]>(`/api/categories?brandId=${brandId}`)
       .then(setCategories)
       .catch((e: Error) => setError(e.message));
-  }, []);
+  }, [brandId]);
 
   async function addCategory() {
-    if (!newCategory.trim()) return;
+    if (!newCategory.trim() || brandId === undefined) return;
     try {
-      const created = await api<CategoryDto>("/api/categories", { method: "POST", json: { name: newCategory } });
+      const created = await api<CategoryDto>("/api/categories", { method: "POST", json: { brandId, name: newCategory } });
       setCategories((c) => [...c, created]);
       setCategoryId(created.id);
       setNewCategory("");
@@ -42,19 +49,24 @@ export default function ProductForm({ product: initial }: { product?: ProductDto
       setError("Kategori seçin.");
       return;
     }
+    if (brandId === undefined) {
+      setError("Marka yüklenemedi, sayfayı yenileyin.");
+      return;
+    }
     const form = new FormData(event.currentTarget);
-    const body = {
+    const body: Record<string, unknown> = {
       name: form.get("name"),
       description: form.get("description"),
       price: form.get("price"),
       categoryId,
       status: form.get("status"),
     };
+    if (product?.variantLabel) body.variantLabel = form.get("variantLabel");
     setBusy(true);
     setError("");
     try {
       if (product) await api(`/api/products/${product.id}`, { method: "PATCH", json: body });
-      else await api("/api/products", { method: "POST", json: body });
+      else await api("/api/products", { method: "POST", json: { ...body, brandId } });
       router.push("/products");
     } catch (e) {
       setError((e as Error).message);
@@ -64,17 +76,25 @@ export default function ProductForm({ product: initial }: { product?: ProductDto
 
   return (
     <form onSubmit={onSubmit} className="max-w-xl space-y-4">
+      {brandName && <p className="text-sm text-slate-500">Marka: <b className="text-slate-700">{brandName}</b></p>}
       {product ? <ImageUploader product={product} onChange={setProduct} /> : <p className="text-xs text-slate-500">Görseli, ürünü kaydettikten sonra düzenleme sayfasından yükleyebilirsiniz.</p>}
       <label className="block text-sm">
         <span className="mb-1 block text-slate-600">Ürün adı</span>
         <input name="name" required maxLength={150} defaultValue={product?.name} className={input} />
+        {product?.groupKey && <span className="mt-1 block text-xs text-slate-500">Dikkat: ad değiştirilirse yalnızca bu porsiyonun adı değişir; diğer porsiyonlar için ayrıca düzenleyin.</span>}
       </label>
+      {product?.variantLabel && (
+        <label className="block text-sm">
+          <span className="mb-1 block text-slate-600">Porsiyon</span>
+          <input name="variantLabel" required maxLength={40} defaultValue={product.variantLabel} className={input} />
+        </label>
+      )}
       <label className="block text-sm">
         <span className="mb-1 block text-slate-600">Açıklama</span>
         <textarea name="description" rows={3} maxLength={1000} defaultValue={product?.description} className={input} />
       </label>
       <label className="block text-sm">
-        <span className="mb-1 block text-slate-600">Liste fiyatı (TL)</span>
+        <span className="mb-1 block text-slate-600">Liste fiyatı (TL){product?.variantLabel ? ` · ${product.variantLabel}` : ""}</span>
         <input name="price" required inputMode="decimal" placeholder="949 veya 1.099,00" defaultValue={product ? (product.priceKurus / 100).toFixed(2).replace(".", ",") : ""} className={input} />
         <span className="mt-1 block text-xs text-slate-500">İndirimsiz liste fiyatı. Nakit/kart indirimi sipariş sırasında uygulanır.</span>
       </label>

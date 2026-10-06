@@ -1,7 +1,14 @@
 import { metaPrice } from "../../shared/money";
-import type { MetaEnv } from "../lib/env";
 
 export type FetchFn = typeof fetch;
+
+/** Tek bir markanın Meta kataloğuna bağlanmak için gereken ayarlar. */
+export interface MetaClientConfig {
+  version: string;
+  catalogId: string;
+  token: string;
+  baseUrl: string;
+}
 
 export class MetaApiError extends Error {
   constructor(
@@ -36,24 +43,32 @@ export interface ItemSource {
   priceKurus: number;
   imagePath: string | null;
   category: { name: string };
+  brandName: string;
+  groupKey: string | null;
+  variantLabel: string | null;
 }
 
-export const BRAND = "Yerinde Tandır";
+/** Porsiyonlu üründe "Ad (Porsiyon)" biçimi; porsiyonsuzda yalnızca ad. */
+export function metaTitle(name: string, variantLabel: string | null): string {
+  return variantLabel ? `${name} (${variantLabel})` : name;
+}
 
 /** Meta ürün verisi. Görsel yoksa null döner (Meta görselsiz ürünü reddeder). */
 export function buildItemData(p: ItemSource, inStock: boolean, publicBaseUrl: string): Record<string, unknown> | null {
   if (!p.imagePath) return null;
   return {
     id: p.retailerId,
-    title: p.name.slice(0, 200),
+    title: metaTitle(p.name, p.variantLabel).slice(0, 200),
     description: (p.description || p.name).slice(0, 9999),
     availability: inStock ? "in stock" : "out of stock",
     condition: "new",
     price: metaPrice(p.priceKurus),
     link: publicBaseUrl,
     image_link: `${publicBaseUrl}/uploads/${p.imagePath}`,
-    brand: BRAND,
+    brand: p.brandName,
     product_type: p.category.name,
+    // Aynı yemeğin porsiyonları Meta'da tek ürün grubu olarak bağlanır
+    ...(p.groupKey ? { item_group_id: p.groupKey } : {}),
   };
 }
 
@@ -65,7 +80,7 @@ interface CallOptions {
 
 export class MetaCatalogClient {
   constructor(
-    private readonly cfg: MetaEnv,
+    private readonly cfg: MetaClientConfig,
     private readonly fetchFn: FetchFn = fetch,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   ) {}

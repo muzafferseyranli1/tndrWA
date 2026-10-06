@@ -8,7 +8,8 @@ import { authRouter } from "./routes/auth";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
 import { metaRouter } from "./routes/meta";
-import { MetaCatalogClient } from "./services/meta-catalog";
+import { brandsRouter } from "./routes/brands";
+import { bootstrapBrands } from "./services/brands";
 import { SyncCoordinator, refreshExpiredSoldOut } from "./services/meta-sync";
 import path from "node:path";
 
@@ -54,8 +55,10 @@ async function main() {
   app.use(requireAuth(env.sessionSecret));
   app.use("/api/auth", authRouter(env));
 
-  const coordinator = new SyncCoordinator(db, env.meta ? new MetaCatalogClient(env.meta) : null, env.publicBaseUrl, env.metaAutoSync);
-  const onChange = () => coordinator.trigger();
+  await bootstrapBrands(db, env);
+  const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
+  const onChange = (brandId: number) => coordinator.trigger(brandId);
+  app.use("/api/brands", brandsRouter(db));
   app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
   app.use("/api/products", productsRouter(db, onChange));
   app.use("/api/categories", categoriesRouter(db));
@@ -64,15 +67,15 @@ async function main() {
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
     refreshExpiredSoldOut(db, new Date())
-      .then((n) => {
-        if (n > 0) {
-          logger.info(`${n} ürünün "bugün tükendi" işareti kaldırıldı`);
-          coordinator.trigger();
+      .then((brandIds) => {
+        if (brandIds.length > 0) {
+          logger.info(`"Bugün tükendi" işaretleri kaldırıldı (marka: ${brandIds.join(", ")})`);
+          for (const id of brandIds) coordinator.trigger(id);
         }
       })
       .catch((err) => logger.error({ err }, "tükendi işareti temizlenemedi"));
   }, 60_000);
-  logger.info(`Meta eşitleme: ${coordinator.blockers().length ? "kapalı (" + coordinator.blockers().join("; ") + ")" : env.metaAutoSync ? "açık, otomatik" : "açık, elle"}`);
+  logger.info(`Meta eşitleme: ${env.meta ? (env.metaAutoSync ? "açık, otomatik" : "açık, elle") : "kapalı (Meta ayarları eksik)"}`);
 
   app.all("*", (req, res) => handle(req, res));
 

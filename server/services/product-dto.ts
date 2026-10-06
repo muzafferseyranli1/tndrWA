@@ -9,6 +9,9 @@ export function toProductDto(p: ProductWithCategory, now: Date = new Date()): Pr
   const status = p.status as ProductStatus;
   return {
     id: p.id,
+    brandId: p.brandId,
+    groupKey: p.groupKey,
+    variantLabel: p.variantLabel,
     retailerId: p.retailerId,
     name: p.name,
     description: p.description,

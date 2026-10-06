@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MetaApiError, MetaCatalogClient, buildItemData, type ItemSource } from "../server/services/meta-catalog";
+import { MetaApiError, MetaCatalogClient, buildItemData, metaTitle, type ItemSource } from "../server/services/meta-catalog";
 
 const cfg = { version: "v23.0", catalogId: "999", token: "SECRET-TOKEN-VALUE", baseUrl: "https://graph.example.test" };
 const noSleep = async () => undefined;
@@ -12,6 +12,9 @@ const product: ItemSource = {
   priceKurus: 99900,
   imagePath: "tandir-tabagi-100-g-ab12cd34.jpg",
   category: { name: "Et Tandırlar" },
+  brandName: "Yerinde Tandır",
+  groupKey: null,
+  variantLabel: null,
 };
 
 function fakeFetch(handler: (url: URL, init: RequestInit) => { status?: number; body: unknown }): { fn: typeof fetch; calls: { url: URL; init: RequestInit }[] } {
@@ -40,6 +43,15 @@ test("ürün verisi: liste fiyatı, stok durumu, kategori ve herkese açık gör
     product_type: "Et Tandırlar",
   });
   assert.equal(buildItemData(product, false, "https://x.test")?.availability, "out of stock");
+});
+
+test("porsiyonlu ürün: başlıkta porsiyon adı, aynı yemek item_group_id ile bağlanır", () => {
+  const half = buildItemData({ ...product, name: "Bahçeden", variantLabel: "Yarım", groupKey: "BAH-1", priceKurus: 44300 }, true, "https://x.test");
+  assert.equal(half?.title, "Bahçeden (Yarım)");
+  assert.equal(half?.item_group_id, "BAH-1");
+  assert.equal(half?.price, "443.00 TRY");
+  assert.equal(metaTitle("Su (50 cl)", null), "Su (50 cl)");
+  assert.equal("item_group_id" in (buildItemData(product, true, "https://x.test") ?? {}), false);
 });
 
 test("görselsiz ürün için veri üretilmez; boş açıklamada ad kullanılır", () => {

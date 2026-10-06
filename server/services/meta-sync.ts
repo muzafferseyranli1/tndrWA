@@ -1,34 +1,36 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Brand, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import type { SyncSummaryDto } from "../../shared/types";
+import type { MetaEnv } from "../lib/env";
 import { logger } from "../lib/logger";
-import { buildItemData, type BatchItemError, type BatchRequest, type MetaCatalogClient } from "./meta-catalog";
+import { MetaCatalogClient, buildItemData, type BatchItemError, type BatchRequest, type FetchFn } from "./meta-catalog";
 
 const CHUNK = 100;
 
 export interface SyncOptions {
-  /** Yalnızca bu ürünler; verilmezse bekleyen/hatalı tüm ürünler. */
+  /** Yalnızca bu ürünler; verilmezse markanın bekleyen/hatalı tüm ürünleri. */
   ids?: number[];
 }
 
-/** Süresi dolan "bugün tükendi" işaretlerini temizler ve ürünü Meta'ya yeniden gönderilecek diye işaretler. */
-export async function refreshExpiredSoldOut(db: PrismaClient, now: Date): Promise<number> {
-  const res = await db.product.updateMany({
-    where: { soldOutUntil: { lte: now } },
-    data: { soldOutUntil: null, metaSyncState: "PENDING" },
-  });
-  return res.count;
+/** Süresi dolan "bugün tükendi" işaretlerini temizler. Etkilenen markaların kimliklerini döndürür. */
+export async function refreshExpiredSoldOut(db: PrismaClient, now: Date): Promise<number[]> {
+  const expired = await db.product.findMany({ where: { soldOutUntil: { lte: now } }, select: { brandId: true }, distinct: ["brandId"] });
+  if (!expired.length) return [];
+  await db.product.updateMany({ where: { soldOutUntil: { lte: now } }, data: { soldOutUntil: null, metaSyncState: "PENDING" } });
+  return expired.map((e) => e.brandId);
 }
 
+/** Bir markanın ürünlerini o markanın kataloğuna eşitler. Başka markaya ait ürüne dokunmaz. */
 export async function syncProducts(
   db: PrismaClient,
   client: MetaCatalogClient,
+  brand: Brand,
   publicBaseUrl: string,
   options: SyncOptions = {},
   now: Date = new Date(),
 ): Promise<SyncSummaryDto> {
   const products = await db.product.findMany({
-    where: options.ids ? { id: { in: options.ids } } : { metaSyncState: { in: ["PENDING", "ERROR"] } },
+    where: { brandId: brand.id, ...(options.ids ? { id: { in: options.ids } } : { metaSyncState: { in: ["PENDING", "ERROR"] } }) },
     include: { category: true },
     orderBy: { id: "asc" },
   });
@@ -62,7 +64,7 @@ export async function syncProducts(
       continue;
     }
 
-    const data = buildItemData(p, availability === "IN_STOCK", publicBaseUrl);
+    const data = buildItemData({ ...p, brandName: brand.name }, availability === "IN_STOCK", publicBaseUrl);
     if (!data) {
       await fail(p.id, p.retailerId, "Görsel yüklenmemiş. Meta, ürünler için görsel ister.");
       continue;
@@ -80,7 +82,7 @@ export async function syncProducts(
       errors = (await client.waitForBatch(handle)).errors;
     } catch (err) {
       // Bu grup Meta'ya ulaşmadı/bitmedi: durumları değiştirme (bekliyor kalsın), hatayı yukarı bildir
-      logger.warn({ err: (err as Error).message }, "Meta batch başarısız");
+      logger.warn({ err: (err as Error).message, brand: brand.code }, "Meta batch başarısız");
       throw err;
     }
 
@@ -108,23 +110,29 @@ export async function syncProducts(
   return summary;
 }
 
-/** Eşitlemeleri sıraya koyar (aynı anda tek eşitleme) ve panel değişikliklerinden sonra gecikmeli otomatik çalıştırır. */
+/**
+ * Marka başına eşitlemeleri sıraya koyar (bir markada aynı anda tek eşitleme) ve panel
+ * değişikliklerinden sonra gecikmeli otomatik çalıştırır. Her markanın kendi katalog kimliği
+ * ve (varsa) kendi jetonu vardır.
+ */
 export class SyncCoordinator {
-  private running = false;
-  private timer: NodeJS.Timeout | null = null;
+  private running = new Set<number>();
+  private timers = new Map<number, NodeJS.Timeout>();
 
   constructor(
     private readonly db: PrismaClient,
-    private readonly client: MetaCatalogClient | null,
+    private readonly meta: MetaEnv | null,
     private readonly publicBaseUrl: string | null,
     private readonly autoSync: boolean,
+    private readonly fetchFn?: FetchFn,
     private readonly debounceMs = 3000,
   ) {}
 
-  /** Eksik ayarlar listesi; boşsa eşitleme yapılabilir. */
-  blockers(): string[] {
+  /** O marka için eksik ayarlar; boşsa eşitleme yapılabilir. */
+  blockers(brand: Brand): string[] {
     const list: string[] = [];
-    if (!this.client) list.push("Meta ayarları eksik (META_GRAPH_VERSION, META_CATALOG_ID, META_ACCESS_TOKEN)");
+    if (!this.meta) list.push("Meta ayarları eksik (META_GRAPH_VERSION, META_ACCESS_TOKEN)");
+    if (!brand.metaCatalogId) list.push(`${brand.name} için Meta katalog kimliği girilmemiş (Markalar sayfası)`);
     if (!this.publicBaseUrl) list.push("PUBLIC_BASE_URL tanımlı değil (Meta görselleri bu adresten çeker)");
     return list;
   }
@@ -137,29 +145,44 @@ export class SyncCoordinator {
     return this.publicBaseUrl;
   }
 
-  async run(options: SyncOptions = {}): Promise<SyncSummaryDto> {
-    const blockers = this.blockers();
-    if (blockers.length || !this.client || !this.publicBaseUrl) throw new Error(blockers.join("; "));
-    if (this.running) throw new Error("Bir eşitleme zaten sürüyor, bitmesini bekleyin.");
-    this.running = true;
+  private clientFor(brand: Brand): MetaCatalogClient {
+    const meta = this.meta!;
+    return new MetaCatalogClient(
+      { version: meta.version, catalogId: brand.metaCatalogId!, token: meta.brandTokens[brand.code] ?? meta.token, baseUrl: meta.baseUrl },
+      this.fetchFn,
+    );
+  }
+
+  async run(brandId: number, options: SyncOptions = {}): Promise<SyncSummaryDto> {
+    const brand = await this.db.brand.findUnique({ where: { id: brandId } });
+    if (!brand) throw new Error("Marka bulunamadı.");
+    const blockers = this.blockers(brand);
+    if (blockers.length) throw new Error(blockers.join("; "));
+    if (this.running.has(brand.id)) throw new Error("Bu marka için bir eşitleme zaten sürüyor, bitmesini bekleyin.");
+    this.running.add(brand.id);
     try {
-      return await syncProducts(this.db, this.client, this.publicBaseUrl, options);
+      return await syncProducts(this.db, this.clientFor(brand), brand, this.publicBaseUrl!, options);
     } finally {
-      this.running = false;
+      this.running.delete(brand.id);
     }
   }
 
-  /** Panelde bir değişiklik olduğunda çağrılır; otomatik eşitleme açıksa kısa gecikmeyle çalıştırır. */
-  trigger(): void {
-    if (!this.autoSync || this.blockers().length) return;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      this.run().catch((err: Error) => logger.warn({ err: err.message }, "otomatik eşitleme başarısız"));
-    }, this.debounceMs);
+  /** Bir markada değişiklik olduğunda çağrılır; otomatik eşitleme açıksa kısa gecikmeyle çalıştırır. */
+  trigger(brandId: number): void {
+    if (!this.autoSync) return;
+    const existing = this.timers.get(brandId);
+    if (existing) clearTimeout(existing);
+    this.timers.set(
+      brandId,
+      setTimeout(() => {
+        this.timers.delete(brandId);
+        this.run(brandId).catch((err: Error) => logger.warn({ err: err.message, brandId }, "otomatik eşitleme başarısız"));
+      }, this.debounceMs),
+    );
   }
 
   stop(): void {
-    if (this.timer) clearTimeout(this.timer);
+    for (const t of this.timers.values()) clearTimeout(t);
+    this.timers.clear();
   }
 }

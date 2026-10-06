@@ -40,3 +40,11 @@ export function metaPrice(kurus: number): string {
 export function percentOf(kurus: number, percent: number): number {
   return Math.round((kurus * percent) / 100);
 }
+
+/**
+ * Porsiyon çarpanıyla fiyat (örn. 1,5 porsiyon): fiyat x çarpan, en yakın TAM LİRAYA yuvarlanır (yarım yukarı).
+ * 632,50 x 1,5 = 948,75 -> 949 TL; 863 x 1,5 = 1294,50 -> 1295 TL.
+ */
+export function portionPrice(kurus: number, factor: number): number {
+  return Math.round((kurus * factor) / 100) * 100;
+}

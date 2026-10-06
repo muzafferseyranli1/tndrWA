@@ -1,7 +1,10 @@
-// Menü başlangıç verisi (Yemeksepeti partner ekran görüntülerinden). Tekrar çalıştırılabilir (retailerId'ye göre upsert).
+// Menü başlangıç verisi. Tekrar çalıştırılabilir: mevcut ürünlere dokunmaz.
+// Yerinde Tandır: Yemeksepeti partner ekran görüntülerinden. Yerinde Pide: prisma/data/pide-menu.json (satış fiyat listesi).
 // Kategori sırası Yemeksepeti menüsündeki gibidir.
 // Fiyatlar LİSTE fiyatıdır; nakit/kart %15 indirimi sipariş anında uygulanır.
 import { PrismaClient } from "@prisma/client";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { slugify } from "../shared/slug";
 
 const db = new PrismaClient();
@@ -13,7 +16,7 @@ interface Seed {
   status?: "ACTIVE" | "PASSIVE";
 }
 
-const MENU: { category: string; items: Seed[] }[] = [
+const TANDIR_MENU: { category: string; items: Seed[] }[] = [
   {
     category: "Menüler",
     items: [
@@ -93,41 +96,91 @@ const MENU: { category: string; items: Seed[] }[] = [
   },
 ];
 
-async function main() {
-  // --if-empty: yalnızca ürün tablosu boşsa yükle (sunucuda ilk açılış). Sonradan silinen/değişen ürünler geri gelmez.
-  if (process.argv.includes("--if-empty") && (await db.product.count()) > 0) {
-    console.log("Seed atlandı: veritabanında zaten ürün var.");
-    return;
-  }
+interface Row {
+  name: string;
+  description: string;
+  priceKurus: number;
+  status: "ACTIVE" | "PASSIVE";
+  groupKey: string | null;
+  variantLabel: string | null;
+}
+
+/** Yerinde Pide satış listesi: porsiyonlu ürünler (örn. 1 Porsiyon / 1,5 Porsiyon) ayrı kayıt, aynı groupKey. */
+interface PideItem {
+  kod: string;
+  name: string;
+  priceKurus?: number;
+  variants?: { label: string; priceKurus: number }[];
+}
+
+function loadPide(): { category: string; rows: Row[] }[] {
+  const data = JSON.parse(readFileSync(path.join(__dirname, "data", "pide-menu.json"), "utf-8")) as { category: string; items: PideItem[] }[];
+  return data.map((g) => ({
+    category: g.category,
+    rows: g.items.flatMap((it): Row[] =>
+      it.variants
+        ? it.variants.map((v) => ({ name: it.name, description: "", priceKurus: v.priceKurus, status: "ACTIVE" as const, groupKey: it.kod, variantLabel: v.label }))
+        : [{ name: it.name, description: "", priceKurus: it.priceKurus!, status: "ACTIVE" as const, groupKey: null, variantLabel: null }],
+    ),
+  }));
+}
+
+function loadTandir(): { category: string; rows: Row[] }[] {
+  return TANDIR_MENU.map((g) => ({
+    category: g.category,
+    rows: g.items.map((i) => ({ name: i.name, description: i.description, priceKurus: Math.round(i.price * 100), status: i.status ?? "ACTIVE", groupKey: null, variantLabel: null })),
+  }));
+}
+
+async function seedBrand(code: string, menu: { category: string; rows: Row[] }[], ifEmpty: boolean): Promise<string> {
+  const brand = await db.brand.findUnique({ where: { code } });
+  if (!brand) return `${code}: marka bulunamadı (migration uygulanmamış?)`;
+  // --if-empty: o markanın hiç ürünü yoksa yükle (sunucuda ilk açılış). Sonradan silinen/değişen ürünler geri gelmez.
+  if (ifEmpty && (await db.product.count({ where: { brandId: brand.id } })) > 0) return `${brand.name}: atlandı (zaten ürün var)`;
+
   let created = 0;
-  let updated = 0;
-  for (const [catIndex, group] of MENU.entries()) {
+  let existed = 0;
+  const used = new Set<string>(); // retailer_id marka genelinde benzersiz; aynı slug çıkarsa -2, -3 eklenir (her çalıştırmada aynı sırayla)
+  for (const [catIndex, group] of menu.entries()) {
     const category = await db.category.upsert({
-      where: { name: group.category },
+      where: { brandId_name: { brandId: brand.id, name: group.category } },
       update: { sortOrder: catIndex },
-      create: { name: group.category, sortOrder: catIndex },
+      create: { brandId: brand.id, name: group.category, sortOrder: catIndex },
     });
-    for (const [i, item] of group.items.entries()) {
-      const retailerId = slugify(item.name);
-      const data = {
-        name: item.name,
-        description: item.description,
-        priceKurus: Math.round(item.price * 100),
-        categoryId: category.id,
-        status: item.status ?? "ACTIVE",
-        sortOrder: i,
-      };
-      const existing = await db.product.findUnique({ where: { retailerId } });
+    for (const [i, row] of group.rows.entries()) {
+      const base = slugify(row.variantLabel ? `${row.name} ${row.variantLabel}` : row.name) || "urun";
+      let retailerId = base;
+      for (let n = 2; used.has(retailerId); n++) retailerId = `${base}-${n}`;
+      used.add(retailerId);
+      const existing = await db.product.findUnique({ where: { brandId_retailerId: { brandId: brand.id, retailerId } } });
       if (existing) {
-        // Panelden yapılan değişiklikleri ezme: yalnızca henüz değiştirilmemiş alanları dokunmadan bırak
-        updated++;
+        existed++;
         continue;
       }
-      await db.product.create({ data: { retailerId, ...data } });
+      await db.product.create({
+        data: {
+          brandId: brand.id,
+          retailerId,
+          name: row.name,
+          description: row.description,
+          priceKurus: row.priceKurus,
+          categoryId: category.id,
+          status: row.status,
+          groupKey: row.groupKey,
+          variantLabel: row.variantLabel,
+          sortOrder: i,
+        },
+      });
       created++;
     }
   }
-  console.log(`Seed tamam: ${created} ürün eklendi, ${updated} ürün zaten vardı (dokunulmadı).`);
+  return `${brand.name}: ${created} ürün eklendi, ${existed} ürün zaten vardı (dokunulmadı)`;
+}
+
+async function main() {
+  const ifEmpty = process.argv.includes("--if-empty");
+  console.log(await seedBrand("tandir", loadTandir(), ifEmpty));
+  console.log(await seedBrand("pide", loadPide(), ifEmpty));
 }
 
 main()

@@ -8,6 +8,11 @@ Hedef: Müşteri QR/link ile WhatsApp kataloğuna girer, sipariş verir. Panel s
 - Meta: yeni portföy, katalog (`1868568421015157`), uygulama, sistem kullanıcısı, jeton hazır. Okuma ve tek ürün oluştur/güncelle/sil testi **başarılı** (`scripts/meta-check.mjs`, `scripts/meta-write-test.mjs`).
 - Henüz yok: uygulama iskeleti, panel, WAHA, deploy.
 
+## Çok marka (bulut mutfak) — 7 Ekim 2026'da eklendi
+İki marka tek panelde: **Yerinde Tandır** ve **Yerinde Pide**. Marka başına ayrı: ürünler/kategoriler, Meta kataloğu (+ isteğe bağlı ayrı jeton `META_ACCESS_TOKEN_<KOD>`), WhatsApp numarası ve WAHA oturumu (`Brand.waSession`), mesaj şablonları, ödeme tipi/indirim kuralları. Ortak: giriş, mutfak sipariş ekranı. `retailerId` ve kategori adı marka içinde benzersiz. İkinci markanın Meta bağlantısı hazır olmadan eklenebilir: katalog kimliği boş kalır, o marka için gönderim kapalıdır; hazır olunca Markalar sayfasından girilir.
+
+**Porsiyonlar (varyant):** Her porsiyonun kendi fiyatı vardır ve katalogda ayrı ürün olarak görünür (`item_group_id` ile bağlı, başlık "Ad (Porsiyon)"). "1,5 Porsiyon" = fiyat x 1,5, en yakın tam liraya yuvarlanır (632,50 -> 949). "Yarım" porsiyonlar kullanılmaz. Diğer porsiyonlar (500 gr, 4 Kişi, Az...) açık fiyatla eklenir. Görsel aynı yemeğin tüm porsiyonlarında ortaktır. Bu, Aşama 5f'deki "sipariş sonrası porsiyon sorusu" fikrinin yerini alır; seçenek grupları (sos/içecek seçimi, ek ücret) 5f'de ayrıca yapılacak.
+
 ## Mimari
 ```
 Müşteri → WhatsApp kataloğu → sepet/sipariş mesajı

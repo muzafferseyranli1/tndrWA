@@ -1,5 +1,14 @@
 import type { Availability, ProductStatus } from "./availability";
 
+export interface BrandDto {
+  id: number;
+  code: string;
+  name: string;
+  metaCatalogId: string | null;
+  waSession: string | null;
+  productCount: number;
+}
+
 export interface CategoryDto {
   id: number;
   name: string;
@@ -7,6 +16,11 @@ export interface CategoryDto {
 
 export interface ProductDto {
   id: number;
+  brandId: number;
+  /** Aynı yemeğin porsiyonlarını birleştirir (porsiyonsuzda null) */
+  groupKey: string | null;
+  /** "Yarım", "1,5 Pors."... (porsiyonsuzda null) */
+  variantLabel: string | null;
   retailerId: string;
   name: string;
   description: string;

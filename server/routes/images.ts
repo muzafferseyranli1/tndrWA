@@ -16,7 +16,21 @@ async function removeFile(dir: string, name: string | null) {
   await unlink(path.join(dir, name)).catch(() => undefined);
 }
 
-export function imagesRouter(db: PrismaClient, uploadDir: string, onChange: () => void): Router {
+/** Görsel, aynı yemeğin tüm porsiyonları için ortaktır; porsiyonsuz üründe yalnızca kendisi. */
+async function targetIds(db: PrismaClient, product: { id: number; brandId: number; groupKey: string | null }): Promise<number[]> {
+  if (!product.groupKey) return [product.id];
+  const group = await db.product.findMany({ where: { brandId: product.brandId, groupKey: product.groupKey }, select: { id: true } });
+  return group.map((g) => g.id);
+}
+
+/** Artık hiçbir ürünün kullanmadığı eski görsel dosyalarını siler. */
+async function cleanupOrphans(db: PrismaClient, dir: string, names: (string | null)[]) {
+  for (const name of new Set(names)) {
+    if (name && (await db.product.count({ where: { imagePath: name } })) === 0) await removeFile(dir, name);
+  }
+}
+
+export function imagesRouter(db: PrismaClient, uploadDir: string, onChange: (brandId: number) => void): Router {
   const router = Router();
   const dir = path.resolve(uploadDir);
 
@@ -33,7 +47,7 @@ export function imagesRouter(db: PrismaClient, uploadDir: string, onChange: () =
     },
     async (req, res) => {
       const id = Number(req.params.id);
-      const product = Number.isInteger(id) ? await db.product.findUnique({ where: { id } }) : null;
+      const product = Number.isInteger(id) ? await db.product.findUnique({ where: { id }, include: { brand: true } }) : null;
       if (!product) return res.status(404).json({ error: "Ürün bulunamadı." });
       if (!req.file) return res.status(400).json({ error: "Görsel dosyası gerekli (alan adı: image)." });
 
@@ -41,16 +55,17 @@ export function imagesRouter(db: PrismaClient, uploadDir: string, onChange: () =
       if (!img) return res.status(400).json({ error: "Yalnızca JPEG veya PNG görsel yüklenebilir." });
 
       await mkdir(dir, { recursive: true });
-      const fileName = `${product.retailerId}-${randomBytes(4).toString("hex")}.${img.ext}`;
+      // Marka kodu öneki: iki markada aynı retailerId olsa da dosya adları çakışmaz
+      const fileName = `${product.brand.code}-${product.retailerId}-${randomBytes(4).toString("hex")}.${img.ext}`;
       await writeFile(path.join(dir, fileName), req.file.buffer, { flag: "wx" });
-      await removeFile(dir, product.imagePath);
 
-      const updated = await db.product.update({
-        where: { id },
-        data: { imagePath: fileName, metaSyncState: "PENDING", metaError: null },
-        include: { category: true },
-      });
-      onChange();
+      const ids = await targetIds(db, product);
+      const old = (await db.product.findMany({ where: { id: { in: ids } }, select: { imagePath: true } })).map((p) => p.imagePath);
+      await db.product.updateMany({ where: { id: { in: ids } }, data: { imagePath: fileName, metaSyncState: "PENDING", metaError: null } });
+      await cleanupOrphans(db, dir, old);
+
+      const updated = await db.product.findUniqueOrThrow({ where: { id }, include: { category: true } });
+      onChange(product.brandId);
       res.json({ product: toProductDto(updated), warning: sizeWarning(img) });
     },
   );
@@ -59,13 +74,14 @@ export function imagesRouter(db: PrismaClient, uploadDir: string, onChange: () =
     const id = Number(req.params.id);
     const product = Number.isInteger(id) ? await db.product.findUnique({ where: { id } }) : null;
     if (!product) return res.status(404).json({ error: "Ürün bulunamadı." });
-    await removeFile(dir, product.imagePath);
-    const updated = await db.product.update({
-      where: { id },
-      data: { imagePath: null, metaSyncState: "PENDING", metaError: null },
-      include: { category: true },
-    });
-    onChange();
+
+    const ids = await targetIds(db, product);
+    const old = (await db.product.findMany({ where: { id: { in: ids } }, select: { imagePath: true } })).map((p) => p.imagePath);
+    await db.product.updateMany({ where: { id: { in: ids } }, data: { imagePath: null, metaSyncState: "PENDING", metaError: null } });
+    await cleanupOrphans(db, dir, old);
+
+    const updated = await db.product.findUniqueOrThrow({ where: { id }, include: { category: true } });
+    onChange(product.brandId);
     res.json({ product: toProductDto(updated), warning: null });
   });
 

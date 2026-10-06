@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import { api } from "@/lib/api";
+import { useBrands } from "@/lib/brand";
 import type { MetaStatusDto, ProductDto, SyncSummaryDto } from "@shared/types";
 
 const badge: Record<ProductDto["availability"], { text: string; cls: string }> = {
@@ -18,26 +19,35 @@ const metaBadge: Record<ProductDto["metaSyncState"], { text: string; cls: string
   ERROR: { text: "Meta: hata", cls: "bg-red-100 text-red-700" },
 };
 
+const displayName = (p: ProductDto) => (p.variantLabel ? `${p.name} (${p.variantLabel})` : p.name);
+
 export default function ProductsPage() {
+  const { brand } = useBrands();
   const [meta, setMeta] = useState<MetaStatusDto | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncSummaryDto | null>(null);
   const [products, setProducts] = useState<ProductDto[] | null>(null);
+  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
 
+  const brandId = brand?.id;
+
   const load = useCallback(async () => {
+    if (brandId === undefined) return;
     try {
-      const [list, status] = await Promise.all([api<ProductDto[]>("/api/products"), api<MetaStatusDto>("/api/meta/status")]);
+      const [list, status] = await Promise.all([api<ProductDto[]>(`/api/products?brandId=${brandId}`), api<MetaStatusDto>(`/api/meta/status?brandId=${brandId}`)]);
       setProducts(list);
       setMeta(status);
       setError("");
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  }, [brandId]);
 
   useEffect(() => {
+    setProducts(null);
+    setSyncResult(null);
     void load();
   }, [load]);
 
@@ -59,7 +69,7 @@ export default function ProductsPage() {
     setError("");
     setSyncResult(null);
     try {
-      setSyncResult(await api<SyncSummaryDto>("/api/meta/sync", { method: "POST", json: {} }));
+      setSyncResult(await api<SyncSummaryDto>("/api/meta/sync", { method: "POST", json: { brandId } }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -73,15 +83,22 @@ export default function ProductsPage() {
   const toggleStatus = (p: ProductDto) =>
     act(p.id, () => api<ProductDto>(`/api/products/${p.id}`, { method: "PATCH", json: { status: p.status === "ACTIVE" ? "PASSIVE" : "ACTIVE" } }));
 
-  const groups = new Map<string, ProductDto[]>();
-  for (const p of products ?? []) groups.set(p.categoryName, [...(groups.get(p.categoryName) ?? []), p]);
+  const groups = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase("tr");
+    const map = new Map<string, ProductDto[]>();
+    for (const p of products ?? []) {
+      if (q && !displayName(p).toLocaleLowerCase("tr").includes(q) && !p.categoryName.toLocaleLowerCase("tr").includes(q)) continue;
+      map.set(p.categoryName, [...(map.get(p.categoryName) ?? []), p]);
+    }
+    return [...map.entries()];
+  }, [products, query]);
 
   return (
     <>
       <AppHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Ürünler</h1>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Ürünler{brand ? ` · ${brand.name}` : ""}</h1>
           <Link href="/products/new" className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
             Yeni ürün
           </Link>
@@ -109,12 +126,22 @@ export default function ProductsPage() {
           </p>
         )}
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ürün veya kategori ara…"
+          className="mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-brand-500"
+        />
         {!products && !error && <p className="text-slate-500">Yükleniyor…</p>}
+        {products && products.length === 0 && <p className="text-slate-500">Bu markada henüz ürün yok.</p>}
 
         <div className="space-y-6">
-          {[...groups.entries()].map(([category, items]) => (
+          {groups.map(([category, items]) => (
             <section key={category}>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{category}</h2>
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                {category} <span className="font-normal normal-case text-slate-400">({items.length})</span>
+              </h2>
               <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
                 {items.map((p) => (
                   <li key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${p.availability === "HIDDEN" ? "opacity-60" : ""}`}>
@@ -126,7 +153,7 @@ export default function ProductsPage() {
                     )}
                     <div className="min-w-0 flex-1 basis-60">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{p.name}</span>
+                        <span className="font-medium">{displayName(p)}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs ${badge[p.availability].cls}`}>{badge[p.availability].text}</span>
                         {p.metaSyncState === "SYNCED" && !p.onMeta ? (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">Meta: katalogda yok</span>

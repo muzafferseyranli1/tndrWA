@@ -1,7 +1,11 @@
 export interface MetaEnv {
   version: string;
-  catalogId: string;
+  /** Ortak jeton. Markaya özel jeton gerekirse META_ACCESS_TOKEN_<KOD> (örn. META_ACCESS_TOKEN_PIDE). */
   token: string;
+  /** Marka kodu (küçük harf) -> o markaya özel jeton */
+  brandTokens: Record<string, string>;
+  /** Yalnızca ilk kurulumda varsayılan markanın katalog kimliğini doldurmak için (sonra veritabanından okunur). */
+  defaultCatalogId: string | null;
   /** Test için değiştirilebilir; varsayılan resmi Graph API adresi. */
   baseUrl: string;
 }
@@ -60,17 +64,24 @@ export function loadEnv(source: Source = process.env): Env {
   const nodeEnvRaw = source.NODE_ENV?.trim() || "development";
   if (!["development", "production", "test"].includes(nodeEnvRaw)) problems.push("NODE_ENV geçersiz");
 
-  // Meta: üçü birlikte tanımlı olmalı; hiçbiri yoksa özellik kapalıdır.
-  const metaKeys = ["META_GRAPH_VERSION", "META_CATALOG_ID", "META_ACCESS_TOKEN"] as const;
+  // Meta: sürüm ve jeton birlikte tanımlı olmalı; hiçbiri yoksa özellik kapalıdır.
+  // Katalog kimliği artık markaya bağlı (veritabanında); META_CATALOG_ID yalnızca varsayılan marka için ilk doldurmada kullanılır.
+  const metaKeys = ["META_GRAPH_VERSION", "META_ACCESS_TOKEN"] as const;
   const metaSet = metaKeys.filter((k) => source[k]?.trim());
   let meta: MetaEnv | null = null;
   if (metaSet.length === metaKeys.length) {
     const version = source.META_GRAPH_VERSION!.trim();
     if (!/^v\d+\.\d+$/.test(version)) problems.push("META_GRAPH_VERSION v23.0 gibi olmalı");
+    const brandTokens: Record<string, string> = {};
+    for (const [key, value] of Object.entries(source)) {
+      const m = /^META_ACCESS_TOKEN_([A-Z0-9_]+)$/.exec(key);
+      if (m && value?.trim()) brandTokens[m[1].toLowerCase()] = value.trim();
+    }
     meta = {
       version,
-      catalogId: source.META_CATALOG_ID!.trim(),
       token: source.META_ACCESS_TOKEN!.trim(),
+      brandTokens,
+      defaultCatalogId: source.META_CATALOG_ID?.trim() || null,
       baseUrl: (source.META_GRAPH_BASE_URL?.trim() || "https://graph.facebook.com").replace(/\/+$/, ""),
     };
   } else if (metaSet.length > 0) {

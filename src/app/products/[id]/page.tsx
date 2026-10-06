@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { api } from "@/lib/api";
 import ProductForm from "../ProductForm";
+import VariantsPanel from "@/components/VariantsPanel";
 import type { ProductDto } from "@shared/types";
 
 export default function EditProductPage() {
@@ -28,6 +29,7 @@ export default function EditProductPage() {
           <>
             <p className="mb-4 text-xs text-slate-500">Katalog kodu: <code>{product.retailerId}</code> (değiştirilemez)</p>
             <ProductForm product={product} />
+            <VariantsPanel product={product} />
           </>
         )}
       </main>

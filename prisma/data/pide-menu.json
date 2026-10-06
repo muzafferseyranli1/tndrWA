@@ -1,0 +1,1486 @@
+[
+ {
+  "category": "Kahvaltı > Kahvaltı tabakları",
+  "items": [
+   {
+    "kod": "ALLS-86607704",
+    "name": "ALL STAR (2-3 Kişilik)",
+    "variants": [
+     {
+      "label": "3 Kişilik",
+      "priceKurus": 313500
+     },
+     {
+      "label": "4 kişi",
+      "priceKurus": 337500
+     },
+     {
+      "label": "5 kişi",
+      "priceKurus": 362500
+     },
+     {
+      "label": "6 kişi",
+      "priceKurus": 387500
+     }
+    ]
+   },
+   {
+    "kod": "KAHV-56745405",
+    "name": "Kahvaltı Pidesi",
+    "priceKurus": 33000
+   },
+   {
+    "kod": "KAHV-21303986",
+    "name": "Kahvaltı Tabağı (1 Kişilik)",
+    "priceKurus": 80850
+   },
+   {
+    "kod": "MINI-91263225",
+    "name": "Mini Kahvaltı Tabağı",
+    "priceKurus": 46750
+   },
+   {
+    "kod": "PIDE-73223497",
+    "name": "Pideli Kahvaltı (2 Kişilik)",
+    "variants": [
+     {
+      "label": null,
+      "priceKurus": 196900
+     },
+     {
+      "label": "3 kişi",
+      "priceKurus": 221900
+     },
+     {
+      "label": "4 kişi",
+      "priceKurus": 246900
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "İçecekler",
+  "items": [
+   {
+    "kod": "AYRA-94787718",
+    "name": "Ayran - Açık",
+    "priceKurus": 10450
+   },
+   {
+    "kod": "AYRA-60674785",
+    "name": "Ayran - Özerhisar",
+    "priceKurus": 10450
+   },
+   {
+    "kod": "AYRA-87917933",
+    "name": "Ayran - Şişe",
+    "priceKurus": 10450
+   },
+   {
+    "kod": "AYRA-23775479",
+    "name": "Ayran 1 lt",
+    "priceKurus": 23500
+   },
+   {
+    "kod": "CAPP-47793574",
+    "name": "Cappy Karışık",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "CAPP-45455394",
+    "name": "Cappy Şeftali",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "CAPP-15439067",
+    "name": "Cappy Vişne",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "COCA-44868383",
+    "name": "Coca Cola",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "COCA-26609678",
+    "name": "Coca Cola - Şişe",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "COCA-31472938",
+    "name": "Coca Cola Zero",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "COCA-56188043",
+    "name": "Coca Cola Zero - Şişe",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "COCA-93703948",
+    "name": "Coca-Cola 1 lt",
+    "priceKurus": 25500
+   },
+   {
+    "kod": "ÇAYX-30815180",
+    "name": "Çay",
+    "priceKurus": 6600
+   },
+   {
+    "kod": "FANT-54760059",
+    "name": "Fanta",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "GAZO-85725019",
+    "name": "Gazoz Şişe",
+    "priceKurus": 9000
+   },
+   {
+    "kod": "ICET-87561505",
+    "name": "Ice Tea Limon",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "ICET-82416677",
+    "name": "Ice Tea Şeftali",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "LIMO-25037280",
+    "name": "Limonata",
+    "priceKurus": 17050
+   },
+   {
+    "kod": "PORT-99966126",
+    "name": "Portakal Suyu",
+    "priceKurus": 21450
+   },
+   {
+    "kod": "SODA-40175394",
+    "name": "Soda",
+    "priceKurus": 6600
+   },
+   {
+    "kod": "SPRI-83260897",
+    "name": "Sprite",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "SUXX-68218821",
+    "name": "Su",
+    "priceKurus": 6600
+   },
+   {
+    "kod": "ŞALG-51369828",
+    "name": "Şalgam",
+    "priceKurus": 12100
+   },
+   {
+    "kod": "TÜRK-78567047",
+    "name": "Türk Kahvesi",
+    "priceKurus": 8888
+   }
+  ]
+ },
+ {
+  "category": "Yöresel Pideler",
+  "items": [
+   {
+    "kod": "BAHÇ-33482222",
+    "name": "Bahçeden",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   },
+   {
+    "kod": "DIYE-36416744",
+    "name": "Diyet",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   },
+   {
+    "kod": "ISPA-72264337",
+    "name": "Ispanak Harman Peynir",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   },
+   {
+    "kod": "PAST-82906533",
+    "name": "Ispanaklı -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 50050
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 75100
+     }
+    ]
+   },
+   {
+    "kod": "KÖZK-69481409",
+    "name": "Köz Köz",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   },
+   {
+    "kod": "MANT-13912121",
+    "name": "Mantar / Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Kahvaltı > Kahvaltı Soğuklar",
+  "items": [
+   {
+    "kod": "BALK-83146097",
+    "name": "Bal Kaymak",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 41250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 61900
+     }
+    ]
+   },
+   {
+    "kod": "BEYA-50153472",
+    "name": "Beyaz Peynir",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 25850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 38800
+     }
+    ]
+   },
+   {
+    "kod": "KOLO-51101231",
+    "name": "Kolot Peynir",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 25850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 38800
+     }
+    ]
+   },
+   {
+    "kod": "PEYN-10417840",
+    "name": "Peynir Tabağı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 63250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 94900
+     }
+    ]
+   },
+   {
+    "kod": "PEYN-98955572",
+    "name": "Peynirli Söğüş",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 47850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 71800
+     }
+    ]
+   },
+   {
+    "kod": "SIYA-79796023",
+    "name": "Siyah Zeytin",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 23100
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 34700
+     }
+    ]
+   },
+   {
+    "kod": "TELL-35989394",
+    "name": "Telli Peynir",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 25850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 38800
+     }
+    ]
+   },
+   {
+    "kod": "TULL-55668300",
+    "name": "Tullumi Peynir",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 25850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 38800
+     }
+    ]
+   },
+   {
+    "kod": "YERI-50984645",
+    "name": "Yerinde Atom",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 54450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 81700
+     }
+    ]
+   },
+   {
+    "kod": "YEŞI-63768476",
+    "name": "Yeşil Zeytin",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 23100
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 34700
+     }
+    ]
+   },
+   {
+    "kod": "ZEYT-66245280",
+    "name": "Zeytinli Söğüş",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 36850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 55300
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Yerinde Pazar",
+  "items": [
+   {
+    "kod": "BEYA-92660256",
+    "name": "Beyaz Peynir -Paket",
+    "priceKurus": 69500
+   },
+   {
+    "kod": "ÇAY--21684740",
+    "name": "Çay -Paket",
+    "priceKurus": 47500
+   },
+   {
+    "kod": "KOLO-80261925",
+    "name": "Kolot Peynir -Paket",
+    "priceKurus": 37500
+   },
+   {
+    "kod": "PAST-59992292",
+    "name": "Pastırma -Paket",
+    "priceKurus": 420000
+   },
+   {
+    "kod": "TELL-22452394",
+    "name": "Telli Peynir -Paket",
+    "priceKurus": 39500
+   },
+   {
+    "kod": "TERE-50905390",
+    "name": "Tereyağ -Paket",
+    "priceKurus": 42500
+   },
+   {
+    "kod": "TULL-12001127",
+    "name": "Tullumi -Paket",
+    "priceKurus": 47500
+   },
+   {
+    "kod": "YUMU-50657176",
+    "name": "Yumurta -Paket",
+    "priceKurus": 24500
+   }
+  ]
+ },
+ {
+  "category": "Yerinde Pideler",
+  "items": [
+   {
+    "kod": "BIZI-22692720",
+    "name": "Bizim Köyün Pidesi",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 74250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 111400
+     }
+    ]
+   },
+   {
+    "kod": "DÖRT-79182857",
+    "name": "Dört Mevsim",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "EVCI-78412088",
+    "name": "Evci Pide",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KARI-77581625",
+    "name": "Karışık",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 79750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 119600
+     }
+    ]
+   },
+   {
+    "kod": "KOLB-38009184",
+    "name": "Kolbastı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 80850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 121300
+     }
+    ]
+   },
+   {
+    "kod": "KUZU-45686856",
+    "name": "Kuzuumm -K",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 90747
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 136100
+     }
+    ]
+   },
+   {
+    "kod": "PATL-51773092",
+    "name": "Patlıycan",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 80850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 121300
+     }
+    ]
+   },
+   {
+    "kod": "PIDE-93453143",
+    "name": "Pide Paçanga",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 80850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 121300
+     }
+    ]
+   },
+   {
+    "kod": "ŞEFI-12865726",
+    "name": "Şefin Pidesi",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 87450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 131200
+     }
+    ]
+   },
+   {
+    "kod": "TÜRK-12129082",
+    "name": "Türk İşi -A",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 80850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 121300
+     }
+    ]
+   },
+   {
+    "kod": "XXX--70315577",
+    "name": "XXX -K",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "YERI-91372450",
+    "name": "Yerinde Pide -A",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 80850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 121300
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Kahvaltı > Kahvaltı Sıcaklar",
+  "items": [
+   {
+    "kod": "ÇAKA-13771887",
+    "name": "Çakallı Menemen",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 43450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 65200
+     }
+    ]
+   },
+   {
+    "kod": "KAVU-33160897",
+    "name": "Kavurmalı yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 57750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 86600
+     }
+    ]
+   },
+   {
+    "kod": "KIYM-51092743",
+    "name": "Kıymalı Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 50050
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 75100
+     }
+    ]
+   },
+   {
+    "kod": "KLAS-18093723",
+    "name": "Klasik Menemen",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 37950
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 56900
+     }
+    ]
+   },
+   {
+    "kod": "KUYM-35698547",
+    "name": "Kuymak",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 53350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 80000
+     }
+    ]
+   },
+   {
+    "kod": "OMLE-41911059",
+    "name": "Omlet",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 54450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 81700
+     }
+    ]
+   },
+   {
+    "kod": "ÖZEL-78174626",
+    "name": "Özel Omlet",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 54450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 81700
+     }
+    ]
+   },
+   {
+    "kod": "PAST-71561989",
+    "name": "Pastırmalı Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 57750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 86600
+     }
+    ]
+   },
+   {
+    "kod": "PATA-87153733",
+    "name": "Patates Kavurma",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 31350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 47000
+     }
+    ]
+   },
+   {
+    "kod": "PEYN-89839119",
+    "name": "Peynirli Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 46750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 70100
+     }
+    ]
+   },
+   {
+    "kod": "SAHA-58287036",
+    "name": "Sahanda Yumurta",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 21450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 32200
+     }
+    ]
+   },
+   {
+    "kod": "SUCU-79644244",
+    "name": "Sucuk Tava",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 52250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 78400
+     }
+    ]
+   },
+   {
+    "kod": "SUCU-61345447",
+    "name": "Sucuklu Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 50050
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 75100
+     }
+    ]
+   },
+   {
+    "kod": "TR.P-70746452",
+    "name": "Tr Peynirli Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 46750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 70100
+     }
+    ]
+   },
+   {
+    "kod": "TULL-56017499",
+    "name": "Tullumi Yum",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 46750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 70100
+     }
+    ]
+   },
+   {
+    "kod": "TURŞ-54642489",
+    "name": "Turşu Kavurma",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 30250
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 45400
+     }
+    ]
+   },
+   {
+    "kod": "YERI-23102382",
+    "name": "Yerinde Omlet",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 58850
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 88300
+     }
+    ]
+   },
+   {
+    "kod": "YERI-83923463",
+    "name": "Yerinde Sahanda",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 54450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 81700
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Tatlılar",
+  "items": [
+   {
+    "kod": "ÇIKO-49126837",
+    "name": "Çikolatalı Pide",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 39000
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 58500
+     }
+    ]
+   },
+   {
+    "kod": "FIND-18612493",
+    "name": "Fındıklı Burma",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 30250
+     },
+     {
+      "label": "500 gr",
+      "priceKurus": 65000
+     },
+     {
+      "label": "750 gr",
+      "priceKurus": 97500
+     },
+     {
+      "label": "1 kg",
+      "priceKurus": 130000
+     }
+    ]
+   },
+   {
+    "kod": "FIRI-17320438",
+    "name": "Fırın Sütlaç",
+    "priceKurus": 32450
+   }
+  ]
+ },
+ {
+  "category": "Çorbalar",
+  "items": [
+   {
+    "kod": "TAND-42490868",
+    "name": "Düğün Çorba",
+    "priceKurus": 43450
+   },
+   {
+    "kod": "EZOG-87311043",
+    "name": "Günün Çorbası",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 19250
+     },
+     {
+      "label": "Az",
+      "priceKurus": 13250
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Ana Yemekler",
+  "items": [
+   {
+    "kod": "GÜVE-50857321",
+    "name": "Güveçte Et Sote",
+    "priceKurus": 80850
+   },
+   {
+    "kod": "GÜVE-69944973",
+    "name": "Güveçte Köfte",
+    "priceKurus": 74200
+   },
+   {
+    "kod": "KUZU-44578431",
+    "name": "Kuzu Tandır",
+    "variants": [
+     {
+      "label": "100 gr",
+      "priceKurus": 82500
+     },
+     {
+      "label": "150 gr",
+      "priceKurus": 107250
+     },
+     {
+      "label": "200 gr",
+      "priceKurus": 129250
+     }
+    ]
+   },
+   {
+    "kod": "KUZU-87702063",
+    "name": "Kuzu Tandır - Dürüm",
+    "priceKurus": 82500
+   },
+   {
+    "kod": "KUZU-82077759",
+    "name": "Kuzu Tandır - Sandviç",
+    "priceKurus": 57750
+   }
+  ]
+ },
+ {
+  "category": "Açık Pideler",
+  "items": [
+   {
+    "kod": "HARM-88983531",
+    "name": "Harman Peynirli",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KAŞA-94775310",
+    "name": "Kaşar Peynirli",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KAVU-21014393",
+    "name": "Kavurma / Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86300
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "KAVU-49571709",
+    "name": "Kavurmalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86300
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "KIYM-48798019",
+    "name": "Kıyma / Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KIYM-77879564",
+    "name": "Kıymalı -Açık",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KUŞB-32784506",
+    "name": "Kuşbaşı / Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 76450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 114700
+     }
+    ]
+   },
+   {
+    "kod": "KUŞB-82657279",
+    "name": "Kuşbaşılı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 76450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 114700
+     }
+    ]
+   },
+   {
+    "kod": "PAST-27064799",
+    "name": "Pastırma / Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "PAST-27667765",
+    "name": "Pastırmalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "SUCU-66705529",
+    "name": "Sucuk/Kaşar",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 79750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 119600
+     }
+    ]
+   },
+   {
+    "kod": "SUCU-19458422",
+    "name": "Sucuklu",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 79750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 119600
+     }
+    ]
+   },
+   {
+    "kod": "TRBZ-68558570",
+    "name": "Trbz Peynirli Yuvarlak",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "TULL-13856991",
+    "name": "Tullumi",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 68750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 103100
+     }
+    ]
+   },
+   {
+    "kod": "YAĞL-36873800",
+    "name": "Yağlı -A",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 43450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 65200
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Kapalı Pideler",
+  "items": [
+   {
+    "kod": "HARM-92410214",
+    "name": "Harman Peynirli -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KAŞA-70001230",
+    "name": "Kaşar Peynirli -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KAVU-45104031",
+    "name": "Kavurma / Kaşar - Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86300
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "KAVU-15451130",
+    "name": "Kavurmalı - Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86300
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "KIYM-22487864",
+    "name": "Kıyma / Kaşar -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "KIYM-44212138",
+    "name": "Kıymalı -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "PAST-31394393",
+    "name": "Pastırma / Kaşar -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "PAST-56306142",
+    "name": "Pastırmalı -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 86350
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 129500
+     }
+    ]
+   },
+   {
+    "kod": "PATA-57572641",
+    "name": "Patatesli  -K",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 50050
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 75100
+     }
+    ]
+   },
+   {
+    "kod": "TIRN-91977769",
+    "name": "Pide Hamuru - Boş",
+    "priceKurus": 11000
+   },
+   {
+    "kod": "SUCU-55825631",
+    "name": "Sucuk/Kaşar -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 79750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 119600
+     }
+    ]
+   },
+   {
+    "kod": "TRBZ-28228861",
+    "name": "Trbz Peynirli -Kapalı",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 65450
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 98200
+     }
+    ]
+   },
+   {
+    "kod": "YENG-61294137",
+    "name": "Yengen -K",
+    "variants": [
+     {
+      "label": "1 Porsiyon",
+      "priceKurus": 79750
+     },
+     {
+      "label": "1,5 Porsiyon",
+      "priceKurus": 119600
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "category": "Lahmacunlar",
+  "items": [
+   {
+    "kod": "ISPA-27298784",
+    "name": "Ispanak Harman Peynir Lhmcn",
+    "priceKurus": 52250
+   },
+   {
+    "kod": "LAHM-62190412",
+    "name": "Lahmacun",
+    "priceKurus": 28050
+   },
+   {
+    "kod": "PATL-14801430",
+    "name": "Patlıcan Lhmcn",
+    "priceKurus": 62150
+   },
+   {
+    "kod": "TULL-58597014",
+    "name": "Tullumi Lhmcn",
+    "priceKurus": 52250
+   }
+  ]
+ },
+ {
+  "category": "Çocuklara",
+  "items": [
+   {
+    "kod": "KÖFT-97058121",
+    "name": "Köfte Patates",
+    "priceKurus": 63250
+   },
+   {
+    "kod": "MINI-79380478",
+    "name": "Mini Pide",
+    "priceKurus": 52250
+   }
+  ]
+ },
+ {
+  "category": "Salatalar",
+  "items": [
+   {
+    "kod": "MEVS-62163981",
+    "name": "Mevsim Salata",
+    "priceKurus": 26950
+   },
+   {
+    "kod": "SÖĞÜ-55233599",
+    "name": "Söğüş",
+    "priceKurus": 21450
+   },
+   {
+    "kod": "TURŞ-50661250",
+    "name": "Turşu Kavurma",
+    "priceKurus": 30250
+   }
+  ]
+ },
+ {
+  "category": "Menüler",
+  "items": [
+   {
+    "kod": "ÖZEL-72414546",
+    "name": "Özel Ürün",
+    "priceKurus": 5000
+   }
+  ]
+ }
+]

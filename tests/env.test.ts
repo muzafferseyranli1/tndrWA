@@ -35,19 +35,26 @@ test("biçimi bozuk şifre hash'i reddedilir", () => {
 
 test("Meta ayarları yoksa özellik kapalı (null), yarımsa hata", () => {
   assert.equal(loadEnv(valid).meta, null);
-  assert.throws(() => loadEnv({ ...valid, META_CATALOG_ID: "123" }), (err: unknown) => {
+  assert.throws(() => loadEnv({ ...valid, META_GRAPH_VERSION: "v23.0" }), (err: unknown) => {
     assert.ok(err instanceof EnvError);
     assert.ok(err.problems.some((p) => p.includes("META_ACCESS_TOKEN")));
     return true;
   });
 });
 
-test("Meta ayarları tam olunca yüklenir, sürüm biçimi doğrulanır", () => {
-  const full = { ...valid, META_GRAPH_VERSION: "v23.0", META_CATALOG_ID: "123", META_ACCESS_TOKEN: "t".repeat(20) };
+test("Meta ayarları: sürüm+jeton yeter, katalog kimliği isteğe bağlı, sürüm biçimi doğrulanır", () => {
+  const full = { ...valid, META_GRAPH_VERSION: "v23.0", META_ACCESS_TOKEN: "t".repeat(20) };
   const env = loadEnv(full);
-  assert.equal(env.meta?.catalogId, "123");
+  assert.equal(env.meta?.defaultCatalogId, null);
   assert.equal(env.meta?.baseUrl, "https://graph.facebook.com");
+  assert.equal(loadEnv({ ...full, META_CATALOG_ID: "123" }).meta?.defaultCatalogId, "123");
   assert.throws(() => loadEnv({ ...full, META_GRAPH_VERSION: "23" }), EnvError);
+});
+
+test("markaya özel jetonlar META_ACCESS_TOKEN_<KOD> ile okunur", () => {
+  const env = loadEnv({ ...valid, META_GRAPH_VERSION: "v23.0", META_ACCESS_TOKEN: "ortak", META_ACCESS_TOKEN_PIDE: "pide-jeton", META_ACCESS_TOKEN_BOS: " " });
+  assert.deepEqual(env.meta?.brandTokens, { pide: "pide-jeton" });
+  assert.equal(env.meta?.token, "ortak");
 });
 
 test("PUBLIC_BASE_URL: sondaki / atılır, üretimde https zorunlu", () => {

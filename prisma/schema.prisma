@@ -7,18 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Marka (bulut mutfak: her markanın kendi menüsü, Meta kataloğu ve WhatsApp numarası var)
+model Brand {
+  id            Int        @id @default(autoincrement())
+  code          String     @unique // kısa kod: "tandir", "pide" (env'de META_ACCESS_TOKEN_<KOD> için de kullanılır)
+  name          String
+  sortOrder     Int        @default(0)
+  // Meta katalog kimliği; markanın Meta ayarları hazır olana kadar boş kalabilir
+  metaCatalogId String?
+  // WAHA oturum adı (Aşama 4)
+  waSession     String?
+  categories    Category[]
+  products      Product[]
+}
+
 model Category {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  brandId   Int       @default(1)
+  brand     Brand     @relation(fields: [brandId], references: [id])
+  name      String
   sortOrder Int       @default(0)
   products  Product[]
+
+  @@unique([brandId, name])
 }
 
 model Product {
   id          Int      @id @default(autoincrement())
-  // Meta kataloğundaki retailer_id; oluşturulduktan sonra DEĞİŞMEZ
-  retailerId  String   @unique
+  brandId     Int      @default(1)
+  brand       Brand    @relation(fields: [brandId], references: [id])
+  // Meta kataloğundaki retailer_id; oluşturulduktan sonra DEĞİŞMEZ. Marka içinde benzersiz.
+  retailerId  String
+  // Ürünün temel adı. Porsiyon seçenekleri (varyant) aynı ada ve aynı groupKey'e sahip ayrı kayıtlardır.
   name        String
+  // Aynı yemeğin porsiyonlarını birleştirir (örn. POS kodu); porsiyonu olmayan üründe boş
+  groupKey    String?
+  // "Yarım", "1,5 Pors.", "500 gr"... Boşsa tek porsiyonlu ürün
+  variantLabel String?
   description String   @default("")
   // Liste fiyatı (kuruş). Nakit/kart indirimi sipariş anında uygulanır, burada tutulmaz.
   priceKurus  Int
@@ -40,7 +65,9 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@unique([brandId, retailerId])
   @@index([categoryId])
+  @@index([brandId, groupKey])
 }
 
 // Ayar anahtar/değer deposu (mesaj şablonları vb. ileride burada tutulacak).
