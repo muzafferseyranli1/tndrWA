@@ -105,7 +105,7 @@ interface Row {
   variantLabel: string | null;
 }
 
-/** Yerinde Pide satış listesi: porsiyonlu ürünler (örn. 1 Porsiyon / 1,5 Porsiyon) ayrı kayıt, aynı groupKey. */
+/** Yerinde Pide satış listesi (görseller yüklenip aktifleştirilene kadar PASİF gelir): porsiyonlu ürünler (örn. 1 Porsiyon / 1,5 Porsiyon) ayrı kayıt, aynı groupKey. */
 interface PideItem {
   kod: string;
   name: string;
@@ -119,8 +119,8 @@ function loadPide(): { category: string; rows: Row[] }[] {
     category: g.category,
     rows: g.items.flatMap((it): Row[] =>
       it.variants
-        ? it.variants.map((v) => ({ name: it.name, description: "", priceKurus: v.priceKurus, status: "ACTIVE" as const, groupKey: it.kod, variantLabel: v.label }))
-        : [{ name: it.name, description: "", priceKurus: it.priceKurus!, status: "ACTIVE" as const, groupKey: null, variantLabel: null }],
+        ? it.variants.map((v) => ({ name: it.name, description: "", priceKurus: v.priceKurus, status: "PASSIVE" as const, groupKey: it.kod, variantLabel: v.label }))
+        : [{ name: it.name, description: "", priceKurus: it.priceKurus!, status: "PASSIVE" as const, groupKey: null, variantLabel: null }],
     ),
   }));
 }
