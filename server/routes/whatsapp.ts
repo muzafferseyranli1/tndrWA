@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
 import { resolveBrand } from "../services/brands";
 import { WahaClient, WahaError } from "../services/waha";
+import { CloudApiError, type PhoneInfo, type WhatsappCloudClient } from "../services/whatsapp-cloud";
 
 export interface WhatsappStatusDto {
   configured: boolean;
@@ -15,7 +16,18 @@ export interface WhatsappStatusDto {
   blockers: string[];
 }
 
-export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | null): Router {
+export interface CloudStatusDto {
+  /** Webhook için gerekli ayarlar (uygulama sırrı + doğrulama anahtarı) tanımlı mı */
+  webhookConfigured: boolean;
+  /** Mesaj göndermek için kalıcı jeton tanımlı mı */
+  tokenSet: boolean;
+  phoneNumberId: string | null;
+  webhookUrl: string | null;
+  info: PhoneInfo | null;
+  error: string | null;
+}
+
+export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | null, cloud: WhatsappCloudClient | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
   const webhookUrl = env.publicBaseUrl ? `${env.publicBaseUrl}/api/webhooks/waha` : null;
@@ -92,13 +104,55 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
     const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
     const brand = await brandOf(req.query.brandId, res);
     if (!brand) return;
+    // Bu markanın hem WAHA oturumunun hem de resmi Cloud API numarasının olayları
+    const sessions = [brand.waSession, brand.waPhoneNumberId ? `cloud:${brand.waPhoneNumberId}` : null].filter((x): x is string => !!x);
     const events = await db.webhookEvent.findMany({
-      where: brand.waSession ? { session: brand.waSession } : {},
+      where: sessions.length ? { session: { in: sessions } } : { id: -1 },
       orderBy: { id: "desc" },
       take: limit,
       select: { id: true, receivedAt: true, session: true, event: true, messageType: true },
     });
     res.json(events.map((e) => ({ ...e, receivedAt: e.receivedAt.toISOString() })));
+  });
+
+  // ---- Resmi WhatsApp Cloud API ----
+  router.get("/cloud/status", async (req, res) => {
+    const brand = await brandOf(req.query.brandId, res);
+    if (!brand) return;
+    const dto: CloudStatusDto = {
+      webhookConfigured: !!env.whatsappCloud,
+      tokenSet: !!env.whatsappCloud?.token,
+      phoneNumberId: brand.waPhoneNumberId,
+      webhookUrl: env.publicBaseUrl ? `${env.publicBaseUrl}/api/webhooks/meta` : null,
+      info: null,
+      error: null,
+    };
+    if (cloud && brand.waPhoneNumberId) {
+      try {
+        dto.info = await cloud.phoneInfo(brand.waPhoneNumberId);
+      } catch (err) {
+        dto.error = (err as Error).message;
+      }
+    }
+    res.json(dto);
+  });
+
+  // Deneme mesajı: markanın Cloud API numarasından gönderir (test numarası yalnızca kayıtlı alıcılara yazabilir)
+  router.post("/cloud/send", async (req, res) => {
+    const parsed = z
+      .object({ brandId: z.number().int().optional(), to: z.string().trim().regex(/^\+?\d{8,15}$/, "Alıcı numarası ülke koduyla yazılmalı (örn. 905551112233)."), text: z.string().trim().min(1, "Mesaj boş olamaz.").max(1000) })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
+    const brand = await brandOf(parsed.data.brandId, res);
+    if (!brand) return;
+    if (!cloud) return res.status(503).json({ error: "WhatsApp Cloud API jetonu (WHATSAPP_CLOUD_TOKEN) tanımlı değil." });
+    if (!brand.waPhoneNumberId) return res.status(503).json({ error: `${brand.name} için Cloud API telefon numarası kimliği girilmemiş (Markalar sayfası).` });
+    try {
+      const id = await cloud.sendText(brand.waPhoneNumberId, parsed.data.to.replace(/^\+/, ""), parsed.data.text);
+      res.json({ ok: true, messageId: id });
+    } catch (err) {
+      res.status(err instanceof CloudApiError ? 502 : 500).json({ error: (err as Error).message });
+    }
   });
 
   // Tek olayın ham içeriği (sipariş mesajı biçimini incelemek için)

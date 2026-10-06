@@ -13,6 +13,14 @@ interface Status {
   error: string | null;
   blockers: string[];
 }
+interface CloudStatus {
+  webhookConfigured: boolean;
+  tokenSet: boolean;
+  phoneNumberId: string | null;
+  webhookUrl: string | null;
+  info: { displayPhoneNumber: string | null; verifiedName: string | null; qualityRating: string | null; platformType: string | null } | null;
+  error: string | null;
+}
 interface EventRow {
   id: number;
   receivedAt: string;
@@ -42,6 +50,9 @@ export default function WhatsappPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
+  const [cloud, setCloud] = useState<CloudStatus | null>(null);
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
 
   const refresh = useCallback(async () => {
     if (brandId === undefined) return;
@@ -54,6 +65,15 @@ export default function WhatsappPage() {
     } catch (err) {
       setError((err as Error).message);
     }
+  }, [brandId]);
+
+  // Cloud API durumu Meta ya sorgu atar: yalnizca acilista ve marka degisince (4 saniyelik donguye girmez)
+  useEffect(() => {
+    if (brandId === undefined) return;
+    setCloud(null);
+    api<CloudStatus>(`/api/whatsapp/cloud/status?brandId=${brandId}`)
+      .then(setCloud)
+      .catch((err: Error) => setError(err.message));
   }, [brandId]);
 
   // Durum ve olaylar 4 saniyede bir yenilenir (QR taranınca "Bağlı"ya dönmesi için)
@@ -75,6 +95,21 @@ export default function WhatsappPage() {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendTest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSending(true);
+    setSendMsg(null);
+    try {
+      await api("/api/whatsapp/cloud/send", { method: "POST", json: { brandId, to: form.get("to"), text: form.get("text") } });
+      setSendMsg({ ok: true, text: "Mesaj gönderildi." });
+    } catch (err) {
+      setSendMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setSending(false);
     }
   }
 
@@ -124,6 +159,34 @@ export default function WhatsappPage() {
                   <li>Bu QR kodunu okutun (kod yaklaşık 20 saniyede bir yenilenir).</li>
                 </ol>
               </div>
+            )}
+          </section>
+        )}
+
+        {cloud && (
+          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+            <h2 className="mb-2 font-semibold">Resmi WhatsApp (Cloud API)</h2>
+            <ul className="space-y-1 text-slate-700">
+              <li>Webhook ayarı (uygulama sırrı + doğrulama anahtarı): <b className={cloud.webhookConfigured ? "text-green-700" : "text-red-600"}>{cloud.webhookConfigured ? "tamam" : "eksik"}</b></li>
+              <li>Gönderim jetonu: <b className={cloud.tokenSet ? "text-green-700" : "text-amber-700"}>{cloud.tokenSet ? "tanımlı" : "yok (mesaj gönderilemez)"}</b></li>
+              <li>Telefon numarası kimliği: <b>{cloud.phoneNumberId ?? "girilmemiş (Markalar sayfası)"}</b></li>
+              {cloud.webhookUrl && <li>Meta&apos;ya girilecek webhook adresi: <code className="break-all">{cloud.webhookUrl}</code></li>}
+              {cloud.info && <li>Numara: <b>{cloud.info.displayPhoneNumber}</b> · ad: {cloud.info.verifiedName ?? "-"} · kalite: {cloud.info.qualityRating ?? "-"}</li>}
+              {cloud.error && <li className="text-red-600">Meta: {cloud.error}</li>}
+            </ul>
+            {cloud.tokenSet && cloud.phoneNumberId && (
+              <form onSubmit={sendTest} className="mt-3 flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-slate-500">Alıcı (ülke koduyla)</span>
+                  <input name="to" required placeholder="905551112233" className="rounded-lg border border-slate-300 px-3 py-2" />
+                </label>
+                <label className="block min-w-48 flex-1">
+                  <span className="mb-1 block text-xs text-slate-500">Mesaj</span>
+                  <input name="text" required defaultValue="Merhaba, bu bir deneme mesajıdır." className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                </label>
+                <button disabled={sending} className="rounded-lg bg-brand-500 px-3 py-2 font-medium text-white hover:bg-brand-600 disabled:opacity-50">{sending ? "Gönderiliyor…" : "Deneme mesajı gönder"}</button>
+                {sendMsg && <span className={sendMsg.ok ? "text-green-700" : "text-red-600"}>{sendMsg.text}</span>}
+              </form>
             )}
           </section>
         )}

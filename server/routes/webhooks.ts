@@ -2,7 +2,9 @@ import express, { Router } from "express";
 import type { PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
 import { logger } from "../lib/logger";
+import { sameSecret, verifyMetaSignature } from "../lib/meta-signature";
 import { verifyWahaSignature } from "../lib/waha-hmac";
+import { extractCloudEvents, parseCloudOrder } from "../services/whatsapp-cloud";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
 export function detectMessageType(payload: unknown): string | null {
@@ -92,6 +94,58 @@ export function webhooksRouter(db: PrismaClient, env: Env): Router {
       logger.info({ event, session, messageType, raw: compactForLog(text) }, "WAHA keşif: sipariş/katalog olayı");
     }
     res.json({ ok: true });
+  });
+
+  // ---- Resmi WhatsApp Cloud API (Meta) ----
+  // Meta, webhook adresini kaydederken önce GET ile "hub.challenge" doğrulaması yapar.
+  router.get("/meta", (req, res) => {
+    const cloud = env.whatsappCloud;
+    if (!cloud) return res.status(503).send("WhatsApp Cloud API ayarları tanımlı değil.");
+    const mode = req.query["hub.mode"];
+    const token = typeof req.query["hub.verify_token"] === "string" ? req.query["hub.verify_token"] : undefined;
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && sameSecret(token, cloud.verifyToken) && typeof challenge === "string") {
+      logger.info("Meta webhook doğrulandı");
+      return res.status(200).type("text/plain").send(challenge);
+    }
+    logger.warn({ ip: req.ip }, "Meta webhook doğrulaması reddedildi");
+    return res.status(403).send("Doğrulama başarısız.");
+  });
+
+  router.post("/meta", express.raw({ type: () => true, limit: "5mb" }), async (req, res) => {
+    const cloud = env.whatsappCloud;
+    if (!cloud) return res.status(503).json({ error: "WhatsApp Cloud API ayarları tanımlı değil." });
+    const raw = req.body;
+    if (!Buffer.isBuffer(raw) || raw.length === 0) return res.status(400).json({ error: "Boş gövde." });
+    if (!verifyMetaSignature(raw, cloud.appSecret, req.header("x-hub-signature-256"))) {
+      logger.warn({ ip: req.ip }, "Meta webhook: imza geçersiz");
+      return res.status(401).json({ error: "İmza geçersiz." });
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw.toString("utf8"));
+    } catch {
+      return res.status(400).json({ error: "Geçersiz JSON." });
+    }
+
+    let stored = 0;
+    for (const ev of extractCloudEvents(payload)) {
+      try {
+        await db.webhookEvent.create({ data: { requestId: ev.requestId, session: ev.session, event: ev.event, messageType: ev.messageType, body: ev.body } });
+        stored++;
+      } catch (err) {
+        if ((err as { code?: string }).code === "P2002") continue; // Meta aynı olayı yeniden gönderdi
+        logger.error({ err }, "Meta webhook olayı kaydedilemedi");
+        return res.status(500).json({ error: "Kaydedilemedi." }); // Meta yeniden dener
+      }
+      logger.info({ event: ev.event, session: ev.session, messageType: ev.messageType }, "Cloud API olayı alındı");
+      if (ev.messageType === "order") {
+        const order = parseCloudOrder(JSON.parse(ev.body).message);
+        logger.info({ session: ev.session, order: order ? { adetKalem: order.items.length, toplamKurus: order.totalKurus, katalog: order.catalogId } : "ayrıştırılamadı" }, "Cloud API siparişi");
+      }
+    }
+    res.json({ ok: true, stored });
   });
 
   return router;

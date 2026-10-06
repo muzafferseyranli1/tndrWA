@@ -75,6 +75,21 @@ test("WAHA ayarları: üçü birlikte yoksa kapalı, yarımsa hata, tam olunca y
   assert.throws(() => loadEnv({ ...valid, WAHA_URL: "w.example.com", WAHA_API_KEY: "k", WAHA_WEBHOOK_HMAC_KEY: "h" }), EnvError);
 });
 
+test("WhatsApp Cloud API: sır ve doğrulama anahtarı birlikte, Meta sürümü gerekli, jeton isteğe bağlı", () => {
+  const meta = { META_GRAPH_VERSION: "v23.0", META_ACCESS_TOKEN: "t".repeat(20) };
+  assert.equal(loadEnv({ ...valid, ...meta }).whatsappCloud, null);
+  assert.throws(() => loadEnv({ ...valid, ...meta, META_APP_SECRET: "s" }), (err: unknown) => {
+    assert.ok(err instanceof EnvError);
+    assert.ok(err.problems.some((p) => p.includes("WHATSAPP_VERIFY_TOKEN")));
+    return true;
+  });
+  assert.throws(() => loadEnv({ ...valid, META_APP_SECRET: "s", WHATSAPP_VERIFY_TOKEN: "v" }), EnvError);
+  const env = loadEnv({ ...valid, ...meta, META_APP_SECRET: "s", WHATSAPP_VERIFY_TOKEN: "v" });
+  assert.equal(env.whatsappCloud?.token, null);
+  assert.equal(env.whatsappCloud?.version, "v23.0");
+  assert.equal(loadEnv({ ...valid, ...meta, META_APP_SECRET: "s", WHATSAPP_VERIFY_TOKEN: "v", WHATSAPP_CLOUD_TOKEN: "jeton" }).whatsappCloud?.token, "jeton");
+});
+
 test("otomatik eşitleme yalnızca açıkça 'true' ise açılır", () => {
   assert.equal(loadEnv(valid).metaAutoSync, false);
   assert.equal(loadEnv({ ...valid, META_AUTO_SYNC: "true" }).metaAutoSync, true);

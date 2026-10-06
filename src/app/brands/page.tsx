@@ -20,7 +20,7 @@ function BrandCard({ brand, onSaved }: { brand: BrandDto; onSaved: () => void })
     try {
       await api(`/api/brands/${brand.id}`, {
         method: "PATCH",
-        json: { name: form.get("name"), metaCatalogId: form.get("metaCatalogId"), waSession: form.get("waSession") },
+        json: { name: form.get("name"), metaCatalogId: form.get("metaCatalogId"), waSession: form.get("waSession"), waPhoneNumberId: form.get("waPhoneNumberId") },
       });
       setMessage({ ok: true, text: "Kaydedildi." });
       onSaved();
@@ -52,6 +52,11 @@ function BrandCard({ brand, onSaved }: { brand: BrandDto; onSaved: () => void })
         <span className="mb-1 block text-slate-600">WhatsApp (WAHA) oturum adı</span>
         <input name="waSession" defaultValue={brand.waSession ?? ""} placeholder="Henüz girilmedi (örn. tandir)" className={field} />
       </label>
+      <label className="block text-sm">
+        <span className="mb-1 block text-slate-600">Resmi WhatsApp (Cloud API) telefon numarası kimliği</span>
+        <input name="waPhoneNumberId" inputMode="numeric" defaultValue={brand.waPhoneNumberId ?? ""} placeholder="Henüz girilmedi" className={field} />
+        <span className="mt-1 block text-xs text-slate-500">Meta uygulamasındaki &quot;Phone number ID&quot; (yalnızca rakam). Resmi API&apos;den gelen mesaj ve siparişler bu kimlikle markaya eşlenir.</span>
+      </label>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={busy} className="rounded-lg bg-brand-500 px-4 py-2 font-medium text-white hover:bg-brand-600 disabled:opacity-60">
           {busy ? "Kaydediliyor…" : "Kaydet"}
@@ -74,7 +79,7 @@ export default function BrandsPage() {
         {!brands && <p className="text-slate-500">Yükleniyor…</p>}
         <div className="grid gap-4 md:grid-cols-2">
           {brands?.map((b) => (
-            <BrandCard key={`${b.id}-${b.metaCatalogId}-${b.name}-${b.waSession}`} brand={b} onSaved={() => void reload()} />
+            <BrandCard key={`${b.id}-${b.metaCatalogId}-${b.name}-${b.waSession}-${b.waPhoneNumberId}`} brand={b} onSaved={() => void reload()} />
           ))}
         </div>
       </main>

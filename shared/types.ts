@@ -6,6 +6,7 @@ export interface BrandDto {
   name: string;
   metaCatalogId: string | null;
   waSession: string | null;
+  waPhoneNumberId: string | null;
   productCount: number;
 }
 

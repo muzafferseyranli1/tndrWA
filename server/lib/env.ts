@@ -18,6 +18,17 @@ export interface WahaEnv {
   hmacKey: string;
 }
 
+export interface WhatsappCloudEnv {
+  /** Meta uygulama sırrı: webhook imzası (X-Hub-Signature-256) bununla doğrulanır */
+  appSecret: string;
+  /** Meta'da webhook adresi tanımlanırken girilen doğrulama anahtarı */
+  verifyToken: string;
+  /** Sistem kullanıcısı jetonu (mesaj göndermek için); henüz yoksa null */
+  token: string | null;
+  version: string;
+  baseUrl: string;
+}
+
 export interface Env {
   nodeEnv: "development" | "production" | "test";
   port: number;
@@ -35,6 +46,8 @@ export interface Env {
   metaAutoSync: boolean;
   /** WAHA ayarları eksikse null: panel çalışır, WhatsApp sayfası "ayar eksik" der, webhook kabul edilmez. */
   waha: WahaEnv | null;
+  /** Resmi WhatsApp Cloud API ayarları eksikse null: webhook kabul edilmez, panel "ayar eksik" der. */
+  whatsappCloud: WhatsappCloudEnv | null;
 }
 
 export class EnvError extends Error {
@@ -111,6 +124,23 @@ export function loadEnv(source: Source = process.env): Env {
     problems.push(`WAHA ayarları yarım: ${wahaKeys.filter((k) => !source[k]?.trim()).join(", ")} eksik`);
   }
 
+  // Resmi WhatsApp Cloud API: uygulama sırrı ve doğrulama anahtarı birlikte olmalı; jeton sonra eklenebilir.
+  const cloudKeys = ["META_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"] as const;
+  const cloudSet = cloudKeys.filter((k) => source[k]?.trim());
+  let whatsappCloud: WhatsappCloudEnv | null = null;
+  if (cloudSet.length === cloudKeys.length) {
+    if (!meta) problems.push("WhatsApp Cloud API için META_GRAPH_VERSION ve META_ACCESS_TOKEN da tanımlı olmalı");
+    whatsappCloud = {
+      appSecret: source.META_APP_SECRET!.trim(),
+      verifyToken: source.WHATSAPP_VERIFY_TOKEN!.trim(),
+      token: source.WHATSAPP_CLOUD_TOKEN?.trim() || null,
+      version: meta?.version ?? "",
+      baseUrl: meta?.baseUrl ?? "https://graph.facebook.com",
+    };
+  } else if (cloudSet.length > 0) {
+    problems.push(`WhatsApp Cloud API ayarları yarım: ${cloudKeys.filter((k) => !source[k]?.trim()).join(", ")} eksik`);
+  }
+
   const publicRaw = source.PUBLIC_BASE_URL?.trim();
   let publicBaseUrl: string | null = null;
   if (publicRaw) {
@@ -135,5 +165,6 @@ export function loadEnv(source: Source = process.env): Env {
     meta,
     metaAutoSync: source.META_AUTO_SYNC?.trim().toLowerCase() === "true",
     waha,
+    whatsappCloud,
   };
 }

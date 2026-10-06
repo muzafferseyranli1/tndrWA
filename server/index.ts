@@ -12,6 +12,7 @@ import { brandsRouter } from "./routes/brands";
 import { purgeOldWebhookEvents, webhooksRouter } from "./routes/webhooks";
 import { whatsappRouter } from "./routes/whatsapp";
 import { WahaClient } from "./services/waha";
+import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
 import { SyncCoordinator, refreshExpiredSoldOut } from "./services/meta-sync";
 import path from "node:path";
@@ -69,7 +70,7 @@ async function main() {
   app.use("/api/products", productsRouter(db, onChange));
   app.use("/api/categories", categoriesRouter(db));
   app.use("/api/meta", metaRouter(db, coordinator));
-  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null));
+  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
@@ -86,7 +87,7 @@ async function main() {
   const purge = () => purgeOldWebhookEvents(db).then((n) => n > 0 && logger.info(`${n} eski webhook olayı silindi`)).catch((err) => logger.error({ err }, "eski olaylar silinemedi"));
   void purge();
   const purgeTimer = setInterval(purge, 60 * 60 * 1000);
-  logger.info(`WhatsApp (WAHA): ${env.waha ? "ayarlı" : "kapalı (WAHA ayarları eksik)"}`);
+  logger.info(`WhatsApp (WAHA): ${env.waha ? "ayarlı" : "kapalı (WAHA ayarları eksik)"} | Cloud API: ${env.whatsappCloud ? (env.whatsappCloud.token ? "webhook + gönderim" : "yalnızca webhook (jeton yok)") : "kapalı"}`);
   logger.info(`Meta eşitleme: ${env.meta ? (env.metaAutoSync ? "açık, otomatik" : "açık, elle") : "kapalı (Meta ayarları eksik)"}`);
 
   app.all("*", (req, res) => handle(req, res));

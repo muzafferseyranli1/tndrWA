@@ -17,6 +17,8 @@ model Brand {
   metaCatalogId String?
   // WAHA oturum adı (Aşama 4)
   waSession     String?
+  // Resmi WhatsApp Cloud API telefon numarası kimliği (Meta); webhook olayları bu kimlikle markaya eşlenir
+  waPhoneNumberId String?
   categories    Category[]
   products      Product[]
 }
