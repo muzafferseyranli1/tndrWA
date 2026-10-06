@@ -29,7 +29,7 @@ const statusText: Record<string, { text: string; cls: string }> = {
   SCAN_QR_CODE: { text: "QR bekleniyor", cls: "bg-amber-100 text-amber-800" },
   STARTING: { text: "Başlıyor", cls: "bg-blue-100 text-blue-800" },
   STOPPED: { text: "Durdu", cls: "bg-slate-200 text-slate-700" },
-  FAILED: { text: "Hata", cls: "bg-red-100 text-red-700" },
+  FAILED: { text: "Bağlantı yok (QR süresi dolmuş olabilir)", cls: "bg-red-100 text-red-700" },
   NOT_CREATED: { text: "Oturum yok", cls: "bg-slate-200 text-slate-700" },
 };
 

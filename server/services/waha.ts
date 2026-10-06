@@ -65,7 +65,11 @@ export class WahaClient {
   async startSession(name: string, webhookUrl: string): Promise<WahaSession> {
     const existing = await this.getSession(name);
     if (existing) {
-      if (existing.status === "STOPPED" || existing.status === "FAILED") {
+      // FAILED (örn. QR süresi doldu) oturumda motor "zaten çalışıyor" sayılır, /start işe yaramaz: restart gerekir.
+      // STOPPED oturumda /start çalışır. Diğer durumlarda (başlıyor, QR bekliyor, bağlı) dokunulmaz.
+      if (existing.status === "FAILED") {
+        await this.json(await this.call(`/api/sessions/${encodeURIComponent(name)}/restart`, { method: "POST" }));
+      } else if (existing.status === "STOPPED") {
         await this.json(await this.call(`/api/sessions/${encodeURIComponent(name)}/start`, { method: "POST" }));
       }
       return (await this.getSession(name)) ?? existing;

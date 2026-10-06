@@ -22,7 +22,15 @@ export function detectMessageType(payload: unknown): string | null {
   return null;
 }
 
-const DISCOVERY = /order|product|catalog|cart/i;
+const DISCOVERY_TYPE = /order|product|catalog|cart/i;
+// Ham metinde yalnızca JSON ANAHTARI olarak geçen eşleşmeler sayılır ("orderMessage": ...). Şifreli base64 verideki rastgele harf dizileri sayılmaz.
+const DISCOVERY_KEY = /"[A-Za-z_]*(order|product|catalog|cart)[A-Za-z_]*"\s*:/i;
+
+/** Sipariş/ürün/katalog olayı mı (günlüğe ham içerik yazılsın mı)? */
+export function isDiscoveryEvent(event: string, messageType: string | null, rawText: string): boolean {
+  if (messageType && DISCOVERY_TYPE.test(messageType)) return true;
+  return event === "engine.event" && DISCOVERY_KEY.test(rawText);
+}
 
 export function webhooksRouter(db: PrismaClient, env: Env): Router {
   const router = Router();
@@ -62,7 +70,7 @@ export function webhooksRouter(db: PrismaClient, env: Env): Router {
 
     logger.info({ event, session, messageType }, "WAHA olayı alındı");
     // Sipariş/ürün/katalog mesajlarının biçimini keşfetmek için ham içerik günlüğe de (kısaltılmış) yazılır
-    if ((messageType && DISCOVERY.test(messageType)) || (event === "engine.event" && DISCOVERY.test(text))) {
+    if (isDiscoveryEvent(event, messageType, text)) {
       logger.info({ event, session, messageType, raw: text.slice(0, 6000) }, "WAHA keşif: sipariş/katalog olayı");
     }
     res.json({ ok: true });
