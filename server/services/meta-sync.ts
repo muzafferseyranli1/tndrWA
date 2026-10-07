@@ -241,3 +241,19 @@ export async function syncCollections(db: PrismaClient, client: MetaCatalogClien
   }
   return errors;
 }
+
+/**
+ * Herkese açık adres (PUBLIC_BASE_URL) değiştiyse katalogdaki görsel adresleri eskimiştir:
+ * katalogdaki ürünleri yeniden gönderilecek olarak işaretler ve etkilenen markaların kimliklerini döndürür.
+ * Adres Ayarlar tablosunda saklanır; kayıt yoksa (ilk çalıştırma) da yeniden gönderilir, bu zararsızdır.
+ */
+export async function handlePublicUrlChange(db: PrismaClient, url: string | null): Promise<number[]> {
+  if (!url) return [];
+  const row = await db.setting.findUnique({ where: { key: "publicBaseUrl" } });
+  if (row?.value === url) return [];
+  await db.setting.upsert({ where: { key: "publicBaseUrl" }, create: { key: "publicBaseUrl", value: url }, update: { value: url } });
+  const brands = await db.product.findMany({ where: { onMeta: true }, select: { brandId: true }, distinct: ["brandId"] });
+  if (!brands.length) return [];
+  await db.product.updateMany({ where: { onMeta: true }, data: { metaSyncState: "PENDING" } });
+  return brands.map((b) => b.brandId);
+}

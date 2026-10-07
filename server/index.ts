@@ -20,7 +20,7 @@ import { sendWelcomeIfNeeded } from "./services/chat";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
-import { SyncCoordinator, refreshExpiredSoldOut } from "./services/meta-sync";
+import { SyncCoordinator, handlePublicUrlChange, refreshExpiredSoldOut } from "./services/meta-sync";
 import path from "node:path";
 
 async function main() {
@@ -89,6 +89,15 @@ async function main() {
   await bootstrapBrands(db, env);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);
+  // Alan adı değiştiyse katalogdaki görsel adresleri yenilenir (arka planda, açılışı geciktirmez)
+  void handlePublicUrlChange(db, env.publicBaseUrl)
+    .then((brandIds) => {
+      for (const id of brandIds) {
+        logger.info({ brandId: id }, "Herkese açık adres değişti: katalog yeniden gönderiliyor");
+        coordinator.run(id).catch((err: Error) => logger.warn({ err: err.message, brandId: id }, "adres değişimi sonrası katalog gönderimi başarısız (Ürünler sayfasından 'Meta'ya gönder')"));
+      }
+    })
+    .catch((err) => logger.error({ err }, "adres değişimi denetlenemedi"));
   app.use("/api/brands", brandsRouter(db));
   app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
   app.use("/api/products", productsRouter(db, onChange));
