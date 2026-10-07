@@ -56,3 +56,23 @@ export interface SyncSummaryDto {
   skipped: number;
   errors: { retailerId: string; message: string }[];
 }
+
+export type OrderStatusDto = "NEW" | "PREPARING" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
+
+export interface OrderDto {
+  id: number;
+  brandId: number;
+  status: OrderStatusDto;
+  note: string;
+  totalKurus: number;
+  totalText: string;
+  createdAt: string;
+  customer: { name: string | null; phone: string | null };
+  items: { id: number; name: string; quantity: number; unitText: string; lineText: string }[];
+}
+
+export interface OrderStatusResultDto {
+  order: OrderDto;
+  /** Müşteriye bildirim gitti mi; gitmediyse sebebi */
+  notice: { sent: boolean; error?: string };
+}

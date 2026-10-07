@@ -6,6 +6,7 @@ import { useBrands } from "@/lib/brand";
 
 const links = [
   { href: "/", label: "Panel" },
+  { href: "/orders", label: "Siparişler" },
   { href: "/products", label: "Ürünler" },
   { href: "/whatsapp", label: "WhatsApp" },
   { href: "/brands", label: "Markalar" },

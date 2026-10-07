@@ -53,7 +53,7 @@ export function isDiscoveryEvent(event: string, messageType: string | null, rawT
   return event === "engine.event" && DISCOVERY_KEY.test(rawText);
 }
 
-export function webhooksRouter(db: PrismaClient, env: Env): Router {
+export function webhooksRouter(db: PrismaClient, env: Env, onOrderCreated: (orderId: number) => void = () => undefined): Router {
   const router = Router();
 
   // Ham gövde gerekir: imza, JSON'a çevrilmeden önceki baytlar üzerinden doğrulanır
@@ -146,7 +146,10 @@ export function webhooksRouter(db: PrismaClient, env: Env): Router {
       if (ev.messageType === "order") {
         try {
           const result = await ingestCloudOrder(db, ev.body);
-          if (result.status === "created") logger.info({ orderId: result.order.id, brandId: result.order.brandId, toplamKurus: result.order.totalKurus }, "Sipariş kaydedildi");
+          if (result.status === "created") {
+            logger.info({ orderId: result.order.id, brandId: result.order.brandId, toplamKurus: result.order.totalKurus }, "Sipariş kaydedildi");
+            onOrderCreated(result.order.id);
+          }
           else if (result.status === "skipped") logger.warn({ session: ev.session, reason: result.reason }, "Sipariş kaydedilmedi");
         } catch (err) {
           logger.error({ err }, "Sipariş işlenemedi");

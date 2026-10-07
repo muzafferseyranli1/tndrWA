@@ -11,6 +11,8 @@ import { metaRouter } from "./routes/meta";
 import { brandsRouter } from "./routes/brands";
 import { purgeOldWebhookEvents, webhooksRouter } from "./routes/webhooks";
 import { whatsappRouter } from "./routes/whatsapp";
+import { ordersRouter } from "./routes/orders";
+import { notifyOrderStatus } from "./services/order-messages";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
@@ -57,7 +59,19 @@ async function main() {
   app.use("/uploads", express.static(path.resolve(env.uploadDir), { index: false, dotfiles: "deny", maxAge: "30d", immutable: true }));
 
   // WAHA webhook: oturum çerezi yok, HMAC imzasıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
-  app.use("/api/webhooks", webhooksRouter(db, env));
+  // Yeni siparişte müşteriye "siparişinizi aldık" mesajı (hata sipariş kaydını etkilemez)
+  const cloudForAck = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
+  const acknowledgeOrder = (orderId: number) => {
+    db.order
+      .findUnique({ where: { id: orderId }, include: { brand: true, customer: true } })
+      .then(async (order) => {
+        if (!order) return;
+        const notice = await notifyOrderStatus(db, cloudForAck, order, "NEW");
+        if (!notice.sent) logger.warn({ orderId, error: notice.error }, "Sipariş alındı mesajı gönderilemedi");
+      })
+      .catch((err) => logger.error({ err, orderId }, "Sipariş alındı mesajı hatası"));
+  };
+  app.use("/api/webhooks", webhooksRouter(db, env, acknowledgeOrder));
 
   app.use(requireAuth(env.sessionSecret));
   app.use("/api/auth", authRouter(env));
@@ -70,7 +84,9 @@ async function main() {
   app.use("/api/products", productsRouter(db, onChange));
   app.use("/api/categories", categoriesRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
-  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null));
+  const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
+  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, cloudClient));
+  app.use("/api/orders", ordersRouter(db, cloudClient));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
