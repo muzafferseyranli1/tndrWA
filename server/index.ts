@@ -12,6 +12,7 @@ import { brandsRouter } from "./routes/brands";
 import { purgeOldWebhookEvents, webhooksRouter } from "./routes/webhooks";
 import { whatsappRouter } from "./routes/whatsapp";
 import { ordersRouter } from "./routes/orders";
+import { soundRouter } from "./routes/sound";
 import { notifyOrderStatus } from "./services/order-messages";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
@@ -87,6 +88,7 @@ async function main() {
   const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
   app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, cloudClient));
   app.use("/api/orders", ordersRouter(db, cloudClient));
+  app.use("/api/sound", soundRouter(db, env.uploadDir));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {

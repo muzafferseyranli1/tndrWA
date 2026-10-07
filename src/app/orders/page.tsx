@@ -35,6 +35,15 @@ export default function OrdersPage() {
   const [notices, setNotices] = useState<Record<number, string>>({});
   const [soundOn, setSoundOn] = useState(false);
   const audio = useRef<AudioContext | null>(null);
+  const [soundUrl, setSoundUrl] = useState<string | null>(null);
+  const [soundMsg, setSoundMsg] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api<{ url: string | null }>("/api/sound")
+      .then((s) => setSoundUrl(s.url))
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     if (brandId === undefined) return;
@@ -56,6 +65,10 @@ export default function OrdersPage() {
   const newCount = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW").length : 0;
 
   const beep = useCallback(() => {
+    if (soundUrl) {
+      new Audio(soundUrl).play().catch(() => undefined);
+      return;
+    }
     const ctx = audio.current;
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -70,7 +83,7 @@ export default function OrdersPage() {
       osc.start(now + i * 0.25);
       osc.stop(now + i * 0.25 + 0.25);
     });
-  }, []);
+  }, [soundUrl]);
 
   // Yeni (henüz işlenmemiş) sipariş varken ses tekrar tekrar çalar; sipariş işleme alınınca durur
   useEffect(() => {
@@ -92,6 +105,35 @@ export default function OrdersPage() {
       beep();
     } catch {
       setError("Tarayıcı ses çalmaya izin vermedi.");
+    }
+  }
+
+  async function uploadSound(file: File | undefined) {
+    if (!file) return;
+    setSoundMsg("");
+    try {
+      const body = new FormData();
+      body.append("sound", file);
+      const res = await fetch("/api/sound", { method: "POST", body });
+      const data = (await res.json().catch(() => ({}))) as { url?: string | null; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Ses dosyası yüklenemedi.");
+      setSoundUrl(data.url ?? null);
+      setSoundMsg("Yeni ses kaydedildi.");
+    } catch (e) {
+      setSoundMsg((e as Error).message);
+    } finally {
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function resetSound() {
+    setSoundMsg("");
+    try {
+      await api("/api/sound", { method: "DELETE" });
+      setSoundUrl(null);
+      setSoundMsg("Varsayılan sese dönüldü.");
+    } catch (e) {
+      setSoundMsg((e as Error).message);
     }
   }
 
@@ -122,6 +164,25 @@ export default function OrdersPage() {
           >
             {soundOn ? "🔔 Ses açık (kapat)" : "🔕 Sesi aç"}
           </button>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <span>
+            Uyarı sesi: <b>{soundUrl ? "özel dosya" : "varsayılan"}</b>
+          </span>
+          <input ref={fileInput} type="file" accept=".mp3,.wav,.ogg,.m4a,audio/*" className="hidden" onChange={(e) => void uploadSound(e.target.files?.[0])} />
+          <button onClick={() => fileInput.current?.click()} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
+            Ses dosyası seç
+          </button>
+          <button onClick={() => (audio.current ? beep() : enableSound())} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
+            Dene
+          </button>
+          {soundUrl && (
+            <button onClick={resetSound} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
+              Varsayılana dön
+            </button>
+          )}
+          <span className="text-xs text-slate-400">MP3, WAV, OGG veya M4A, en fazla 2 MB</span>
+          {soundMsg && <span className="text-slate-700">{soundMsg}</span>}
         </div>
         {!soundOn && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Yeni sipariş geldiğinde sesli uyarı için bu sayfayı açık tutun ve &quot;Sesi aç&quot;a bir kez basın (tarayıcı kuralı).</p>}
 
