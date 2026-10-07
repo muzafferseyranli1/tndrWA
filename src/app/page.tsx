@@ -3,7 +3,7 @@ import AppHeader from "@/components/AppHeader";
 
 const modules = [
   { title: "Ürünler", text: "Menüyü yönet: fiyat, açıklama, aktif/pasif, bugün tükendi.", href: "/products" },
-  { title: "Siparişler", text: "WhatsApp siparişleri, sesli bildirim, durum akışı.", href: null },
+  { title: "Siparişler", text: "WhatsApp siparişleri, sesli bildirim, durum akışı.", href: "/orders" },
   { title: "Yazışma", text: "Müşterilerle panelden karşılıklı yazışma.", href: null },
 ];
 
