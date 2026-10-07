@@ -76,3 +76,12 @@ export interface OrderStatusResultDto {
   /** Müşteriye bildirim gitti mi; gitmediyse sebebi */
   notice: { sent: boolean; error?: string };
 }
+
+export interface MessageTemplateDto {
+  key: string;
+  label: string;
+  hint: string;
+  text: string;
+  defaultText: string;
+  isDefault: boolean;
+}

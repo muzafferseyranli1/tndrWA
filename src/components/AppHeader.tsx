@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Panel" },
   { href: "/orders", label: "Siparişler" },
   { href: "/products", label: "Ürünler" },
+  { href: "/messages", label: "Mesajlar" },
   { href: "/whatsapp", label: "WhatsApp" },
   { href: "/brands", label: "Markalar" },
 ];

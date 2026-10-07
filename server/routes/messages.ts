@@ -1,0 +1,51 @@
+import express, { Router } from "express";
+import { z } from "zod";
+import type { PrismaClient } from "@prisma/client";
+import { resolveBrand } from "../services/brands";
+import { DEFAULT_TEMPLATES, MESSAGE_KEYS, templateKey, templateFor, type MessageKey } from "../services/order-messages";
+
+const LABELS: Record<MessageKey, { label: string; hint: string }> = {
+  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında gider. {ad} müşterinin adıdır." },
+  NEW: { label: "Sipariş alındı", hint: "Sipariş geldiğinde otomatik gider. {ad} ve {no} kullanılabilir." },
+  PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. {ad} ve {no} kullanılabilir." },
+  ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. {ad} ve {no} kullanılabilir." },
+  DELIVERED: { label: "Teslim edildi", hint: "Durum Teslim edildi olunca gider. {ad} ve {no} kullanılabilir." },
+  CANCELLED: { label: "İptal edildi", hint: "Sipariş iptal edilince gider. {ad} ve {no} kullanılabilir." },
+};
+
+export const MAX_MESSAGE_LENGTH = 1000;
+
+/** Markaya göre müşteri mesaj metinleri (durum bildirimleri, hoş geldin). Boş kaydedilen metin varsayılana döner. */
+export function messagesRouter(db: PrismaClient): Router {
+  const router = Router();
+  router.use(express.json({ limit: "10kb" }));
+
+  router.get("/", async (req, res) => {
+    const brand = await resolveBrand(db, req.query.brandId);
+    if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
+    const items = [];
+    for (const key of MESSAGE_KEYS) {
+      const text = await templateFor(db, brand.code, key);
+      items.push({ key, ...LABELS[key], text, defaultText: DEFAULT_TEMPLATES[key], isDefault: text === DEFAULT_TEMPLATES[key] });
+    }
+    res.json(items);
+  });
+
+  router.put("/:key", async (req, res) => {
+    const key = req.params.key as MessageKey;
+    if (!MESSAGE_KEYS.includes(key)) return res.status(404).json({ error: "Bilinmeyen mesaj." });
+    const parsed = z.object({ brandId: z.number().int().optional(), text: z.string().max(MAX_MESSAGE_LENGTH, `Mesaj en fazla ${MAX_MESSAGE_LENGTH} karakter olabilir.`) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
+    const brand = await resolveBrand(db, parsed.data.brandId === undefined ? undefined : String(parsed.data.brandId));
+    if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
+
+    const text = parsed.data.text.trim();
+    const storeKey = templateKey(brand.code, key);
+    if (!text || text === DEFAULT_TEMPLATES[key]) await db.setting.deleteMany({ where: { key: storeKey } });
+    else await db.setting.upsert({ where: { key: storeKey }, create: { key: storeKey, value: text }, update: { value: text } });
+    const current = await templateFor(db, brand.code, key);
+    res.json({ key, ...LABELS[key], text: current, defaultText: DEFAULT_TEMPLATES[key], isDefault: current === DEFAULT_TEMPLATES[key] });
+  });
+
+  return router;
+}
