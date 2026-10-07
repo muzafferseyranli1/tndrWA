@@ -192,7 +192,7 @@ export class SyncCoordinator {
 
 /**
  * Kategorileri Meta'da koleksiyon (ürün seti) olarak eşitler; WhatsApp kataloğunda bölümler olarak görünür.
- * Koleksiyonlar panelle aynı sırada oluşturulur; sıra değişirse hepsi yeniden sırayla kurulur.
+ * Koleksiyonlar panel sırasında görünsün diye ters sırayla oluşturulur; sıra değişirse hepsi yeniden sırayla kurulur.
  * Katalogda ürünü kalmayan kategorinin koleksiyonu silinir. Hataları dizi olarak döndürür.
  */
 export async function syncCollections(db: PrismaClient, client: MetaCatalogClient, brand: Brand): Promise<string[]> {
@@ -203,7 +203,7 @@ export async function syncCollections(db: PrismaClient, client: MetaCatalogClien
   });
   const errors: string[] = [];
   const wanted = cats.filter((c) => c.products.length > 0);
-  const positionChanged = wanted.some((c, i) => c.metaSetId && c.metaSetSig?.split("|")[0] !== String(i));
+  const positionChanged = wanted.some((c, i) => c.metaSetId && c.metaSetSig?.split("|")[0] !== `o${i}`);
 
   const drop = async (c: (typeof cats)[number]) => {
     if (!c.metaSetId) return;
@@ -219,9 +219,10 @@ export async function syncCollections(db: PrismaClient, client: MetaCatalogClien
 
   for (const c of cats) if (c.products.length === 0 || positionChanged) await drop(c);
 
-  for (const [i, c] of wanted.entries()) {
+  // Meta koleksiyonları en son oluşturulan başta listeler; panel sırası görünsün diye sondan başa oluşturulur
+  for (const [i, c] of [...wanted.entries()].reverse()) {
     const ids = c.products.map((p) => p.retailerId);
-    const sig = `${i}|${ids.join(",")}`;
+    const sig = `o${i}|${ids.join(",")}`;
     if (c.metaSetId && c.metaSetSig === sig) continue;
     try {
       let setId = c.metaSetId;
