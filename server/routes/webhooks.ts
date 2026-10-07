@@ -4,7 +4,8 @@ import type { Env } from "../lib/env";
 import { logger } from "../lib/logger";
 import { sameSecret, verifyMetaSignature } from "../lib/meta-signature";
 import { verifyWahaSignature } from "../lib/waha-hmac";
-import { extractCloudEvents, parseCloudOrder } from "../services/whatsapp-cloud";
+import { extractCloudEvents } from "../services/whatsapp-cloud";
+import { ingestCloudOrder } from "../services/orders";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
 export function detectMessageType(payload: unknown): string | null {
@@ -134,15 +135,23 @@ export function webhooksRouter(db: PrismaClient, env: Env): Router {
       try {
         await db.webhookEvent.create({ data: { requestId: ev.requestId, session: ev.session, event: ev.event, messageType: ev.messageType, body: ev.body } });
         stored++;
+        logger.info({ event: ev.event, session: ev.session, messageType: ev.messageType }, "Cloud API olayı alındı");
       } catch (err) {
-        if ((err as { code?: string }).code === "P2002") continue; // Meta aynı olayı yeniden gönderdi
-        logger.error({ err }, "Meta webhook olayı kaydedilemedi");
-        return res.status(500).json({ error: "Kaydedilemedi." }); // Meta yeniden dener
+        // Meta aynı olayı yeniden gönderdi. Sipariş işlemi tekrar güvenli olduğundan siparişler yine de işlenir (önceki deneme yarım kalmış olabilir).
+        if ((err as { code?: string }).code !== "P2002") {
+          logger.error({ err }, "Meta webhook olayı kaydedilemedi");
+          return res.status(500).json({ error: "Kaydedilemedi." }); // Meta yeniden dener
+        }
       }
-      logger.info({ event: ev.event, session: ev.session, messageType: ev.messageType }, "Cloud API olayı alındı");
       if (ev.messageType === "order") {
-        const order = parseCloudOrder(JSON.parse(ev.body).message);
-        logger.info({ session: ev.session, order: order ? { adetKalem: order.items.length, toplamKurus: order.totalKurus, katalog: order.catalogId } : "ayrıştırılamadı" }, "Cloud API siparişi");
+        try {
+          const result = await ingestCloudOrder(db, ev.body);
+          if (result.status === "created") logger.info({ orderId: result.order.id, brandId: result.order.brandId, toplamKurus: result.order.totalKurus }, "Sipariş kaydedildi");
+          else if (result.status === "skipped") logger.warn({ session: ev.session, reason: result.reason }, "Sipariş kaydedilmedi");
+        } catch (err) {
+          logger.error({ err }, "Sipariş işlenemedi");
+          return res.status(500).json({ error: "Sipariş kaydedilemedi." }); // Meta yeniden dener; olay kaydı tekrarda 'duplicate' sayılır
+        }
       }
     }
     res.json({ ok: true, stored });

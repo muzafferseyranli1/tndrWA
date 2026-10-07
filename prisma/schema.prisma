@@ -21,6 +21,7 @@ model Brand {
   waPhoneNumberId String?
   categories    Category[]
   products      Product[]
+  orders        Order[]
 }
 
 model Category {
@@ -97,4 +98,48 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// Müşteri: WhatsApp numarası (wa_id) ve Meta'nın kullanıcı kimliği (BSUID). Kullanıcı adı özelliği açık müşterilerde telefon gelmeyebilir.
+model Customer {
+  id        Int      @id @default(autoincrement())
+  waId      String?  @unique
+  bsuid     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
+// Sipariş: WhatsApp katalog sepetinden gelir. Fiyatlar müşterinin sepette gördüğü liste fiyatlarıdır.
+model Order {
+  id          Int         @id @default(autoincrement())
+  brandId     Int
+  brand       Brand       @relation(fields: [brandId], references: [id])
+  customerId  Int
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  // Meta mesaj kimliği: aynı sipariş webhook'u tekrar gelirse ikinci kayıt açılmaz
+  waMessageId String      @unique
+  // NEW | PREPARING | ON_THE_WAY | DELIVERED | CANCELLED
+  status      String      @default("NEW")
+  note        String      @default("")
+  totalKurus  Int
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+
+  @@index([brandId, status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Ürün sonradan silinse de sipariş okunabilsin: ad ve fiyat sipariş anındaki halidir
+  productId  Int?
+  retailerId String
+  name       String
+  unitKurus  Int
+  quantity   Int
 }
