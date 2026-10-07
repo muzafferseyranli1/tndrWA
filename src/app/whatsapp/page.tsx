@@ -98,13 +98,13 @@ export default function WhatsappPage() {
     }
   }
 
-  async function sendTest(event: React.FormEvent<HTMLFormElement>) {
+  async function sendTest(event: React.FormEvent<HTMLFormElement>, catalog = false) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setSending(true);
     setSendMsg(null);
     try {
-      await api("/api/whatsapp/cloud/send", { method: "POST", json: { brandId, to: form.get("to"), text: form.get("text") } });
+      await api("/api/whatsapp/cloud/send", { method: "POST", json: { brandId, to: form.get("to"), text: form.get("text"), catalog } });
       setSendMsg({ ok: true, text: "Mesaj gönderildi." });
     } catch (err) {
       setSendMsg({ ok: false, text: (err as Error).message });
@@ -175,7 +175,7 @@ export default function WhatsappPage() {
               {cloud.error && <li className="text-red-600">Meta: {cloud.error}</li>}
             </ul>
             {cloud.tokenSet && cloud.phoneNumberId && (
-              <form onSubmit={sendTest} className="mt-3 flex flex-wrap items-end gap-2">
+              <form onSubmit={(e) => sendTest(e, (e.nativeEvent as SubmitEvent).submitter?.getAttribute("name") === "catalog")} className="mt-3 flex flex-wrap items-end gap-2">
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">Alıcı (ülke koduyla)</span>
                   <input name="to" required placeholder="905551112233" className="rounded-lg border border-slate-300 px-3 py-2" />
@@ -185,6 +185,7 @@ export default function WhatsappPage() {
                   <input name="text" required defaultValue="Merhaba, bu bir deneme mesajıdır." className="w-full rounded-lg border border-slate-300 px-3 py-2" />
                 </label>
                 <button disabled={sending} className="rounded-lg bg-brand-500 px-3 py-2 font-medium text-white hover:bg-brand-600 disabled:opacity-50">{sending ? "Gönderiliyor…" : "Deneme mesajı gönder"}</button>
+                <button name="catalog" disabled={sending} className="rounded-lg border border-brand-500 px-3 py-2 font-medium text-brand-600 hover:bg-slate-50 disabled:opacity-50">Katalog mesajı gönder</button>
                 {sendMsg && <span className={sendMsg.ok ? "text-green-700" : "text-red-600"}>{sendMsg.text}</span>}
               </form>
             )}

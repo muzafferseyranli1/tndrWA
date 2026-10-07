@@ -139,3 +139,10 @@ test("numara bilgisi alanları okunur", async () => {
   assert.deepEqual(info, { displayPhoneNumber: "+1 555 647 9578", verifiedName: "Test Number", qualityRating: "GREEN", platformType: "CLOUD_API" });
   assert.ok(calls[0].url.search.includes("fields=display_phone_number"));
 });
+
+test("katalog mesajı: interactive catalog_message gövdesi", async () => {
+  const { fn, calls } = fake(() => ({ body: { messages: [{ id: "wamid.CAT1" }] } }));
+  const id = await new WhatsappCloudClient(cfg, fn).sendCatalog("1408635558995998", "905551112233", "Menümüz");
+  assert.equal(id, "wamid.CAT1");
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive, { type: "catalog_message", body: { text: "Menümüz" }, action: { name: "catalog_message" } });
+});

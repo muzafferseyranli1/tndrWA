@@ -140,7 +140,7 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
   // Deneme mesajı: markanın Cloud API numarasından gönderir (test numarası yalnızca kayıtlı alıcılara yazabilir)
   router.post("/cloud/send", async (req, res) => {
     const parsed = z
-      .object({ brandId: z.number().int().optional(), to: z.string().trim().regex(/^\+?\d{8,15}$/, "Alıcı numarası ülke koduyla yazılmalı (örn. 905551112233)."), text: z.string().trim().min(1, "Mesaj boş olamaz.").max(1000) })
+      .object({ brandId: z.number().int().optional(), catalog: z.boolean().optional(), to: z.string().trim().regex(/^\+?\d{8,15}$/, "Alıcı numarası ülke koduyla yazılmalı (örn. 905551112233)."), text: z.string().trim().min(1, "Mesaj boş olamaz.").max(1000) })
       .safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
     const brand = await brandOf(parsed.data.brandId, res);
@@ -148,7 +148,8 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
     if (!cloud) return res.status(503).json({ error: "WhatsApp Cloud API jetonu (WHATSAPP_CLOUD_TOKEN) tanımlı değil." });
     if (!brand.waPhoneNumberId) return res.status(503).json({ error: `${brand.name} için Cloud API telefon numarası kimliği girilmemiş (Markalar sayfası).` });
     try {
-      const id = await cloud.sendText(brand.waPhoneNumberId, parsed.data.to.replace(/^\+/, ""), parsed.data.text);
+      const to = parsed.data.to.replace(/^\+/, "");
+      const id = parsed.data.catalog ? await cloud.sendCatalog(brand.waPhoneNumberId, to, parsed.data.text) : await cloud.sendText(brand.waPhoneNumberId, to, parsed.data.text);
       res.json({ ok: true, messageId: id });
     } catch (err) {
       res.status(err instanceof CloudApiError ? 502 : 500).json({ error: (err as Error).message });

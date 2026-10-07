@@ -149,6 +149,15 @@ export class WhatsappCloudClient {
     return out.messages?.[0]?.id ?? null;
   }
 
+  /** Numaraya bağlı kataloğu açan düğmeli mesaj (müşteri katalogdan sepet kurup sipariş verir). */
+  async sendCatalog(phoneNumberId: string, to: string, text: string): Promise<string | null> {
+    const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
+      method: "POST",
+      json: { messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive", interactive: { type: "catalog_message", body: { text }, action: { name: "catalog_message" } } },
+    });
+    return out.messages?.[0]?.id ?? null;
+  }
+
   /** Numaranın görünen adı ve durumu: jetonun geçerli olduğunu da doğrular. */
   async phoneInfo(phoneNumberId: string): Promise<PhoneInfo> {
     const out = await this.call<{ display_phone_number?: string; verified_name?: string; quality_rating?: string; platform_type?: string }>(
