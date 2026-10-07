@@ -1,5 +1,6 @@
 import type { Brand, Customer, Order, PrismaClient } from "@prisma/client";
 import type { OrderStatus } from "./orders";
+import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 export type MessageKey = OrderStatus | "WELCOME";
@@ -51,7 +52,8 @@ export async function notifyOrderStatus(
   if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok (yalnızca Meta kullanıcı kimliği var)." };
   try {
     const text = renderTemplate(await templateFor(db, order.brand.code, status), { ad: order.customer.name, no: order.id });
-    await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
+    const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
+    await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId: order.id });
     return { sent: true };
   } catch (err) {
     return { sent: false, error: (err as Error).message };

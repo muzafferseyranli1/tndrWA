@@ -22,6 +22,7 @@ model Brand {
   categories    Category[]
   products      Product[]
   orders        Order[]
+  messages      Message[]
 }
 
 model Category {
@@ -109,6 +110,9 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   orders    Order[]
+  messages  Message[]
+  // Personelin yazışmayı en son okuduğu an (okunmamış sayısı için); marka başına değil müşteri başına
+  readAt    DateTime?
 }
 
 // Sipariş: WhatsApp katalog sepetinden gelir. Fiyatlar müşterinin sepette gördüğü liste fiyatlarıdır.
@@ -142,4 +146,28 @@ model OrderItem {
   name       String
   unitKurus  Int
   quantity   Int
+}
+
+// WhatsApp yazışması: müşteriden gelen ve panelden/otomatik giden mesajlar. Kişisel veri içerir, KVKK gereği düzenli silinir.
+model Message {
+  id          Int      @id @default(autoincrement())
+  brandId     Int
+  brand       Brand    @relation(fields: [brandId], references: [id])
+  customerId  Int
+  customer    Customer @relation(fields: [customerId], references: [id])
+  // IN: müşteriden | OUT: bizden
+  direction   String
+  // text | order | catalog | image | audio ... (gelen türler Meta'dan olduğu gibi)
+  type        String
+  body        String
+  // Meta mesaj kimliği; giden mesajın teslim durumu bu kimlikle eşlenir
+  waMessageId String?  @unique
+  // IN: RECEIVED | OUT: SENT | DELIVERED | READ | FAILED
+  status      String
+  error       String?
+  orderId     Int?
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([brandId, createdAt])
 }

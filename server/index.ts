@@ -14,7 +14,9 @@ import { whatsappRouter } from "./routes/whatsapp";
 import { ordersRouter } from "./routes/orders";
 import { soundRouter } from "./routes/sound";
 import { messagesRouter } from "./routes/messages";
+import { chatRouter } from "./routes/chat";
 import { notifyOrderStatus } from "./services/order-messages";
+import { sendWelcomeIfNeeded } from "./services/chat";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
@@ -73,7 +75,13 @@ async function main() {
       })
       .catch((err) => logger.error({ err, orderId }, "Sipariş alındı mesajı hatası"));
   };
-  app.use("/api/webhooks", webhooksRouter(db, env, acknowledgeOrder));
+  app.use(
+    "/api/webhooks",
+    webhooksRouter(db, env, {
+      onOrderCreated: acknowledgeOrder,
+      onInbound: (i) => void sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message),
+    }),
+  );
 
   app.use(requireAuth(env.sessionSecret));
   app.use("/api/auth", authRouter(env));
@@ -91,6 +99,7 @@ async function main() {
   app.use("/api/orders", ordersRouter(db, cloudClient));
   app.use("/api/sound", soundRouter(db, env.uploadDir));
   app.use("/api/messages", messagesRouter(db));
+  app.use("/api/chat", chatRouter(db, cloudClient));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {

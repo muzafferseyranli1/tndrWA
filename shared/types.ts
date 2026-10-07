@@ -85,3 +85,35 @@ export interface MessageTemplateDto {
   defaultText: string;
   isDefault: boolean;
 }
+
+export interface ChatConversationDto {
+  customerId: number;
+  name: string | null;
+  phone: string | null;
+  lastBody: string;
+  lastType: string;
+  lastDirection: "IN" | "OUT";
+  lastAt: string;
+  unread: number;
+  /** Müşterinin son mesajından beri 24 saat geçmediyse serbest mesaj gönderilebilir */
+  windowOpen: boolean;
+}
+
+export interface ChatMessageDto {
+  id: number;
+  direction: "IN" | "OUT";
+  type: string;
+  body: string;
+  /** IN: RECEIVED | OUT: SENT, DELIVERED, READ, FAILED */
+  status: string;
+  error: string | null;
+  orderId: number | null;
+  createdAt: string;
+}
+
+export interface ChatThreadDto {
+  customer: { id: number; name: string | null; phone: string | null };
+  messages: ChatMessageDto[];
+  windowOpen: boolean;
+  windowEndsAt: string | null;
+}

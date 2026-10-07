@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contactFrom } from "../server/services/orders";
+import { contactFrom } from "../server/services/customers";
 
 test("müşteri: telefon, BSUID ve profil adı webhook'tan okunur", () => {
   const c = contactFrom({ contacts: [{ profile: { name: " Muzaffer " }, wa_id: "905332760534", user_id: "TR.1" }], message: { from: "905332760534" } });

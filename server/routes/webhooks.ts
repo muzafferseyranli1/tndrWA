@@ -6,6 +6,7 @@ import { sameSecret, verifyMetaSignature } from "../lib/meta-signature";
 import { verifyWahaSignature } from "../lib/waha-hmac";
 import { extractCloudEvents } from "../services/whatsapp-cloud";
 import { ingestCloudOrder } from "../services/orders";
+import { recordInbound, recordStatus, type InboundRecord } from "../services/chat";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
 export function detectMessageType(payload: unknown): string | null {
@@ -53,7 +54,14 @@ export function isDiscoveryEvent(event: string, messageType: string | null, rawT
   return event === "engine.event" && DISCOVERY_KEY.test(rawText);
 }
 
-export function webhooksRouter(db: PrismaClient, env: Env, onOrderCreated: (orderId: number) => void = () => undefined): Router {
+export interface WebhookHooks {
+  /** Yeni sipariş kaydedildi (müşteriye "aldık" mesajı vb. için) */
+  onOrderCreated?: (orderId: number) => void;
+  /** Müşteriden sipariş dışı yeni bir mesaj geldi (hoş geldin mesajı vb. için) */
+  onInbound?: (inbound: InboundRecord) => void;
+}
+
+export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks = {}): Router {
   const router = Router();
 
   // Ham gövde gerekir: imza, JSON'a çevrilmeden önceki baytlar üzerinden doğrulanır
@@ -148,12 +156,25 @@ export function webhooksRouter(db: PrismaClient, env: Env, onOrderCreated: (orde
           const result = await ingestCloudOrder(db, ev.body);
           if (result.status === "created") {
             logger.info({ orderId: result.order.id, brandId: result.order.brandId, toplamKurus: result.order.totalKurus }, "Sipariş kaydedildi");
-            onOrderCreated(result.order.id);
-          }
-          else if (result.status === "skipped") logger.warn({ session: ev.session, reason: result.reason }, "Sipariş kaydedilmedi");
+            hooks.onOrderCreated?.(result.order.id);
+          } else if (result.status === "skipped") logger.warn({ session: ev.session, reason: result.reason }, "Sipariş kaydedilmedi");
         } catch (err) {
           logger.error({ err }, "Sipariş işlenemedi");
           return res.status(500).json({ error: "Sipariş kaydedilemedi." }); // Meta yeniden dener; olay kaydı tekrarda 'duplicate' sayılır
+        }
+      } else if (ev.event === "cloud.message") {
+        // Yazışma kaydı kritik değil: hata webhook'u düşürmez (Meta'yı yeniden denemeye zorlamaz)
+        try {
+          const inbound = await recordInbound(db, ev.body);
+          if (inbound) hooks.onInbound?.(inbound);
+        } catch (err) {
+          logger.error({ err }, "Gelen mesaj kaydedilemedi");
+        }
+      } else if (ev.event === "cloud.status") {
+        try {
+          await recordStatus(db, ev.body);
+        } catch (err) {
+          logger.error({ err }, "Teslim durumu işlenemedi");
         }
       }
     }

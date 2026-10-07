@@ -1,28 +1,13 @@
 import type { Order, PrismaClient } from "@prisma/client";
+import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
+import { contactFrom, upsertCustomer } from "./customers";
 import { parseCloudOrder } from "./whatsapp-cloud";
-
-export const ORDER_STATUSES = ["NEW", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"] as const;
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-export interface CloudContact {
-  waId: string | null;
-  bsuid: string | null;
-  name: string | null;
-}
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-/** Webhook gövdesinden (kaydedilen olay biçimi) müşteri bilgisi: telefon, Meta kullanıcı kimliği ve profil adı. */
-export function contactFrom(body: unknown): CloudContact {
-  const b = body as { contacts?: { profile?: { name?: unknown }; wa_id?: unknown; user_id?: unknown }[]; message?: { from?: unknown; from_user_id?: unknown } } | null;
-  const c = b?.contacts?.[0];
-  return {
-    waId: str(c?.wa_id) ?? str(b?.message?.from),
-    bsuid: str(c?.user_id) ?? str(b?.message?.from_user_id),
-    name: str(c?.profile?.name),
-  };
-}
+export const ORDER_STATUSES = ["NEW", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export type IngestResult = { status: "created"; order: Order } | { status: "duplicate" } | { status: "skipped"; reason: string };
 
@@ -56,14 +41,9 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
 
   try {
     const order = await db.$transaction(async (tx) => {
-      const existing =
-        (contact.waId ? await tx.customer.findUnique({ where: { waId: contact.waId } }) : null) ??
-        (contact.bsuid ? await tx.customer.findUnique({ where: { bsuid: contact.bsuid } }) : null);
-      const customer = existing
-        ? await tx.customer.update({ where: { id: existing.id }, data: { name: contact.name ?? existing.name, waId: existing.waId ?? contact.waId, bsuid: existing.bsuid ?? contact.bsuid } })
-        : await tx.customer.create({ data: { waId: contact.waId, bsuid: contact.bsuid, name: contact.name } });
+      const customer = await upsertCustomer(tx, contact);
 
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           brandId: brand.id,
           customerId: customer.id,
@@ -79,6 +59,11 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
           },
         },
       });
+      // Yazışma akışında sipariş de bir mesaj olarak görünür
+      await tx.message.create({
+        data: { brandId: brand.id, customerId: customer.id, direction: "IN", type: "order", body: `Sipariş #${created.id} · ${formatTRY(created.totalKurus)}`, waMessageId, status: "RECEIVED", orderId: created.id },
+      });
+      return created;
     });
     return { status: "created", order };
   } catch (err) {
