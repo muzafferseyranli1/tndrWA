@@ -68,7 +68,7 @@ async function main() {
   app.use("/api/brands", brandsRouter(db));
   app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
   app.use("/api/products", productsRouter(db, onChange));
-  app.use("/api/categories", categoriesRouter(db));
+  app.use("/api/categories", categoriesRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
   app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null));
 

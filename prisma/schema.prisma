@@ -29,6 +29,9 @@ model Category {
   brand     Brand     @relation(fields: [brandId], references: [id])
   name      String
   sortOrder Int       @default(0)
+  // Meta'daki koleksiyon (ürün seti) kimliği ve en son gönderilen içerik imzası (sıra + ürünler)
+  metaSetId  String?
+  metaSetSig String?
   products  Product[]
 
   @@unique([brandId, name])

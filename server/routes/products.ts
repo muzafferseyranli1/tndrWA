@@ -221,10 +221,25 @@ export function productsRouter(db: PrismaClient, onChange: (brandId: number) => 
     res.json(toProductDto(updated));
   });
 
+  // Kategori içinde yukarı/aşağı taşı (porsiyonlar yemekle birlikte hareket eder)
+  router.post("/:id/move", async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = moveSchema.safeParse(req.body);
+    if (!parsed.success) return fail(res, 400, "direction (up/down) gerekli.");
+    const product = Number.isInteger(id) ? await db.product.findUnique({ where: { id } }) : null;
+    if (!product) return fail(res, 404, "Ürün bulunamadı.");
+    const rows = await db.product.findMany({ where: { categoryId: product.categoryId }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true, groupKey: true } });
+    const moves = moveInOrder(rows, id, parsed.data.direction);
+    if (!moves) return res.json({ moved: false });
+    await db.$transaction(moves.map((m) => db.product.update({ where: { id: m.id }, data: { sortOrder: m.position } })));
+    onChange(product.brandId);
+    res.json({ moved: true });
+  });
+
   return router;
 }
 
-export function categoriesRouter(db: PrismaClient): Router {
+export function categoriesRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 
@@ -246,5 +261,41 @@ export function categoriesRouter(db: PrismaClient): Router {
     res.status(201).json({ id: created.id, name: created.name });
   });
 
+  // Kategori sırasını değiştir (Meta'da koleksiyonlar bu sırayla yeniden kurulur)
+  router.post("/:id/move", async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = moveSchema.safeParse(req.body);
+    if (!parsed.success) return fail(res, 400, "direction (up/down) gerekli.");
+    const category = Number.isInteger(id) ? await db.category.findUnique({ where: { id } }) : null;
+    if (!category) return fail(res, 404, "Kategori bulunamadı.");
+    const rows = await db.category.findMany({ where: { brandId: category.brandId }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true } });
+    const moves = moveInOrder(rows, id, parsed.data.direction);
+    if (!moves) return res.json({ moved: false });
+    await db.$transaction(moves.map((m) => db.category.update({ where: { id: m.id }, data: { sortOrder: m.position } })));
+    onChange(category.brandId);
+    res.json({ moved: true });
+  });
+
   return router;
 }
+
+/** Birimleri (porsiyonlu yemeğin tüm porsiyonları tek birim) yer değiştirip sortOrder'ı yeniden numaralar. */
+export function moveInOrder<T extends { id: number; groupKey?: string | null }>(
+  rows: T[],
+  id: number,
+  direction: "up" | "down",
+): { id: number; position: number }[] | null {
+  const units = new Map<string, T[]>();
+  for (const r of rows) {
+    const key = r.groupKey ? `g:${r.groupKey}` : `i:${r.id}`;
+    units.set(key, [...(units.get(key) ?? []), r]);
+  }
+  const list = [...units.values()];
+  const from = list.findIndex((u) => u.some((r) => r.id === id));
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= list.length) return null;
+  [list[from], list[to]] = [list[to], list[from]];
+  return list.flatMap((u, position) => u.map((r) => ({ id: r.id, position })));
+}
+
+const moveSchema = z.object({ direction: z.enum(["up", "down"]) });

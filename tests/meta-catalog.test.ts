@@ -37,7 +37,6 @@ test("ürün verisi: liste fiyatı, stok durumu, kategori ve herkese açık gör
     availability: "in stock",
     condition: "new",
     price: "999.00 TRY",
-    link: "https://tndrwa.example.com",
     image_link: "https://tndrwa.example.com/uploads/tandir-tabagi-100-g-ab12cd34.jpg",
     brand: "Yerinde Tandır",
     product_type: "Et Tandırlar",

@@ -161,7 +161,10 @@ export class SyncCoordinator {
     if (this.running.has(brand.id)) throw new Error("Bu marka için bir eşitleme zaten sürüyor, bitmesini bekleyin.");
     this.running.add(brand.id);
     try {
-      return await syncProducts(this.db, this.clientFor(brand), brand, this.publicBaseUrl!, options);
+      const client = this.clientFor(brand);
+      const summary = await syncProducts(this.db, client, brand, this.publicBaseUrl!, options);
+      for (const message of await syncCollections(this.db, client, brand)) summary.errors.push({ retailerId: "koleksiyon", message });
+      return summary;
     } finally {
       this.running.delete(brand.id);
     }
@@ -185,4 +188,55 @@ export class SyncCoordinator {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
   }
+}
+
+/**
+ * Kategorileri Meta'da koleksiyon (ürün seti) olarak eşitler; WhatsApp kataloğunda bölümler olarak görünür.
+ * Koleksiyonlar panelle aynı sırada oluşturulur; sıra değişirse hepsi yeniden sırayla kurulur.
+ * Katalogda ürünü kalmayan kategorinin koleksiyonu silinir. Hataları dizi olarak döndürür.
+ */
+export async function syncCollections(db: PrismaClient, client: MetaCatalogClient, brand: Brand): Promise<string[]> {
+  const cats = await db.category.findMany({
+    where: { brandId: brand.id },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    include: { products: { where: { onMeta: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { retailerId: true } } },
+  });
+  const errors: string[] = [];
+  const wanted = cats.filter((c) => c.products.length > 0);
+  const positionChanged = wanted.some((c, i) => c.metaSetId && c.metaSetSig?.split("|")[0] !== String(i));
+
+  const drop = async (c: (typeof cats)[number]) => {
+    if (!c.metaSetId) return;
+    try {
+      await client.deleteProductSet(c.metaSetId);
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, category: c.name }, "koleksiyon silinemedi (zaten silinmiş olabilir)");
+    }
+    await db.category.update({ where: { id: c.id }, data: { metaSetId: null, metaSetSig: null } });
+    c.metaSetId = null;
+    c.metaSetSig = null;
+  };
+
+  for (const c of cats) if (c.products.length === 0 || positionChanged) await drop(c);
+
+  for (const [i, c] of wanted.entries()) {
+    const ids = c.products.map((p) => p.retailerId);
+    const sig = `${i}|${ids.join(",")}`;
+    if (c.metaSetId && c.metaSetSig === sig) continue;
+    try {
+      let setId = c.metaSetId;
+      if (setId) {
+        try {
+          await client.updateProductSet(setId, c.name, ids);
+        } catch {
+          setId = null; // Meta tarafında silinmiş: yeniden oluştur
+        }
+      }
+      if (!setId) setId = await client.createProductSet(c.name, ids);
+      await db.category.update({ where: { id: c.id }, data: { metaSetId: setId, metaSetSig: sig } });
+    } catch (err) {
+      errors.push(`Koleksiyon "${c.name}": ${(err as Error).message}`);
+    }
+  }
+  return errors;
 }

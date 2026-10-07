@@ -63,7 +63,6 @@ export function buildItemData(p: ItemSource, inStock: boolean, publicBaseUrl: st
     availability: inStock ? "in stock" : "out of stock",
     condition: "new",
     price: metaPrice(p.priceKurus),
-    link: publicBaseUrl,
     image_link: `${publicBaseUrl}/uploads/${p.imagePath}`,
     brand: p.brandName,
     product_type: p.category.name,
@@ -73,7 +72,7 @@ export function buildItemData(p: ItemSource, inStock: boolean, publicBaseUrl: st
 }
 
 interface CallOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
   params?: Record<string, string>;
   form?: Record<string, string>;
 }
@@ -144,4 +143,23 @@ export class MetaCatalogClient {
     }
     throw new MetaApiError("Meta toplu işlemi zamanında bitirmedi, biraz sonra tekrar deneyin.");
   }
+
+  /** Ürün seti (WhatsApp'ta "koleksiyon") oluşturur; kimliğini döndürür. */
+  async createProductSet(name: string, retailerIds: string[]): Promise<string> {
+    const out = await this.call<{ id?: string }>(`${this.cfg.catalogId}/product_sets`, { method: "POST", form: { name, filter: setFilter(retailerIds) } });
+    if (!out.id) throw new MetaApiError("Meta koleksiyon kimliği döndürmedi.");
+    return out.id;
+  }
+
+  async updateProductSet(id: string, name: string, retailerIds: string[]): Promise<void> {
+    await this.call(id, { method: "POST", form: { name, filter: setFilter(retailerIds) } });
+  }
+
+  async deleteProductSet(id: string): Promise<void> {
+    await this.call(id, { method: "DELETE" });
+  }
+}
+
+function setFilter(retailerIds: string[]): string {
+  return JSON.stringify({ retailer_id: { is_any: retailerIds } });
 }

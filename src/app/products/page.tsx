@@ -78,6 +78,16 @@ export default function ProductsPage() {
     }
   }
 
+  async function move(kind: "products" | "categories", id: number, direction: "up" | "down") {
+    setError("");
+    try {
+      await api(`/api/${kind}/${id}/move`, { method: "POST", json: { direction } });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   const toggleSoldOut = (p: ProductDto) =>
     act(p.id, () => api<ProductDto>(`/api/products/${p.id}/sold-out`, { method: "POST", json: { soldOut: p.availability !== "OUT_OF_STOCK" } }));
   const toggleStatus = (p: ProductDto) =>
@@ -112,7 +122,7 @@ export default function ProductsPage() {
             </span>
             <button
               onClick={syncNow}
-              disabled={syncing || meta.blockers.length > 0 || meta.counts.pending + meta.counts.error === 0}
+              disabled={syncing || meta.blockers.length > 0}
               className="ml-auto rounded-lg bg-brand-500 px-3 py-1.5 font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
               {syncing ? "Gönderiliyor…" : "Meta'ya gönder"}
@@ -137,14 +147,26 @@ export default function ProductsPage() {
         {products && products.length === 0 && <p className="text-slate-500">Bu markada henüz ürün yok.</p>}
 
         <div className="space-y-6">
-          {groups.map(([category, items]) => (
+          {groups.map(([category, items], gi) => (
             <section key={category}>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 {category} <span className="font-normal normal-case text-slate-400">({items.length})</span>
+                {!query.trim() && (
+                  <span className="ml-auto flex gap-1 normal-case">
+                    <button title="Kategoriyi yukarı al" disabled={gi === 0} onClick={() => move("categories", items[0].categoryId, "up")} className="rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-30">▲</button>
+                    <button title="Kategoriyi aşağı al" disabled={gi === groups.length - 1} onClick={() => move("categories", items[0].categoryId, "down")} className="rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-30">▼</button>
+                  </span>
+                )}
               </h2>
               <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-                {items.map((p) => (
+                {items.map((p, i) => (
                   <li key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${p.availability === "HIDDEN" ? "opacity-60" : ""}`}>
+                    {!query.trim() && (
+                      <div className="flex flex-col gap-1">
+                        <button title="Yukarı al" disabled={i === 0} onClick={() => move("products", p.id, "up")} className="rounded border border-slate-300 px-1.5 text-[10px] leading-4 hover:bg-slate-50 disabled:opacity-30">▲</button>
+                        <button title="Aşağı al" disabled={i === items.length - 1} onClick={() => move("products", p.id, "down")} className="rounded border border-slate-300 px-1.5 text-[10px] leading-4 hover:bg-slate-50 disabled:opacity-30">▼</button>
+                      </div>
+                    )}
                     {p.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.imageUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 object-cover" />
