@@ -7,6 +7,7 @@ import { resolveBrand } from "../services/brands";
 import { notifyOrderStatus } from "../services/order-messages";
 import { ORDER_STATUSES, type OrderStatus } from "../services/orders";
 import { priceWithDiscount } from "../services/payment";
+import { newRatingToken } from "../services/ratings";
 import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
 type OrderRow = Order & { items: OrderItem[]; customer: Customer };
@@ -34,7 +35,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
 
 const ACTIVE: OrderStatus[] = ["NEW", "PREPARING", "ON_THE_WAY"];
 
-export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null): Router {
+export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 
@@ -64,10 +65,11 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
 
     const updated = await db.order.update({
       where: { id },
-      data: { status },
+      // Teslim edilince müşteriye gidecek değerlendirme bağlantısının anahtarı (bir kez üretilir)
+      data: { status, ...(status === "DELIVERED" && !existing.ratingToken ? { ratingToken: newRatingToken() } : {}) },
       include: { items: { orderBy: { id: "asc" } }, customer: true, brand: true },
     });
-    const notice = notify ? await notifyOrderStatus(db, cloud, updated as OrderRow & { brand: Brand }, status) : { sent: false };
+    const notice = notify ? await notifyOrderStatus(db, cloud, updated as OrderRow & { brand: Brand }, status, publicBaseUrl) : { sent: false };
     res.json({ order: toOrderDto(updated), notice });
   });
 

@@ -35,7 +35,7 @@ export function channelsRouter(db: PrismaClient, publicBaseUrl: string | null): 
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
     const value = validateChannelValue(channel.kind, parsed.data.value);
     if (!value.ok) return res.status(400).json({ error: value.error });
-    if (parsed.data.enabled && !value.value) return res.status(400).json({ error: "Kanalı açmak için önce değerini (numara ya da bağlantı) girin." });
+    if (parsed.data.enabled && !value.value && channel.kind !== "REVIEW") return res.status(400).json({ error: "Kanalı açmak için önce değerini (numara ya da bağlantı) girin." });
     const updated = await db.brandChannel.update({ where: { id }, data: { label: parsed.data.label, value: value.value, enabled: parsed.data.enabled } });
     res.json(toDto(updated));
   });

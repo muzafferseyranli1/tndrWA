@@ -25,6 +25,7 @@ model Brand {
   messages      Message[]
   channels      BrandChannel[]
   paymentTypes  PaymentType[]
+  ratings       Rating[]
 }
 
 model Category {
@@ -145,6 +146,9 @@ model Order {
   address        String      @default("")
   lat            Float?
   lng            Float?
+  // Teslimden sonra müşteriye giden değerlendirme bağlantısındaki tek kullanımlık anahtar
+  ratingToken    String?     @unique
+  ratingRef      Rating?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   items       OrderItem[]
@@ -247,4 +251,29 @@ model CustomerAddress {
   lastUsedAt DateTime @default(now())
 
   @@unique([customerId, key])
+}
+
+// Müşteri değerlendirmesi: lezzet, hizmet, servis (1-5). Herhangi biri 4'ün altındaysa "düşük" sayılır ve arama listesine girer.
+model Rating {
+  id         Int      @id @default(autoincrement())
+  brandId    Int
+  brand      Brand    @relation(fields: [brandId], references: [id])
+  // Sipariş bağlantısından geldiyse siparişin kimliği (sipariş başına bir değerlendirme)
+  orderId    Int?     @unique
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId Int?
+  taste      Int
+  care       Int
+  delivery   Int
+  comment    String   @default("")
+  name       String?
+  phone      String?
+  low        Boolean  @default(false)
+  // NONE | PENDING (aranacak) | CALLED | RESOLVED
+  followUp   String   @default("NONE")
+  followNote String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([brandId, createdAt])
+  @@index([brandId, low, followUp])
 }

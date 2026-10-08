@@ -41,3 +41,19 @@ test("adres anahtarı: büyük/küçük harf ve boşluk farkı aynı adresi veri
   assert.equal(addressKey("IŞIK Sok. No:3"), "ışık sok. no:3");
   assert.notEqual(addressKey("Bağdat Cad. No:100"), addressKey("Bağdat Cad. No:101"));
 });
+
+import { LOW_SCORE_BELOW, isLow, newRatingToken } from "../server/services/ratings";
+
+test("düşük puan: herhangi bir soru 4'ün altındaysa", () => {
+  assert.equal(LOW_SCORE_BELOW, 4);
+  assert.equal(isLow(5, 5, 5), false);
+  assert.equal(isLow(5, 5, 4), false);
+  assert.equal(isLow(5, 3, 5), true);
+  assert.equal(isLow(1, 1, 1), true);
+});
+
+test("değerlendirme anahtarı: tahmin edilemez, URL'ye uygun, tekrar etmez", () => {
+  const a = newRatingToken();
+  assert.match(a, /^[A-Za-z0-9_-]{12}$/);
+  assert.notEqual(a, newRatingToken());
+});

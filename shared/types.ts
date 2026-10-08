@@ -165,3 +165,47 @@ export interface PaymentTypeDto {
   discountPercent: number;
   enabled: boolean;
 }
+
+export interface RatingLinkDto {
+  label: string;
+  href: string;
+}
+
+export interface RatingContextDto {
+  brandName: string;
+  /** Bu bağlantıyla zaten değerlendirme yapıldı */
+  alreadyRated: boolean;
+  /** Bağlantı bir siparişe bağlıysa o siparişin numarası */
+  orderNo: number | null;
+}
+
+export interface RatingResultDto {
+  ok: true;
+  low: boolean;
+  links: RatingLinkDto[];
+}
+
+export interface RatingDto {
+  id: number;
+  orderId: number | null;
+  taste: number;
+  care: number;
+  delivery: number;
+  comment: string;
+  name: string | null;
+  phone: string | null;
+  low: boolean;
+  followUp: "NONE" | "PENDING" | "CALLED" | "RESOLVED";
+  followNote: string;
+  createdAt: string;
+}
+
+export interface RatingSummaryDto {
+  days: number;
+  count: number;
+  lowCount: number;
+  pendingCount: number;
+  avgTaste: number | null;
+  avgCare: number | null;
+  avgDelivery: number | null;
+}

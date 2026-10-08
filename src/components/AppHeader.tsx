@@ -9,6 +9,7 @@ const links = [
   { href: "/orders", label: "Siparişler" },
   { href: "/chat", label: "Yazışma" },
   { href: "/products", label: "Ürünler" },
+  { href: "/ratings", label: "Değerlendirmeler" },
   { href: "/payments", label: "Ödeme" },
   { href: "/messages", label: "Mesajlar" },
   { href: "/channels", label: "Kanallar" },

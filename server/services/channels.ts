@@ -19,7 +19,7 @@ export async function ensureDefaultChannels(db: PrismaClient): Promise<number> {
     for (const [index, spec] of CHANNEL_SPECS.entries()) {
       if (have.has(spec.kind)) continue;
       const value = PREFILL[brand.code]?.[spec.kind] ?? "";
-      await db.brandChannel.create({ data: { brandId: brand.id, kind: spec.kind, label: spec.label, value, enabled: value !== "", sortOrder: index } });
+      await db.brandChannel.create({ data: { brandId: brand.id, kind: spec.kind, label: spec.label, value, enabled: value !== "" || spec.kind === "REVIEW", sortOrder: index } });
       created++;
     }
   }
@@ -32,7 +32,8 @@ export async function publicBrand(db: PrismaClient, code: string): Promise<Publi
   if (!brand) return null;
   const channels = brand.channels.flatMap((c) => {
     if (!isChannelKind(c.kind)) return [];
-    const href = channelHref(c.kind, c.value);
+    // "Bizi değerlendirin" her zaman dahili değerlendirme sayfasına gider; kanalın değeri (Google yorum bağlantısı) o sayfada gösterilir
+    const href = c.kind === "REVIEW" ? `/m/${brand.code}/degerlendir` : channelHref(c.kind, c.value);
     return href ? [{ kind: c.kind, label: c.label, href }] : [];
   });
   return { code: brand.code, name: brand.name, channels };

@@ -5,6 +5,7 @@ import { resolveBrand } from "../services/brands";
 import { DEFAULT_TEMPLATES, MESSAGE_KEYS, templateKey, templateFor, type MessageKey } from "../services/order-messages";
 
 const ALL = "{ad}, {no}, {toplam}, {indirim}, {tutar}, {odeme}, {adres} kullanılabilir.";
+const DELIVERED_HINT = "Durum Teslim edildi olunca gider. {degerlendirme} sipariş için tek kullanımlık değerlendirme bağlantısını koyar. " + ALL;
 const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." },
   NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL },
@@ -14,7 +15,7 @@ const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   CONFIRMED: { label: "Sipariş onayı", hint: "Ödeme ve adres tamamlanınca gider, sipariş panelde yeni olur. " + ALL },
   PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
   ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },
-  DELIVERED: { label: "Teslim edildi", hint: "Durum Teslim edildi olunca gider. " + ALL },
+  DELIVERED: { label: "Teslim edildi", hint: DELIVERED_HINT },
   CANCELLED: { label: "İptal edildi", hint: "Sipariş iptal edilince gider. " + ALL },
 };
 

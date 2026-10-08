@@ -17,11 +17,11 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   CONFIRMED: "Siparişiniz onaylandı (No: {no}).\nÖdeme: {odeme}\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}\n\nHazırlanmaya başlayınca haber vereceğiz.",
   PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",
-  DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!",
+  DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}",
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",
 };
 
-export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string };
+export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string };
 
 /** Yer tutucuları doldurur; ad yoksa "Merhaba {ad}," gibi kalıplar düzgün kalsın diye boşluk ve virgül toparlanır. */
 export function renderTemplate(template: string, vars: TemplateVars): string {
@@ -33,6 +33,7 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
     tutar: vars.tutar ?? "",
     odeme: vars.odeme ?? "",
     adres: vars.adres ?? "",
+    degerlendirme: vars.degerlendirme ?? "",
   };
   let out = template;
   for (const [key, value] of Object.entries(values)) out = out.replaceAll(`{${key}}`, value);
@@ -56,7 +57,7 @@ export async function templateFor(db: PrismaClient, brandCode: string, key: Mess
 }
 
 /** Siparişin tutarlarını yer tutucu değerlerine çevirir. */
-export function orderVars(order: Order, customer: Pick<Customer, "name">): TemplateVars {
+export function orderVars(order: Order, customer: Pick<Customer, "name">, ratingUrl = ""): TemplateVars {
   const payable = order.totalKurus - order.discountKurus;
   return {
     ad: customer.name,
@@ -66,7 +67,13 @@ export function orderVars(order: Order, customer: Pick<Customer, "name">): Templ
     tutar: formatTRY(payable),
     odeme: order.paymentLabel,
     adres: order.address,
+    degerlendirme: ratingUrl,
   };
+}
+
+/** Teslim sonrası müşteriye giden değerlendirme bağlantısı (sipariş başına tek kullanımlık anahtar içerir). */
+export function ratingUrlFor(publicBaseUrl: string | null, brandCode: string, token: string | null): string {
+  return publicBaseUrl && token ? `${publicBaseUrl}/m/${brandCode}/degerlendir?t=${token}` : "";
 }
 
 /** Siparişin yeni durumunu müşteriye WhatsApp'tan bildirir. Hata fırlatmaz; sonucu döndürür (sipariş durumu yine de değişir). */
@@ -75,12 +82,13 @@ export async function notifyOrderStatus(
   cloud: WhatsappCloudClient | null,
   order: Order & { brand: Brand; customer: Customer },
   status: OrderStatus,
+  publicBaseUrl: string | null = null,
 ): Promise<NotifyResult> {
   if (!cloud) return { sent: false, error: "WhatsApp gönderim jetonu tanımlı değil." };
   if (!order.brand.waPhoneNumberId) return { sent: false, error: "Markanın Cloud API numara kimliği girilmemiş." };
   if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok (yalnızca Meta kullanıcı kimliği var)." };
   try {
-    const text = renderTemplate(await templateFor(db, order.brand.code, status), orderVars(order, order.customer));
+    const text = renderTemplate(await templateFor(db, order.brand.code, status), orderVars(order, order.customer, ratingUrlFor(publicBaseUrl, order.brand.code, order.ratingToken)));
     const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
     await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId: order.id });
     return { sent: true };

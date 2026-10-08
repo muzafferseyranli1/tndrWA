@@ -18,6 +18,7 @@ import { chatRouter } from "./routes/chat";
 import { publicRouter } from "./routes/public";
 import { channelsRouter } from "./routes/channels";
 import { paymentsRouter } from "./routes/payments";
+import { ratingsRouter } from "./routes/ratings";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
 import { ensureDefaultPaymentTypes } from "./services/payment";
@@ -107,12 +108,13 @@ async function main() {
   app.use("/api/meta", metaRouter(db, coordinator));
   const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
   app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, cloudClient));
-  app.use("/api/orders", ordersRouter(db, cloudClient));
+  app.use("/api/orders", ordersRouter(db, cloudClient, env.publicBaseUrl));
   app.use("/api/sound", soundRouter(db, env.uploadDir));
   app.use("/api/messages", messagesRouter(db));
   app.use("/api/chat", chatRouter(db, cloudClient));
   app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
   app.use("/api/payments", paymentsRouter(db));
+  app.use("/api/ratings", ratingsRouter(db));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
