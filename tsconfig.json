@@ -40,8 +40,7 @@
     "shared/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "tests/**/*.ts",
-    ".next-e2e/types/**/*.ts"
+    "tests/**/*.ts"
   ],
   "exclude": [
     "node_modules"
