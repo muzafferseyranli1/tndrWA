@@ -158,6 +158,40 @@ export class WhatsappCloudClient {
     return out.messages?.[0]?.id ?? null;
   }
 
+  /** Seçim listesi (en fazla 10 satır). Müşterinin seçimi webhook'ta `interactive.list_reply.id` olarak gelir. */
+  async sendList(phoneNumberId: string, to: string, input: { body: string; buttonText: string; rows: { id: string; title: string; description?: string }[] }): Promise<string | null> {
+    const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
+      method: "POST",
+      json: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          body: { text: input.body },
+          action: { button: input.buttonText.slice(0, 20), sections: [{ title: "Seçenekler", rows: input.rows.slice(0, 10).map((r) => ({ id: r.id, title: r.title.slice(0, 24), ...(r.description ? { description: r.description.slice(0, 72) } : {}) })) }] },
+        },
+      },
+    });
+    return out.messages?.[0]?.id ?? null;
+  }
+
+  /** En fazla 3 hızlı yanıt düğmesi. Seçim webhook'ta `interactive.button_reply.id` olarak gelir. */
+  async sendButtons(phoneNumberId: string, to: string, body: string, buttons: { id: string; title: string }[]): Promise<string | null> {
+    const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
+      method: "POST",
+      json: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "interactive",
+        interactive: { type: "button", body: { text: body }, action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id, title: b.title.slice(0, 20) } })) } },
+      },
+    });
+    return out.messages?.[0]?.id ?? null;
+  }
+
   /** Numaranın görünen adı ve durumu: jetonun geçerli olduğunu da doğrular. */
   async phoneInfo(phoneNumberId: string): Promise<PhoneInfo> {
     const out = await this.call<{ display_phone_number?: string; verified_name?: string; quality_rating?: string; platform_type?: string }>(

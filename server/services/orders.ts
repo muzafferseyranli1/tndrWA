@@ -48,6 +48,8 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
           brandId: brand.id,
           customerId: customer.id,
           waMessageId,
+          // Yeni sepet önce müşteriden ödeme/adres bilgisi toplar; tamamlanınca HAZIR olur ve panelde sesli uyarı verir
+          stage: "AWAITING_PAYMENT",
           note: parsed.note,
           totalKurus: parsed.totalKurus,
           items: {

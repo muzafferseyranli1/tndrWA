@@ -64,8 +64,17 @@ export interface OrderDto {
   brandId: number;
   status: OrderStatusDto;
   note: string;
+  /** Liste fiyatı toplamı (indirim öncesi) */
   totalKurus: number;
   totalText: string;
+  /** AWAITING_PAYMENT | AWAITING_ADDRESS: müşteriden bilgi bekleniyor; READY: personel işleyebilir */
+  stage: "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
+  paymentLabel: string;
+  discountPercent: number;
+  discountText: string;
+  payableText: string;
+  address: string;
+  mapUrl: string | null;
   createdAt: string;
   customer: { name: string | null; phone: string | null };
   items: { id: number; name: string; quantity: number; unitText: string; lineText: string }[];
@@ -148,4 +157,11 @@ export interface ChannelStatsDto {
   landing: number;
   brandVisits: number;
   clicks: Record<string, number>;
+}
+
+export interface PaymentTypeDto {
+  id: number;
+  name: string;
+  discountPercent: number;
+  enabled: boolean;
 }

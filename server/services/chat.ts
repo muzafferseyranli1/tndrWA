@@ -51,6 +51,8 @@ export function sendFailureText(message: string, code?: number): string {
 
 export interface InboundRecord {
   message: Message;
+  /** Meta'dan gelen ham mesaj nesnesi (düğme/liste kimliği, konum gibi ayrıntılar için) */
+  raw: unknown;
   customer: Customer;
   brand: Brand;
 }
@@ -79,7 +81,7 @@ export async function recordInbound(db: PrismaClient, eventBody: string): Promis
   const { type, body: text } = describeInbound(body.message);
   try {
     const message = await db.message.create({ data: { brandId: brand.id, customerId: customer.id, direction: "IN", type, body: text, waMessageId, status: "RECEIVED" } });
-    return { message, customer, brand };
+    return { message, raw: body.message, customer, brand };
   } catch (err) {
     if ((err as { code?: string }).code === "P2002") return null; // eşzamanlı yeniden gönderim
     throw err;

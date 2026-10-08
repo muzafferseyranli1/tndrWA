@@ -4,13 +4,17 @@ import type { PrismaClient } from "@prisma/client";
 import { resolveBrand } from "../services/brands";
 import { DEFAULT_TEMPLATES, MESSAGE_KEYS, templateKey, templateFor, type MessageKey } from "../services/order-messages";
 
+const ALL = "{ad}, {no}, {toplam}, {indirim}, {tutar}, {odeme}, {adres} kullanılabilir.";
 const LABELS: Record<MessageKey, { label: string; hint: string }> = {
-  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında gider. {ad} müşterinin adıdır." },
-  NEW: { label: "Sipariş alındı", hint: "Sipariş geldiğinde otomatik gider. {ad} ve {no} kullanılabilir." },
-  PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. {ad} ve {no} kullanılabilir." },
-  ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. {ad} ve {no} kullanılabilir." },
-  DELIVERED: { label: "Teslim edildi", hint: "Durum Teslim edildi olunca gider. {ad} ve {no} kullanılabilir." },
-  CANCELLED: { label: "İptal edildi", hint: "Sipariş iptal edilince gider. {ad} ve {no} kullanılabilir." },
+  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." },
+  NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL },
+  ASK_ADDRESS: { label: "Adres isteme", hint: "Ödeme seçilince gider. Müşteri adresi yazar ya da konum atar." },
+  CONFIRM_ADDRESS: { label: "Kayıtlı adres onayı", hint: "Müşterinin kayıtlı adresi varsa gider; altında Evet / Yeni adres düğmeleri çıkar. {adres} kullanılabilir." },
+  CONFIRMED: { label: "Sipariş onayı", hint: "Ödeme ve adres tamamlanınca gider, sipariş panelde yeni olur. " + ALL },
+  PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
+  ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },
+  DELIVERED: { label: "Teslim edildi", hint: "Durum Teslim edildi olunca gider. " + ALL },
+  CANCELLED: { label: "İptal edildi", hint: "Sipariş iptal edilince gider. " + ALL },
 };
 
 export const MAX_MESSAGE_LENGTH = 1000;

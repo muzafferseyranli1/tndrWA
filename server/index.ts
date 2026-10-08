@@ -17,8 +17,10 @@ import { messagesRouter } from "./routes/messages";
 import { chatRouter } from "./routes/chat";
 import { publicRouter } from "./routes/public";
 import { channelsRouter } from "./routes/channels";
+import { paymentsRouter } from "./routes/payments";
 import { ensureDefaultChannels } from "./services/channels";
-import { notifyOrderStatus } from "./services/order-messages";
+import { handleOrderReply, startOrderConversation } from "./services/order-flow";
+import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
@@ -68,21 +70,14 @@ async function main() {
   // WAHA webhook: oturum çerezi yok, HMAC imzasıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Yeni siparişte müşteriye "siparişinizi aldık" mesajı (hata sipariş kaydını etkilemez)
   const cloudForAck = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
-  const acknowledgeOrder = (orderId: number) => {
-    db.order
-      .findUnique({ where: { id: orderId }, include: { brand: true, customer: true } })
-      .then(async (order) => {
-        if (!order) return;
-        const notice = await notifyOrderStatus(db, cloudForAck, order, "NEW");
-        if (!notice.sent) logger.warn({ orderId, error: notice.error }, "Sipariş alındı mesajı gönderilemedi");
-      })
-      .catch((err) => logger.error({ err, orderId }, "Sipariş alındı mesajı hatası"));
-  };
   app.use(
     "/api/webhooks",
     webhooksRouter(db, env, {
-      onOrderCreated: acknowledgeOrder,
-      onInbound: (i) => void sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message),
+      // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
+      onOrderCreated: (orderId) => void startOrderConversation(db, cloudForAck, orderId),
+      // Müşteri yazdı: bekleyen siparişin ödeme/adres adımını işle, yoksa uzun süre sonra ilk mesajsa hoş geldin gönder
+      onInbound: (i) =>
+        void handleOrderReply(db, cloudForAck, i.brand, i.customer, i.message, i.raw).then(() => sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message)),
     }),
   );
 
@@ -93,6 +88,7 @@ async function main() {
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);
+  await ensureDefaultPaymentTypes(db);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);
   // Alan adı değiştiyse katalogdaki görsel adresleri yenilenir (arka planda, açılışı geciktirmez)
@@ -116,6 +112,7 @@ async function main() {
   app.use("/api/messages", messagesRouter(db));
   app.use("/api/chat", chatRouter(db, cloudClient));
   app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
+  app.use("/api/payments", paymentsRouter(db));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {

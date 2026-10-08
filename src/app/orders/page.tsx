@@ -62,7 +62,7 @@ export default function OrdersPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  const newCount = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW").length : 0;
+  const newCount = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW" && o.stage === "READY").length : 0;
 
   const beep = useCallback(() => {
     if (soundUrl) {
@@ -137,6 +137,19 @@ export default function OrdersPage() {
     }
   }
 
+  async function markReady(order: OrderDto) {
+    setBusyId(order.id);
+    setError("");
+    try {
+      await api(`/api/orders/${order.id}/ready`, { method: "POST", json: {} });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function setStatus(order: OrderDto, status: OrderStatusDto) {
     if (status === "CANCELLED" && !window.confirm(`#${order.id} numaralı sipariş iptal edilsin ve müşteriye bildirilsin mi?`)) return;
     setBusyId(order.id);
@@ -202,12 +215,23 @@ export default function OrdersPage() {
           {orders?.map((o) => {
             const step = next[o.status];
             return (
-              <li key={o.id} className={`rounded-xl border bg-white p-4 ${o.status === "NEW" ? "border-red-400 ring-2 ring-red-100" : "border-slate-200"}`}>
+              <li key={o.id} className={`rounded-xl border bg-white p-4 ${o.stage !== "READY" ? "border-slate-300 bg-slate-50" : o.status === "NEW" ? "border-red-400 ring-2 ring-red-100" : "border-slate-200"}`}>
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-lg font-semibold">#{o.id}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${label[o.status].cls}`}>{label[o.status].text}</span>
+                  {o.stage === "READY" ? (
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${label[o.status].cls}`}>{label[o.status].text}</span>
+                  ) : (
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
+                  )}
                   <span className="text-sm text-slate-500">{time(o.createdAt)}</span>
-                  <span className="ml-auto text-lg font-semibold tabular-nums">{o.totalText}</span>
+                  <span className="ml-auto text-right">
+                    <span className="block text-lg font-semibold tabular-nums">{o.discountText ? o.payableText : o.totalText}</span>
+                    {o.discountText && (
+                      <span className="block text-xs text-slate-500">
+                        {o.totalText} {o.discountText} (%{o.discountPercent})
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-700">
                   <b>{o.customer.name ?? "İsimsiz müşteri"}</b>
@@ -223,11 +247,32 @@ export default function OrdersPage() {
                     </li>
                   ))}
                 </ul>
+                {(o.paymentLabel || o.address) && (
+                  <div className="mt-2 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    {o.paymentLabel && <p>Ödeme: <b>{o.paymentLabel}</b></p>}
+                    {o.address && (
+                      <p>
+                        Adres: <b>{o.address}</b>{" "}
+                        {o.mapUrl && (
+                          <a href={o.mapUrl} target="_blank" rel="noreferrer" className="text-brand-600 underline">
+                            Haritada aç
+                          </a>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {o.stage !== "READY" && <p className="mt-2 text-sm text-slate-500">Müşteri bu adımı tamamlamadı. Yazışmadan ya da telefonla öğrenip &quot;Bilgiler tamam&quot; ile işleme alabilirsiniz.</p>}
                 {o.note && <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Not: {o.note}</p>}
                 {notices[o.id] && <p className={`mt-2 text-sm ${notices[o.id].includes("GİTMEDİ") ? "text-red-600" : "text-green-700"}`}>{notices[o.id]}</p>}
                 {tab === "active" && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {step && (
+                    {o.stage !== "READY" && (
+                      <button disabled={busyId === o.id} onClick={() => markReady(o)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
+                        Bilgiler tamam, işleme al
+                      </button>
+                    )}
+                    {o.stage === "READY" && step && (
                       <button disabled={busyId === o.id} onClick={() => setStatus(o, step.to)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
                         {step.text}
                       </button>

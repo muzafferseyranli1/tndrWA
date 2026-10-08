@@ -13,10 +13,12 @@ test("müşteri: kişi bloğu yoksa mesajdaki from alanı, telefonsuzda yalnızc
   assert.deepEqual(contactFrom(null), { waId: null, bsuid: null, name: null });
 });
 
-import { DEFAULT_TEMPLATES, renderTemplate } from "../server/services/order-messages";
+import { renderTemplate } from "../server/services/order-messages";
+
+const SAMPLE = "Merhaba {ad}, siparişinizi aldık (No: {no}). Hazırlanmaya başlayınca haber vereceğiz.";
 
 test("mesaj şablonu: ad ve sipariş numarası yerleşir, adsız müşteride 'Merhaba ,' kalmaz", () => {
-  assert.equal(renderTemplate(DEFAULT_TEMPLATES.NEW, { ad: "Muzaffer", no: 12 }), "Merhaba Muzaffer, siparişinizi aldık (No: 12). Hazırlanmaya başlayınca haber vereceğiz.");
-  assert.equal(renderTemplate(DEFAULT_TEMPLATES.NEW, { ad: null, no: 12 }), "Merhaba, siparişinizi aldık (No: 12). Hazırlanmaya başlayınca haber vereceğiz.");
+  assert.equal(renderTemplate(SAMPLE, { ad: "Muzaffer", no: 12 }), "Merhaba Muzaffer, siparişinizi aldık (No: 12). Hazırlanmaya başlayınca haber vereceğiz.");
+  assert.equal(renderTemplate(SAMPLE, { ad: null, no: 12 }), "Merhaba, siparişinizi aldık (No: 12). Hazırlanmaya başlayınca haber vereceğiz.");
   assert.equal(renderTemplate("{no} {no}", { ad: "x", no: 5 }), "5 5");
 });
