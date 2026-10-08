@@ -1,7 +1,7 @@
 import type { Brand, Customer, Message, Order, PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { orderVars, renderTemplate, templateFor, type MessageKey } from "./order-messages";
-import { recordOutbound } from "./outbound";
+import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { priceWithDiscount } from "./payment";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
@@ -65,35 +65,58 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
     });
     await log(db, order, "text", body, id);
   } catch (err) {
-    logger.warn({ err: (err as Error).message, orderId }, "Ödeme sorusu gönderilemedi");
+    const o = await load(db, orderId).catch(() => null);
+    if (o) await reportFailure(db, o, "Ödeme şekli sorusu", "", err);
+    else logger.warn({ err: (err as Error).message, orderId }, "Ödeme sorusu gönderilemedi");
   }
 }
 
+/** Gönderilemeyen mesajı günlüğe ve yazışmaya (kırmızı "gitmedi" + sebep) kaydeder. */
+async function reportFailure(db: PrismaClient, o: FullOrder, what: string, body: string, err: unknown): Promise<void> {
+  const reason = (err as Error).message ?? String(err);
+  logger.warn({ orderId: o.id, what, err: reason }, "Müşteriye mesaj gönderilemedi");
+  await recordFailedOutbound(db, { brandId: o.brandId, customerId: o.customerId, type: "text", body, waMessageId: null, orderId: o.id }, `${what}: ${reason}`).catch(() => undefined);
+}
+
+/** Adres soru mesajı: kayıtlı adres(ler)e göre düğme/liste; olmazsa ya da gönderilemezse düz metinle adres ister (akış asla susmaz). */
 async function askAddress(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
   if (!canSend(cloud, order)) return;
+  const phoneId = order.brand.waPhoneNumberId!;
+  const to = order.customer.waId!;
   const saved = await db.customerAddress.findMany({ where: { customerId: order.customerId }, orderBy: [{ lastUsedAt: "desc" }, { id: "desc" }], take: 9 });
-  if (saved.length === 1) {
-    const body = renderTemplate(await templateFor(db, order.brand.code, "CONFIRM_ADDRESS"), { ...orderVars(order, order.customer), adres: saved[0].text });
-    const id = await cloud.sendButtons(order.brand.waPhoneNumberId!, order.customer.waId!, body, [
-      { id: addrId(order.id, saved[0].id), title: "Evet, bu adres" },
-      { id: addrId(order.id, "new"), title: "Yeni adres" },
-    ]);
-    await log(db, order, "text", body, id);
-    return;
-  }
-  if (saved.length > 1) {
-    const body = await render(db, order, "CHOOSE_ADDRESS");
-    const rows = [
-      ...saved.map((a, i) => ({ id: addrId(order.id, a.id), title: `Adres ${i + 1}`, description: a.text })),
-      { id: addrId(order.id, "new"), title: "Yeni adres" },
-    ];
-    const id = await cloud.sendList(order.brand.waPhoneNumberId!, order.customer.waId!, { body, buttonText: "Adres seç", rows });
-    await log(db, order, "text", body, id);
-    return;
+
+  if (saved.length > 0) {
+    let body = "";
+    try {
+      if (saved.length === 1) {
+        body = renderTemplate(await templateFor(db, order.brand.code, "CONFIRM_ADDRESS"), { ...orderVars(order, order.customer), adres: saved[0].text });
+        const id = await cloud.sendButtons(phoneId, to, body, [
+          { id: addrId(order.id, saved[0].id), title: "Evet, bu adres" },
+          { id: addrId(order.id, "new"), title: "Yeni adres" },
+        ]);
+        await log(db, order, "text", body, id);
+      } else {
+        body = await render(db, order, "CHOOSE_ADDRESS");
+        const rows = [
+          ...saved.map((a, i) => ({ id: addrId(order.id, a.id), title: `Adres ${i + 1}`, description: a.text })),
+          { id: addrId(order.id, "new"), title: "Yeni adres" },
+        ];
+        const id = await cloud.sendList(phoneId, to, { body, buttonText: "Adres seç", rows });
+        await log(db, order, "text", body, id);
+      }
+      return;
+    } catch (err) {
+      await reportFailure(db, order, "Kayıtlı adres sorusu (düğme/liste)", body, err);
+      // aşağıda düz metinle adres istenir
+    }
   }
   const body = await render(db, order, "ASK_ADDRESS");
-  const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);
-  await log(db, order, "text", body, id);
+  try {
+    const id = await cloud.sendText(phoneId, to, body);
+    await log(db, order, "text", body, id);
+  } catch (err) {
+    await reportFailure(db, order, "Adres isteme", body, err);
+  }
 }
 
 /** Ödeme ve adres tamam: sipariş hazır olur (panelde sesli uyarı), müşteriye onay gider, adres müşteriye kaydedilir. */
@@ -143,10 +166,10 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       const [kind, orderIdText, arg] = reply.split(":");
       const order = await orderById(db, brand.id, customer.id, Number(orderIdText), now);
       if (!order) return; // bitmiş ya da başkasına ait eski bir mesajdaki düğme
-      if (kind === "pay" && order.stage === "AWAITING_PAYMENT") return choosePayment(db, cloud, order, Number(arg));
+      if (kind === "pay" && order.stage === "AWAITING_PAYMENT") return await choosePayment(db, cloud, order, Number(arg));
       if (kind === "addr" && order.stage === "AWAITING_ADDRESS") {
         const chosen = arg === "new" ? null : await db.customerAddress.findFirst({ where: { id: Number(arg), customerId: customer.id } });
-        if (chosen) return finish(db, cloud, order.id, { text: chosen.text, lat: chosen.lat, lng: chosen.lng });
+        if (chosen) return await finish(db, cloud, order.id, { text: chosen.text, lat: chosen.lat, lng: chosen.lng });
         if (arg === "new" && canSend(cloud, order)) {
           const body = await render(db, order, "ASK_ADDRESS");
           const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);
@@ -168,11 +191,11 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
     if (order.stage === "AWAITING_ADDRESS") {
       if (m.type === "location" && typeof m.location?.latitude === "number" && typeof m.location.longitude === "number") {
         const label = [m.location.name, m.location.address].filter(Boolean).join(", ");
-        return finish(db, cloud, order.id, { text: label || `Konum: ${m.location.latitude.toFixed(5)}, ${m.location.longitude.toFixed(5)}`, lat: m.location.latitude, lng: m.location.longitude });
+        return await finish(db, cloud, order.id, { text: label || `Konum: ${m.location.latitude.toFixed(5)}, ${m.location.longitude.toFixed(5)}`, lat: m.location.latitude, lng: m.location.longitude });
       }
       if (m.type === "text") {
         const text = (m.text?.body ?? "").trim();
-        if (text.length >= ADDRESS_MIN_LENGTH) return finish(db, cloud, order.id, { text });
+        if (text.length >= ADDRESS_MIN_LENGTH) return await finish(db, cloud, order.id, { text });
         if (canSend(cloud, order)) {
           const body = "Adres çok kısa görünüyor. Lütfen mahalle, sokak ve kapı numarasıyla birlikte yazın ya da konumunuzu gönderin.";
           const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);
@@ -181,7 +204,7 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       }
     }
   } catch (err) {
-    logger.warn({ err: (err as Error).message }, "Sipariş akışı yanıtı işlenemedi");
+    logger.warn({ err: (err as Error).message, messageId: message.id }, "Sipariş akışı yanıtı işlenemedi");
   }
 }
 

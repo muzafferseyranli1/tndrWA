@@ -22,3 +22,4 @@ Thumbs.db
 *.db
 *.db-journal
 *.tsbuildinfo
+.tmp-inspect/

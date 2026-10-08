@@ -209,3 +209,29 @@ export interface RatingSummaryDto {
   avgCare: number | null;
   avgDelivery: number | null;
 }
+
+export interface CustomerDto {
+  id: number;
+  name: string | null;
+  phone: string | null;
+  addressCount: number;
+  orderCount: number;
+  lastAddress: string | null;
+}
+
+export interface CustomerImportJobDto {
+  id: string;
+  state: "running" | "done" | "failed";
+  fileName: string;
+  stats: {
+    read: number;
+    invalidPhone: number;
+    duplicateInFile: number;
+    created: number;
+    existing: number;
+    namesFilled: number;
+    addressesAdded: number;
+    withoutAddress: number;
+  };
+  error: string | null;
+}

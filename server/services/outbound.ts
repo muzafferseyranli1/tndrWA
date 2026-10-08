@@ -15,3 +15,10 @@ export function recordOutbound(db: PrismaClient, input: OutboundInput): Promise<
     data: { brandId: input.brandId, customerId: input.customerId, direction: "OUT", type: input.type, body: input.body, waMessageId: input.waMessageId, status: "SENT", orderId: input.orderId ?? null },
   });
 }
+
+/** Gönderilemeyen mesajı yazışmada kırmızı "gitmedi" olarak kaydeder, personel sebebini görür. */
+export function recordFailedOutbound(db: PrismaClient, input: OutboundInput, error: string): Promise<Message> {
+  return db.message.create({
+    data: { brandId: input.brandId, customerId: input.customerId, direction: "OUT", type: input.type, body: input.body, waMessageId: null, status: "FAILED", error: error.slice(0, 400), orderId: input.orderId ?? null },
+  });
+}

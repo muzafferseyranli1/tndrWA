@@ -19,6 +19,7 @@ import { publicRouter } from "./routes/public";
 import { channelsRouter } from "./routes/channels";
 import { paymentsRouter } from "./routes/payments";
 import { ratingsRouter } from "./routes/ratings";
+import { customersRouter } from "./routes/customers";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
 import { ensureDefaultPaymentTypes } from "./services/payment";
@@ -115,6 +116,7 @@ async function main() {
   app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
   app.use("/api/payments", paymentsRouter(db));
   app.use("/api/ratings", ratingsRouter(db));
+  app.use("/api/customers", customersRouter(db));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
