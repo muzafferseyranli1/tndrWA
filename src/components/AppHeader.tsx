@@ -5,11 +5,12 @@ import LogoutButton from "./LogoutButton";
 import { useBrands } from "@/lib/brand";
 
 const links = [
-  { href: "/", label: "Panel" },
+  { href: "/panel", label: "Panel" },
   { href: "/orders", label: "Siparişler" },
   { href: "/chat", label: "Yazışma" },
   { href: "/products", label: "Ürünler" },
   { href: "/messages", label: "Mesajlar" },
+  { href: "/channels", label: "Kanallar" },
   { href: "/whatsapp", label: "WhatsApp" },
   { href: "/brands", label: "Markalar" },
 ];

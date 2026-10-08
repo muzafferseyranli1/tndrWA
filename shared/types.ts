@@ -117,3 +117,35 @@ export interface ChatThreadDto {
   windowOpen: boolean;
   windowEndsAt: string | null;
 }
+
+import type { ChannelKind } from "./channels";
+
+export interface PublicBrandDto {
+  code: string;
+  name: string;
+  channels: { kind: ChannelKind; label: string; href: string }[];
+}
+
+export interface ChannelDto {
+  id: number;
+  kind: ChannelKind;
+  label: string;
+  value: string;
+  enabled: boolean;
+  valueHint: string;
+  valueType: "phone" | "url" | "place";
+}
+
+export interface ChannelListDto {
+  brandCode: string;
+  channels: ChannelDto[];
+  landingUrl: string | null;
+  brandUrl: string | null;
+}
+
+export interface ChannelStatsDto {
+  days: number;
+  landing: number;
+  brandVisits: number;
+  clicks: Record<string, number>;
+}

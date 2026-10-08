@@ -23,6 +23,7 @@ model Brand {
   products      Product[]
   orders        Order[]
   messages      Message[]
+  channels      BrandChannel[]
 }
 
 model Category {
@@ -170,4 +171,34 @@ model Message {
 
   @@index([customerId, createdAt])
   @@index([brandId, createdAt])
+}
+
+// Herkese açık açılış sayfasındaki sipariş kanalı butonları (marka başına): arama, WhatsApp, Yemeksepeti, harita...
+model BrandChannel {
+  id        Int     @id @default(autoincrement())
+  brandId   Int
+  brand     Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  // CALL | WHATSAPP | YEMEKSEPETI | TRENDYOLGO | GETIR | MAPS | REVIEW (| ileride TELEGRAM)
+  kind      String
+  label     String
+  // CALL/WHATSAPP: telefon numarası, MAPS: adres ya da harita bağlantısı, diğerleri: https bağlantısı
+  value     String  @default("")
+  enabled   Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@unique([brandId, kind])
+}
+
+// Sayfa görüntüleme ve buton tıklama sayacı. Kişisel veri tutulmaz (IP, cihaz kimliği yok).
+model Hit {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  brandId   Int?
+  // landing | brand | click
+  event     String
+  // click için kanal türü (CALL, WHATSAPP...)
+  kind      String?
+
+  @@index([createdAt])
+  @@index([brandId, event, kind])
 }

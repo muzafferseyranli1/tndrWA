@@ -2,9 +2,10 @@ import type { NextFunction, Request, Response } from "express";
 import { SESSION_COOKIE, getCookie, verifySessionToken } from "../lib/session";
 
 // /uploads/: Meta ürün görsellerini girişsiz çekebilmeli
-const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/"];
+// / ve /m/<marka>: herkese açık açılış sayfası (QR kodunun gittiği yer); /api/public/: onun verisi ve sayacı
+const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/", "/m/", "/api/public/"];
 // /api/webhooks/waha: WAHA oturumsuz çağırır; kimlik doğrulaması HMAC imzasıyla yapılır
-const PUBLIC_PATHS = new Set(["/login", "/api/auth/login", "/api/health", "/api/webhooks/waha", "/api/webhooks/meta"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/api/auth/login", "/api/health", "/api/webhooks/waha", "/api/webhooks/meta"]);
 
 export function isPublicPath(path: string): boolean {
   return PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((p) => path.startsWith(p));

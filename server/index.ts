@@ -15,6 +15,9 @@ import { ordersRouter } from "./routes/orders";
 import { soundRouter } from "./routes/sound";
 import { messagesRouter } from "./routes/messages";
 import { chatRouter } from "./routes/chat";
+import { publicRouter } from "./routes/public";
+import { channelsRouter } from "./routes/channels";
+import { ensureDefaultChannels } from "./services/channels";
 import { notifyOrderStatus } from "./services/order-messages";
 import { sendWelcomeIfNeeded } from "./services/chat";
 import { WahaClient } from "./services/waha";
@@ -83,10 +86,13 @@ async function main() {
     }),
   );
 
+  app.use("/api/public", publicRouter(db));
+
   app.use(requireAuth(env.sessionSecret));
   app.use("/api/auth", authRouter(env));
 
   await bootstrapBrands(db, env);
+  await ensureDefaultChannels(db);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);
   // Alan adı değiştiyse katalogdaki görsel adresleri yenilenir (arka planda, açılışı geciktirmez)
@@ -109,6 +115,7 @@ async function main() {
   app.use("/api/sound", soundRouter(db, env.uploadDir));
   app.use("/api/messages", messagesRouter(db));
   app.use("/api/chat", chatRouter(db, cloudClient));
+  app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
