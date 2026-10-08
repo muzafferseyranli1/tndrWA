@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import OrderEditor from "@/components/OrderEditor";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
 import type { OrderDto, OrderStatusDto, OrderStatusResultDto } from "@shared/types";
@@ -32,6 +33,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderDto[] | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [notices, setNotices] = useState<Record<number, string>>({});
   const [soundOn, setSoundOn] = useState(false);
   const audio = useRef<AudioContext | null>(null);
@@ -137,6 +139,20 @@ export default function OrdersPage() {
     }
   }
 
+  async function sendUpdate(order: OrderDto) {
+    setBusyId(order.id);
+    setError("");
+    try {
+      const res = await api<{ order: OrderDto; notice: { sent: boolean; error?: string } }>(`/api/orders/${order.id}/notify-update`, { method: "POST", json: {} });
+      setNotices((n) => ({ ...n, [order.id]: res.notice.sent ? "Güncel özet müşteriye gönderildi." : `Güncel özet GİTMEDİ: ${res.notice.error ?? "bilinmeyen sebep"}` }));
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function markReady(order: OrderDto) {
     setBusyId(order.id);
     setError("");
@@ -237,6 +253,8 @@ export default function OrdersPage() {
                   <b>{o.customer.name ?? "İsimsiz müşteri"}</b>
                   {o.customer.phone ? ` · +${o.customer.phone}` : " · telefon yok"}
                 </p>
+                {editingId === o.id && o.canEdit && tab === "active" && <OrderEditor order={o} onChanged={() => void load()} onClose={() => setEditingId(null)} />}
+                {!(editingId === o.id && o.canEdit && tab === "active") && (
                 <ul className="mt-3 divide-y divide-slate-100 text-sm">
                   {o.items.map((i) => (
                     <li key={i.id} className="flex items-center gap-3 py-1.5">
@@ -247,6 +265,7 @@ export default function OrdersPage() {
                     </li>
                   ))}
                 </ul>
+                )}
                 {(o.paymentLabel || o.address) && (
                   <div className="mt-2 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
                     {o.paymentLabel && <p>Ödeme: <b>{o.paymentLabel}</b></p>}
@@ -264,6 +283,14 @@ export default function OrdersPage() {
                 )}
                 {o.stage !== "READY" && <p className="mt-2 text-sm text-slate-500">Müşteri bu adımı tamamlamadı. Yazışmadan ya da telefonla öğrenip &quot;Bilgiler tamam&quot; ile işleme alabilirsiniz.</p>}
                 {o.note && <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Not: {o.note}</p>}
+                {o.noticePending && tab === "active" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <span>Siparişi değiştirdiniz, müşteri henüz bilgilendirilmedi.</span>
+                    <button disabled={busyId === o.id} onClick={() => sendUpdate(o)} className="ml-auto rounded-lg bg-brand-500 px-3 py-1.5 font-medium text-white hover:bg-brand-600 disabled:opacity-50">
+                      Müşteriye güncel özeti gönder
+                    </button>
+                  </div>
+                )}
                 {notices[o.id] && <p className={`mt-2 text-sm ${notices[o.id].includes("GİTMEDİ") ? "text-red-600" : "text-green-700"}`}>{notices[o.id]}</p>}
                 {tab === "active" && (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -275,6 +302,11 @@ export default function OrdersPage() {
                     {o.stage === "READY" && step && (
                       <button disabled={busyId === o.id} onClick={() => setStatus(o, step.to)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
                         {step.text}
+                      </button>
+                    )}
+                    {o.canEdit && (
+                      <button onClick={() => setEditingId(editingId === o.id ? null : o.id)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+                        {editingId === o.id ? "Düzenlemeyi kapat" : "Düzenle"}
                       </button>
                     )}
                     <button disabled={busyId === o.id} onClick={() => setStatus(o, "CANCELLED")} className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">

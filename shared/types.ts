@@ -76,6 +76,13 @@ export interface OrderDto {
   address: string;
   mapUrl: string | null;
   createdAt: string;
+  paymentTypeId: number | null;
+  /** Yalnızca Yeni ve Hazırlanıyor aşamasında personel siparişi düzenleyebilir */
+  canEdit: boolean;
+  /** Personel düzenledi ama müşteriye güncel özet henüz gönderilmedi */
+  noticePending: boolean;
+  /** Personelin yaptığı değişiklikler, en yeni başta */
+  changes: { text: string; createdAt: string }[];
   customer: { name: string | null; phone: string | null };
   items: { id: number; name: string; quantity: number; unitText: string; lineText: string }[];
 }

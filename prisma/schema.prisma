@@ -149,6 +149,9 @@ model Order {
   // Teslimden sonra müşteriye giden değerlendirme bağlantısındaki tek kullanımlık anahtar
   ratingToken    String?     @unique
   ratingRef      Rating?
+  // Personel siparişi düzenledi ama müşteriye güncel özet henüz gönderilmedi
+  noticePending  Boolean     @default(false)
+  changes        OrderChange[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   items       OrderItem[]
@@ -276,4 +279,15 @@ model Rating {
 
   @@index([brandId, createdAt])
   @@index([brandId, low, followUp])
+}
+
+// Siparişte personelin yaptığı değişikliklerin kaydı (ne zaman, ne değişti)
+model OrderChange {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }

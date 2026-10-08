@@ -4,8 +4,8 @@ import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
-export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED";
-export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
+export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED";
+export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
@@ -15,13 +15,14 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   CONFIRM_ADDRESS: "Kayıtlı adresiniz:\n{adres}\n\nSiparişi bu adrese gönderelim mi?",
   CHOOSE_ADDRESS: "Siparişi hangi adrese gönderelim? Listeden seçebilir ya da yeni adres ekleyebilirsiniz.",
   CONFIRMED: "Siparişiniz onaylandı (No: {no}).\nÖdeme: {odeme}\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}\n\nHazırlanmaya başlayınca haber vereceğiz.",
+  ORDER_UPDATED: "Siparişiniz güncellendi (No: {no}).\n\n{urunler}\n\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}",
   PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",
   DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}",
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",
 };
 
-export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string };
+export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string; urunler?: string };
 
 /** Yer tutucuları doldurur; ad yoksa "Merhaba {ad}," gibi kalıplar düzgün kalsın diye boşluk ve virgül toparlanır. */
 export function renderTemplate(template: string, vars: TemplateVars): string {
@@ -34,6 +35,7 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
     odeme: vars.odeme ?? "",
     adres: vars.adres ?? "",
     degerlendirme: vars.degerlendirme ?? "",
+    urunler: vars.urunler ?? "",
   };
   let out = template;
   for (const [key, value] of Object.entries(values)) out = out.replaceAll(`{${key}}`, value);

@@ -1,16 +1,20 @@
 import express, { Router } from "express";
 import { z } from "zod";
-import type { Brand, Customer, Order, OrderItem, PrismaClient } from "@prisma/client";
+import type { Brand, Customer, Order, OrderChange, OrderItem, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
 import type { OrderDto } from "../../shared/types";
+import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
 import { notifyOrderStatus } from "../services/order-messages";
+import { EDITABLE_STATUSES, EditError, addItem, editDetails, removeItem, sendUpdateNotice, setQuantity } from "../services/order-edit";
 import { ORDER_STATUSES, type OrderStatus } from "../services/orders";
 import { priceWithDiscount } from "../services/payment";
 import { newRatingToken } from "../services/ratings";
 import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
-type OrderRow = Order & { items: OrderItem[]; customer: Customer };
+type OrderRow = Order & { items: OrderItem[]; customer: Customer; changes?: OrderChange[] };
+
+const INCLUDE = { items: { orderBy: { id: "asc" as const } }, customer: true, changes: { orderBy: { createdAt: "desc" as const }, take: 10 } };
 
 export function toOrderDto(o: OrderRow): OrderDto {
   return {
@@ -28,6 +32,10 @@ export function toOrderDto(o: OrderRow): OrderDto {
     address: o.address,
     mapUrl: o.lat != null && o.lng != null ? `https://www.google.com/maps/search/?api=1&query=${o.lat},${o.lng}` : o.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}` : null,
     createdAt: o.createdAt.toISOString(),
+    paymentTypeId: o.paymentTypeId,
+    canEdit: EDITABLE_STATUSES.includes(o.status),
+    noticePending: o.noticePending,
+    changes: (o.changes ?? []).map((c) => ({ text: c.text, createdAt: c.createdAt.toISOString() })),
     customer: { name: o.customer.name, phone: o.customer.waId },
     items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus), lineText: formatTRY(i.unitKurus * i.quantity) })),
   };
@@ -46,7 +54,7 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     const history = req.query.scope === "history";
     const rows = await db.order.findMany({
       where: { brandId: brand.id, status: history ? { notIn: ACTIVE } : { in: ACTIVE } },
-      include: { items: { orderBy: { id: "asc" } }, customer: true },
+      include: INCLUDE,
       orderBy: { createdAt: history ? "desc" : "asc" },
       take: history ? 100 : 200,
     });
@@ -67,7 +75,7 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
       where: { id },
       // Teslim edilince müşteriye gidecek değerlendirme bağlantısının anahtarı (bir kez üretilir)
       data: { status, ...(status === "DELIVERED" && !existing.ratingToken ? { ratingToken: newRatingToken() } : {}) },
-      include: { items: { orderBy: { id: "asc" } }, customer: true, brand: true },
+      include: { ...INCLUDE, brand: true },
     });
     const notice = notify ? await notifyOrderStatus(db, cloud, updated as OrderRow & { brand: Brand }, status, publicBaseUrl) : { sent: false };
     res.json({ order: toOrderDto(updated), notice });
@@ -89,8 +97,71 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
       const { discountKurus } = priceWithDiscount(existing.totalKurus, type.discountPercent);
       Object.assign(data, { paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus });
     }
-    const updated = await db.order.update({ where: { id }, data, include: { items: { orderBy: { id: "asc" } }, customer: true } });
+    const updated = await db.order.update({ where: { id }, data, include: INCLUDE });
     res.json(toOrderDto(updated));
+  });
+
+  // ---- Sipariş düzenleme (Yeni / Hazırlanıyor) ----
+  const reload = async (id: number) => toOrderDto(await db.order.findUniqueOrThrow({ where: { id }, include: INCLUDE }));
+  const run = (fn: (id: number, req: express.Request) => Promise<unknown>): express.RequestHandler => async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(404).json({ error: "Sipariş bulunamadı." });
+    try {
+      await fn(id, req);
+      res.json(await reload(id));
+    } catch (err) {
+      if (err instanceof EditError) return res.status(err.status).json({ error: err.message });
+      logger.error({ err }, "sipariş düzenleme hatası");
+      return res.status(500).json({ error: "Beklenmeyen hata, lütfen tekrar deneyin." });
+    }
+  };
+
+  router.patch(
+    "/:id",
+    run(async (id, req) => {
+      const parsed = z.object({ note: z.string().max(500).optional(), address: z.string().max(500).optional(), paymentTypeId: z.number().int().optional() }).safeParse(req.body ?? {});
+      if (!parsed.success) throw new EditError("Geçersiz istek.", 400);
+      await editDetails(db, id, parsed.data);
+    }),
+  );
+
+  router.post(
+    "/:id/items",
+    run(async (id, req) => {
+      const parsed = z.object({ productId: z.number().int(), quantity: z.number().int().default(1) }).safeParse(req.body ?? {});
+      if (!parsed.success) throw new EditError("productId gerekli.", 400);
+      await addItem(db, id, parsed.data.productId, parsed.data.quantity);
+    }),
+  );
+
+  router.patch(
+    "/:id/items/:itemId",
+    run(async (id, req) => {
+      const parsed = z.object({ quantity: z.number().int() }).safeParse(req.body ?? {});
+      if (!parsed.success) throw new EditError("quantity gerekli.", 400);
+      await setQuantity(db, id, Number(req.params.itemId), parsed.data.quantity);
+    }),
+  );
+
+  router.delete(
+    "/:id/items/:itemId",
+    run(async (id, req) => {
+      await removeItem(db, id, Number(req.params.itemId));
+    }),
+  );
+
+  // Düzenleme bitti: müşteriye güncel özeti gönder
+  router.post("/:id/notify-update", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(404).json({ error: "Sipariş bulunamadı." });
+    try {
+      const notice = await sendUpdateNotice(db, cloud, id);
+      res.json({ order: await reload(id), notice });
+    } catch (err) {
+      if (err instanceof EditError) return res.status(err.status).json({ error: err.message });
+      logger.error({ err }, "sipariş düzenleme hatası");
+      return res.status(500).json({ error: "Beklenmeyen hata, lütfen tekrar deneyin." });
+    }
   });
 
   return router;
