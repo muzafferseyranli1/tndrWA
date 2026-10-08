@@ -165,9 +165,9 @@ export default function RatingsPage() {
         <ul className="space-y-3">{items?.map((r) => <Item key={`${r.id}-${r.followUp}-${r.followNote}`} r={r} onChanged={() => void load()} />)}</ul>
 
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="mb-1 font-medium">Dış değerlendirme bağlantıları</h2>
+          <h2 className="mb-1 font-medium">Google değerlendirme bağlantısı</h2>
           <p className="mb-3 text-slate-600">
-            Değerlendirme sonrası müşteriye Google ve platform (Yemeksepeti, Trendyol Go, Getir) bağlantıları gösterilir. Kimlere gösterileceğini seçin:
+            Değerlendirme sonrası müşteriye Google yorum bağlantısı gösterilir (bağlantıyı Kanallar sayfasında &quot;Bizi değerlendirin&quot; satırına girin). Kimlere gösterileceğini seçin:
           </p>
           <div className="flex flex-wrap gap-2">
             {[

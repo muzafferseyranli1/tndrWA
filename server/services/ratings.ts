@@ -26,20 +26,13 @@ export async function setReviewMinScore(db: PrismaClient, value: number): Promis
   await db.setting.upsert({ where: { key: MIN_SCORE_KEY }, create: { key: MIN_SCORE_KEY, value: String(value) }, update: { value: String(value) } });
 }
 
-const PLATFORM_LABEL: Record<string, string> = { YEMEKSEPETI: "Yemeksepeti'nde değerlendirin", TRENDYOLGO: "Trendyol Go'da değerlendirin", GETIR: "Getir'de değerlendirin" };
-
-/** Değerlendirme sonrası gösterilecek dış bağlantılar: Google yorum bağlantısı ve açık platformlar. */
+/**
+ * Değerlendirme sonrası gösterilecek dış bağlantı: yalnızca Google yorum bağlantısı.
+ * Yemeksepeti, Trendyol Go ve Getir değerlendirmeleri o platformdan verilen siparişe bağlıdır; WhatsApp siparişi veren müşteri orada yorum yazamaz.
+ */
 export async function reviewLinks(db: PrismaClient, brandId: number, minScore: number, ratingMin: number): Promise<RatingLinkDto[]> {
   if (ratingMin < minScore) return [];
-  const channels = await db.brandChannel.findMany({ where: { brandId, enabled: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] });
-  const links: RatingLinkDto[] = [];
-  for (const c of channels) {
-    if (c.kind === "REVIEW" && c.value) links.push({ label: "Google'da değerlendirin", href: c.value });
-    else if (PLATFORM_LABEL[c.kind]) {
-      const href = channelHref(c.kind as "YEMEKSEPETI", c.value);
-      if (href) links.push({ label: PLATFORM_LABEL[c.kind], href });
-    }
-  }
-  // Google en üstte
-  return links.sort((a, b) => Number(b.label.startsWith("Google")) - Number(a.label.startsWith("Google")));
+  const review = await db.brandChannel.findFirst({ where: { brandId, kind: "REVIEW" } });
+  const href = review?.value ? channelHref("REVIEW", review.value) : null;
+  return href ? [{ label: "Google'da değerlendirin", href }] : [];
 }
