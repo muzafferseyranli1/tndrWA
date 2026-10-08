@@ -33,3 +33,11 @@ test("adres onayı şablonu satır sonlarını korur", () => {
   const text = renderTemplate(DEFAULT_TEMPLATES.CONFIRM_ADDRESS, { adres: "Moda Mah. No:5" });
   assert.equal(text, "Kayıtlı adresiniz:\nModa Mah. No:5\n\nSiparişi bu adrese gönderelim mi?");
 });
+
+import { addressKey } from "../server/services/order-flow";
+
+test("adres anahtarı: büyük/küçük harf ve boşluk farkı aynı adresi verir", () => {
+  assert.equal(addressKey("  Bağdat   Cad. No:100  Kadıköy "), addressKey("bağdat cad. no:100 kadıköy"));
+  assert.equal(addressKey("IŞIK Sok. No:3"), "ışık sok. no:3");
+  assert.notEqual(addressKey("Bağdat Cad. No:100"), addressKey("Bağdat Cad. No:101"));
+});

@@ -13,7 +13,21 @@ type FullOrder = Order & { brand: Brand; customer: Customer };
 
 /** Düğme/liste yanıtlarının kimlikleri: kimlik hangi siparişe ait olduğunu da taşır, böylece eski mesajdaki düğme yanlış siparişe işlemez. */
 export const payId = (orderId: number, paymentTypeId: number) => `pay:${orderId}:${paymentTypeId}`;
-export const addrId = (orderId: number, choice: "same" | "new") => `addr:${orderId}:${choice}`;
+export const addrId = (orderId: number, choice: number | "new") => `addr:${orderId}:${choice}`;
+
+/** Aynı adresin farklı yazımlarını tek kayıtta toplamak için anahtar. */
+export const addressKey = (text: string) => text.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
+
+/** Müşterinin adres listesine ekler (varsa kullanım zamanını yeniler). */
+export async function rememberAddress(db: PrismaClient, customerId: number, text: string, lat?: number | null, lng?: number | null): Promise<void> {
+  const key = addressKey(text);
+  if (!key) return;
+  await db.customerAddress.upsert({
+    where: { customerId_key: { customerId, key } },
+    create: { customerId, text: text.trim(), key, lat: lat ?? null, lng: lng ?? null },
+    update: { lastUsedAt: new Date(), ...(lat != null && lng != null ? { lat, lng } : {}) },
+  });
+}
 
 async function load(db: PrismaClient, orderId: number): Promise<FullOrder | null> {
   return db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true } });
@@ -57,13 +71,23 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
 
 async function askAddress(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
   if (!canSend(cloud, order)) return;
-  const saved = order.customer.address?.trim();
-  if (saved) {
-    const body = renderTemplate(await templateFor(db, order.brand.code, "CONFIRM_ADDRESS"), { ...orderVars(order, order.customer), adres: saved });
+  const saved = await db.customerAddress.findMany({ where: { customerId: order.customerId }, orderBy: [{ lastUsedAt: "desc" }, { id: "desc" }], take: 9 });
+  if (saved.length === 1) {
+    const body = renderTemplate(await templateFor(db, order.brand.code, "CONFIRM_ADDRESS"), { ...orderVars(order, order.customer), adres: saved[0].text });
     const id = await cloud.sendButtons(order.brand.waPhoneNumberId!, order.customer.waId!, body, [
-      { id: addrId(order.id, "same"), title: "Evet, bu adres" },
+      { id: addrId(order.id, saved[0].id), title: "Evet, bu adres" },
       { id: addrId(order.id, "new"), title: "Yeni adres" },
     ]);
+    await log(db, order, "text", body, id);
+    return;
+  }
+  if (saved.length > 1) {
+    const body = await render(db, order, "CHOOSE_ADDRESS");
+    const rows = [
+      ...saved.map((a, i) => ({ id: addrId(order.id, a.id), title: `Adres ${i + 1}`, description: a.text })),
+      { id: addrId(order.id, "new"), title: "Yeni adres" },
+    ];
+    const id = await cloud.sendList(order.brand.waPhoneNumberId!, order.customer.waId!, { body, buttonText: "Adres seç", rows });
     await log(db, order, "text", body, id);
     return;
   }
@@ -76,7 +100,7 @@ async function askAddress(db: PrismaClient, cloud: WhatsappCloudClient | null, o
 async function finish(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number, address: { text: string; lat?: number | null; lng?: number | null }): Promise<void> {
   await db.order.update({ where: { id: orderId }, data: { stage: "READY", address: address.text, lat: address.lat ?? null, lng: address.lng ?? null } });
   const order = (await load(db, orderId))!;
-  await db.customer.update({ where: { id: order.customerId }, data: { address: address.text, lat: address.lat ?? null, lng: address.lng ?? null } });
+  await rememberAddress(db, order.customerId, address.text, address.lat, address.lng);
   if (!canSend(cloud, order)) return;
   const body = await render(db, order, "CONFIRMED");
   const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);
@@ -121,7 +145,8 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       if (!order) return; // bitmiş ya da başkasına ait eski bir mesajdaki düğme
       if (kind === "pay" && order.stage === "AWAITING_PAYMENT") return choosePayment(db, cloud, order, Number(arg));
       if (kind === "addr" && order.stage === "AWAITING_ADDRESS") {
-        if (arg === "same" && customer.address) return finish(db, cloud, order.id, { text: customer.address, lat: customer.lat, lng: customer.lng });
+        const chosen = arg === "new" ? null : await db.customerAddress.findFirst({ where: { id: Number(arg), customerId: customer.id } });
+        if (chosen) return finish(db, cloud, order.id, { text: chosen.text, lat: chosen.lat, lng: chosen.lng });
         if (arg === "new" && canSend(cloud, order)) {
           const body = await render(db, order, "ASK_ADDRESS");
           const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);

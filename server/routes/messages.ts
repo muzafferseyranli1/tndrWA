@@ -10,6 +10,7 @@ const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL },
   ASK_ADDRESS: { label: "Adres isteme", hint: "Ödeme seçilince gider. Müşteri adresi yazar ya da konum atar." },
   CONFIRM_ADDRESS: { label: "Kayıtlı adres onayı", hint: "Müşterinin kayıtlı adresi varsa gider; altında Evet / Yeni adres düğmeleri çıkar. {adres} kullanılabilir." },
+  CHOOSE_ADDRESS: { label: "Adres seçimi (birden fazla kayıtlı adres)", hint: "Müşterinin birden fazla kayıtlı adresi varsa gider; altında adres listesi çıkar." },
   CONFIRMED: { label: "Sipariş onayı", hint: "Ödeme ve adres tamamlanınca gider, sipariş panelde yeni olur. " + ALL },
   PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
   ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },

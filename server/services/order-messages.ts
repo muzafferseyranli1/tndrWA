@@ -4,8 +4,8 @@ import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
-export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CONFIRMED";
-export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CONFIRMED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
+export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED";
+export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
@@ -13,6 +13,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   NEW: "Merhaba {ad}, siparişinizi aldık (No: {no}). Sepet tutarı: {toplam}. Ödeme şeklinizi aşağıdan seçin. Nakit ve kapıda kredi kartı ödemelerinde %15 indirim uygulanır.",
   ASK_ADDRESS: "Teşekkürler. Teslimat adresinizi yazın ya da konumunuzu gönderin.",
   CONFIRM_ADDRESS: "Kayıtlı adresiniz:\n{adres}\n\nSiparişi bu adrese gönderelim mi?",
+  CHOOSE_ADDRESS: "Siparişi hangi adrese gönderelim? Listeden seçebilir ya da yeni adres ekleyebilirsiniz.",
   CONFIRMED: "Siparişiniz onaylandı (No: {no}).\nÖdeme: {odeme}\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}\n\nHazırlanmaya başlayınca haber vereceğiz.",
   PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",

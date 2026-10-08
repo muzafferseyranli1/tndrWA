@@ -115,10 +115,11 @@ model Customer {
   messages  Message[]
   // Personelin yazışmayı en son okuduğu an (okunmamış sayısı için); marka başına değil müşteri başına
   readAt    DateTime?
-  // Son teslimat adresi (sonraki siparişte "aynı adres mi?" diye sorulur)
+  // Eski tek adres alanları (yerini CustomerAddress aldı; yeni kodda kullanılmaz)
   address   String?
   lat       Float?
   lng       Float?
+  addresses CustomerAddress[]
 }
 
 // Sipariş: WhatsApp katalog sepetinden gelir. Fiyatlar müşterinin sepette gördüğü liste fiyatlarıdır.
@@ -230,4 +231,20 @@ model PaymentType {
   sortOrder       Int     @default(0)
 
   @@unique([brandId, name])
+}
+
+// Müşterinin bildiği teslimat adresleri (sipariş sırasında "hangisine?" diye sorulur). Önceden yüklenen müşteri listesi de buraya yazılır.
+model CustomerAddress {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  text       String
+  // Aynı adresin tekrar eklenmemesi için küçük harfli, boşlukları sadeleştirilmiş hali
+  key        String
+  lat        Float?
+  lng        Float?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@unique([customerId, key])
 }
