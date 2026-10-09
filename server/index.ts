@@ -28,6 +28,7 @@ import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
+import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
 import { WahaClient } from "./services/waha";
@@ -85,7 +86,11 @@ async function main() {
       onOrderCreated: (orderId) => void startOrderConversation(db, cloudForAck, orderId),
       // Müşteri yazdı: bekleyen siparişin ödeme/adres adımını işle, yoksa uzun süre sonra ilk mesajsa hoş geldin gönder
       onInbound: (i) =>
-        void handleOrderReply(db, cloudForAck, i.brand, i.customer, i.message, i.raw).then(() => sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message)),
+        void (async () => {
+          if (await repeatOrderIfAsked(db, cloudForAck, i.brand, i.customer, i.message)) return; // "1" = son siparişi tekrarla
+          await handleOrderReply(db, cloudForAck, i.brand, i.customer, i.message, i.raw);
+          await sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message);
+        })(),
     }),
   );
 

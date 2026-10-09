@@ -1,4 +1,5 @@
 import type { Brand, Customer, Message, PrismaClient } from "@prisma/client";
+import { findRepeatable, REPEAT_HINT } from "./repeat-order";
 import { logger } from "../lib/logger";
 import { renderTemplate, templateFor } from "./order-messages";
 import { markNoticeSent, noticeLine } from "./notice";
@@ -128,7 +129,11 @@ export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloud
     const recent = await db.message.count({ where: { brandId: brand.id, customerId: customer.id, createdAt: { gte: since, lt: inbound.createdAt } } });
     if (recent > 0) return false;
     const kvkk = await noticeLine(db, customer);
-    const text = renderTemplate(await templateFor(db, brand.code, "WELCOME"), { ad: customer.name, kvkk });
+    const repeatable = await findRepeatable(db, brand.id, customer.id);
+    const base = renderTemplate(await templateFor(db, brand.code, "WELCOME"), { ad: customer.name, kvkk });
+    const text = repeatable ? `${base}
+
+${REPEAT_HINT}` : base;
     const id = await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text);
     await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: text, waMessageId: id });
     if (kvkk) await markNoticeSent(db, customer.id);
