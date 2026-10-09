@@ -129,8 +129,9 @@ export class WhatsappCloudClient {
         body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
         signal: AbortSignal.timeout(20_000),
       });
-    } catch {
-      throw new CloudApiError("WhatsApp Cloud API'ye ulaşılamadı (ağ hatası veya zaman aşımı).");
+    } catch (err) {
+      const cause = (err as { cause?: { code?: string } })?.cause?.code ?? (err as Error)?.name ?? "bilinmiyor";
+      throw new CloudApiError(`WhatsApp Cloud API'ye ulaşılamadı (ağ hatası veya zaman aşımı: ${cause}).`);
     }
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; error_user_msg?: string; code?: number } } & T;
     if (!res.ok) {
