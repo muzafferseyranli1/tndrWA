@@ -21,7 +21,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   ORDER_UPDATED: "Siparişiniz güncellendi (No: {no}).\n\n{urunler}\n\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}",
   PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",
-  DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}",
+  DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}\n\nAynı siparişi tekrar vermek için bize *1* yazmanız yeterli.",
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",
 };
 
