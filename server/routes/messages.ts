@@ -9,6 +9,9 @@ const KVKK = " {kvkk} ilk temasta müşteriye aydınlatma metni bağlantısını
 const DELIVERED_HINT = "Durum Teslim edildi olunca gider. {degerlendirme} sipariş için tek kullanımlık değerlendirme bağlantısını koyar. " + ALL;
 const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." + KVKK },
+  CLOSED: { label: "Kapalı (çalışma saati dışı)", hint: "Açılışa 1 saatten fazla varken sepet gönderen ya da \"1\" yazan müşteriye gider; sipariş alınmaz. {saatler} çalışma saatleri, {acilis} bir sonraki açılış. Saatleri Saatler sayfasından değiştirin." },
+  PREORDER: { label: "Açılıştan önce verilen sipariş", hint: "Açılışa 1 saat kala ile açılış arasında sipariş veren müşteriye, sipariş mesajından önce gider. {acilis} açılış saati, {no} sipariş no." },
+  MIN_BASKET: { label: "Minimum sepet altında", hint: "Sepet minimum tutarın altındaysa gider; sipariş açılmaz, müşteri ürün ekleyip yeniden gönderir. {toplam} sepet, {limit} minimum tutar, {eksik} eksik tutar." },
   NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL + KVKK },
   ASK_ADDRESS: { label: "Adres isteme", hint: "Ödeme seçilince gider. Müşteri adresi yazar ya da konum atar." },
   CONFIRM_ADDRESS: { label: "Kayıtlı adres onayı", hint: "Müşterinin kayıtlı adresi varsa gider; altında Evet / Yeni adres düğmeleri çıkar. {adres} kullanılabilir." },

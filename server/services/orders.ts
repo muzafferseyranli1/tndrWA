@@ -1,7 +1,8 @@
-import type { Order, PrismaClient } from "@prisma/client";
+import type { Brand, Customer, Order, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
 import { contactFrom, upsertCustomer } from "./customers";
+import { brandOrderingState, getMinBasket } from "./hours";
 import { needsOptions } from "./options";
 import { parseCloudOrder } from "./whatsapp-cloud";
 
@@ -10,14 +11,15 @@ const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? 
 export const ORDER_STATUSES = ["NEW", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export type IngestResult = { status: "created"; order: Order } | { status: "duplicate" } | { status: "skipped"; reason: string };
+export type IngestResult = { status: "created"; order: Order } | { status: "duplicate" } | { status: "rejected"; reason: "closed" | "minBasket"; brand: Brand; customer: Customer; totalKurus: number; minKurus: number }
+  | { status: "skipped"; reason: string };
 
 /**
  * Kaydedilmiş bir Cloud API sipariş olayını (webhook olay gövdesi) siparişe çevirir.
  * Marka, mesajın geldiği numaranın kimliğinden (metadata.phone_number_id) bulunur.
  * Aynı mesaj yeniden gelirse ikinci sipariş açılmaz.
  */
-export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Promise<IngestResult> {
+export async function ingestCloudOrder(db: PrismaClient, eventBody: string, now = new Date()): Promise<IngestResult> {
   let body: { metadata?: { phone_number_id?: unknown }; message?: { id?: unknown } };
   try {
     body = JSON.parse(eventBody);
@@ -36,6 +38,21 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
   if (!contact.waId && !contact.bsuid) return { status: "skipped", reason: "müşteri kimliği yok" };
 
   if (await db.order.findUnique({ where: { waMessageId } })) return { status: "duplicate" };
+
+  // Çalışma saati dışında (açılışa 1 saatten fazla varken) ya da minimum sepetin altında gelen sepetten sipariş açılmaz; yazışmada iz kalır, müşteriye mesaj gider (webhook tarafı)
+  const minKurus = await getMinBasket(db, brand.code);
+  const reason = (await brandOrderingState(db, brand, now)) === "closed" ? "closed" : minKurus > 0 && parsed.totalKurus < minKurus ? "minBasket" : null;
+  if (reason) {
+    const customer = await upsertCustomer(db, contact);
+    const note = reason === "closed" ? "kapalıyken geldi" : `minimum sepet (${formatTRY(minKurus)}) altında`;
+    try {
+      await db.message.create({ data: { brandId: brand.id, customerId: customer.id, direction: "IN", type: "order", body: `Sepet (${formatTRY(parsed.totalKurus)}) ${note}, sipariş alınmadı`, waMessageId, status: "RECEIVED" } });
+    } catch (err) {
+      if ((err as { code?: string }).code === "P2002") return { status: "duplicate" };
+      throw err;
+    }
+    return { status: "rejected", reason, brand, customer, totalKurus: parsed.totalKurus, minKurus };
+  }
 
   const products = await db.product.findMany({ where: { brandId: brand.id, retailerId: { in: parsed.items.map((i) => i.retailerId) } } });
   const byRetailerId = new Map(products.map((p) => [p.retailerId, p]));

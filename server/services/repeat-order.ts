@@ -2,6 +2,7 @@ import type { Brand, Customer, Message, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
+import { brandOrderingState, getMinBasket, sendClosedNotice, sendMinBasketNotice } from "./hours";
 import { OPEN_ORDER_WINDOW_MS, startOrderConversation } from "./order-flow";
 import { needsOptions } from "./options";
 import { recordOutbound } from "./outbound";
@@ -26,12 +27,17 @@ export async function findRepeatable(db: PrismaClient, brandId: number, customer
 export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, message: Message, now = new Date()): Promise<boolean> {
   try {
     if (message.type !== "text" || message.body.trim() !== "1") return false;
+    const last0 = await findRepeatable(db, brand.id, customer.id);
+    if (!last0) return false;
+    if ((await brandOrderingState(db, brand, now)) === "closed") {
+      await sendClosedNotice(db, cloud, brand, customer);
+      return true;
+    }
     const open = await db.order.findFirst({
       where: { brandId: brand.id, customerId: customer.id, status: "NEW", stage: { in: ["AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"] }, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } },
     });
     if (open) return false;
-    const last = await findRepeatable(db, brand.id, customer.id);
-    if (!last) return false;
+    const last = last0;
 
     const waMessageId = `tekrar:${message.id}`;
     if (await db.order.findUnique({ where: { waMessageId } })) return true; // aynı mesaj yeniden işlenmesin
@@ -64,6 +70,13 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
       return true;
     }
 
+    const total = kept.reduce((s, k) => s + k.unitKurus * k.quantity, 0);
+    const minKurus = await getMinBasket(db, brand.code);
+    if (minKurus > 0 && total < minKurus) {
+      await sendMinBasketNotice(db, cloud, brand, customer, total, minKurus);
+      return true;
+    }
+
     const stage = (await needsOptions(db, kept.map((k) => k.productId))) ? "AWAITING_OPTIONS" : "AWAITING_PAYMENT";
     const order = await db.order.create({
       data: {
@@ -71,7 +84,7 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
         customerId: customer.id,
         waMessageId,
         stage,
-        totalKurus: kept.reduce((s, k) => s + k.unitKurus * k.quantity, 0),
+        totalKurus: total,
         items: { create: kept.map((k) => ({ productId: k.productId, retailerId: k.retailerId, name: k.name, unitKurus: k.unitKurus, quantity: k.quantity })) },
       },
     });

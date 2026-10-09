@@ -21,6 +21,7 @@ import { paymentsRouter } from "./routes/payments";
 import { ratingsRouter } from "./routes/ratings";
 import { customersRouter } from "./routes/customers";
 import { businessRouter } from "./routes/business";
+import { hoursRouter } from "./routes/hours";
 import { backupsRouter } from "./routes/backups";
 import { optionsRouter } from "./routes/options";
 import { BackupService, backupDue } from "./services/backup";
@@ -28,6 +29,7 @@ import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
+import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
@@ -83,7 +85,9 @@ async function main() {
     "/api/webhooks",
     webhooksRouter(db, env, {
       // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
-      onOrderCreated: (orderId) => void startOrderConversation(db, cloudForAck, orderId),
+      onOrderCreated: (orderId) =>
+        void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => startOrderConversation(db, cloudForAck, orderId)),
+      onRejected: (r) => void (r.reason === "closed" ? sendClosedNotice(db, cloudForAck, r.brand, r.customer) : sendMinBasketNotice(db, cloudForAck, r.brand, r.customer, r.totalKurus, r.minKurus)),
       // Müşteri yazdı: bekleyen siparişin ödeme/adres adımını işle, yoksa uzun süre sonra ilk mesajsa hoş geldin gönder
       onInbound: (i) =>
         void (async () => {
@@ -130,6 +134,7 @@ async function main() {
   app.use("/api/options", optionsRouter(db));
   app.use("/api/ratings", ratingsRouter(db));
   app.use("/api/customers", customersRouter(db));
+  app.use("/api/hours", hoursRouter(db));
   app.use("/api/business", businessRouter(db, env.publicBaseUrl));
   // Yedekler kalıcı diskte (yükleme klasörünün yanında): üretimde /data/backups
   const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);

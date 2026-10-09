@@ -4,12 +4,15 @@ import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
-export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED";
-export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
+export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET";
+export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   WELCOME: "Merhaba {ad}, hoş geldiniz! Menümüzü görmek için aşağıdaki katalog düğmesine dokunabilirsiniz.\n\n{kvkk}",
+  CLOSED: "Merhaba {ad}, şu an kapalıyız. Çalışma saatlerimiz: {saatler}.\nBir sonraki açılış: {acilis}.\n\nSiparişleri açılıştan 1 saat önce almaya başlıyoruz, o saatten sonra tekrar yazabilirsiniz.",
+  PREORDER: "Henüz açılmadık, {acilis} açılıyoruz. Siparişiniz kayıtlı; açılışla birlikte hazırlanmaya başlanır, teslimat açılıştan sonra yapılır.",
+  MIN_BASKET: "Siparişiniz ({toplam}) minimum teslimat limitinin ({limit}) altında kalıyor. Siparişinizi getirebilmemiz için {eksik} değerinde daha ürün ekleyip sepeti yeniden göndermenizi rica ederiz.",
   NEW: "Merhaba {ad}, siparişinizi aldık (No: {no}). Sepet tutarı: {toplam}. Ödeme şeklinizi aşağıdan seçin. Nakit ve kapıda kredi kartı ödemelerinde %15 indirim uygulanır.\n\n{kvkk}",
   ASK_ADDRESS: "Teşekkürler. Teslimat adresinizi yazın ya da konumunuzu gönderin.",
   CONFIRM_ADDRESS: "Kayıtlı adresiniz:\n{adres}\n\nSiparişi bu adrese gönderelim mi?",
@@ -22,7 +25,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",
 };
 
-export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string; urunler?: string; kvkk?: string };
+export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string; urunler?: string; kvkk?: string; saatler?: string; acilis?: string; limit?: string; eksik?: string };
 
 /** Yer tutucuları doldurur; ad yoksa "Merhaba {ad}," gibi kalıplar düzgün kalsın diye boşluk ve virgül toparlanır. */
 export function renderTemplate(template: string, vars: TemplateVars): string {
@@ -37,6 +40,10 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
     degerlendirme: vars.degerlendirme ?? "",
     urunler: vars.urunler ?? "",
     kvkk: vars.kvkk ?? "",
+    saatler: vars.saatler ?? "",
+    acilis: vars.acilis ?? "",
+    limit: vars.limit ?? "",
+    eksik: vars.eksik ?? "",
   };
   // "Adres: {adres}" gibi tek değişkenli etiket satırında değer boşsa satırı hiç gösterme ("Adres:" boş kalmasın)
   const lines = template.split("\n").filter((line) => {

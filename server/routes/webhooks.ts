@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import type { PrismaClient } from "@prisma/client";
+import type { Brand, Customer, PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
 import { logger } from "../lib/logger";
 import { sameSecret, verifyMetaSignature } from "../lib/meta-signature";
@@ -57,6 +57,8 @@ export function isDiscoveryEvent(event: string, messageType: string | null, rawT
 export interface WebhookHooks {
   /** Yeni sipariş kaydedildi (müşteriye "aldık" mesajı vb. için) */
   onOrderCreated?: (orderId: number) => void;
+  /** Sepet reddedildi (kapalı ya da minimum sepet altında): sipariş açılmadı, müşteriye bilgi verilir */
+  onRejected?: (r: { brand: Brand; customer: Customer; reason: "closed" | "minBasket"; totalKurus: number; minKurus: number }) => void;
   /** Müşteriden sipariş dışı yeni bir mesaj geldi (hoş geldin mesajı vb. için) */
   onInbound?: (inbound: InboundRecord) => void;
 }
@@ -157,6 +159,9 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
           if (result.status === "created") {
             logger.info({ orderId: result.order.id, brandId: result.order.brandId, toplamKurus: result.order.totalKurus }, "Sipariş kaydedildi");
             hooks.onOrderCreated?.(result.order.id);
+          } else if (result.status === "rejected") {
+            logger.info({ brandId: result.brand.id, reason: result.reason }, "Sepet reddedildi, sipariş açılmadı");
+            hooks.onRejected?.(result);
           } else if (result.status === "skipped") logger.warn({ session: ev.session, reason: result.reason }, "Sipariş kaydedilmedi");
         } catch (err) {
           logger.error({ err }, "Sipariş işlenemedi");

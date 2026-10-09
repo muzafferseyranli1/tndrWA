@@ -14,6 +14,7 @@ const links = [
   { href: "/backups", label: "Yedekler" },
   { href: "/ratings", label: "Değerlendirmeler" },
   { href: "/options", label: "Seçenekler" },
+  { href: "/hours", label: "Saatler" },
   { href: "/payments", label: "Ödeme" },
   { href: "/messages", label: "Mesajlar" },
   { href: "/channels", label: "Kanallar" },
