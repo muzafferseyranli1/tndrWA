@@ -4,6 +4,9 @@ import type { PrismaClient } from "@prisma/client";
 import { isChannelKind } from "../../shared/channels";
 import { normalizePhone } from "../../shared/channels";
 import type { RatingContextDto, RatingResultDto } from "../../shared/types";
+import { buildPolicySections } from "../../shared/legal";
+import type { LegalDto } from "../../shared/types";
+import { businessReady, getBusiness, getRetention } from "../services/business";
 import { publicBrand } from "../services/channels";
 import { isLow, reviewLinks, reviewMinScore } from "../services/ratings";
 
@@ -131,6 +134,39 @@ export function publicRouter(db: PrismaClient): Router {
     }
     const result: RatingResultDto = { ok: true, low, links: await reviewLinks(db, brand.id, await reviewMinScore(db), Math.min(d.taste, d.care, d.delivery)) };
     res.json(result);
+  });
+
+  // ---- KVKK: gizlilik/aydınlatma metni ve veri silme talebi ----
+  router.get("/legal", async (_req, res) => {
+    const [info, retention] = await Promise.all([getBusiness(db), getRetention(db)]);
+    // Eksik bilgiyle yarım metin yayımlanmaz
+    const dto: LegalDto = businessReady(info)
+      ? { ready: true, brandName: info.legalName, sections: buildPolicySections(info, retention), updatedNote: "" }
+      : { ready: false, brandName: "", sections: [], updatedNote: "" };
+    res.set("Cache-Control", "public, max-age=60").json(dto);
+  });
+
+  const deletionBuckets = new Map<string, { count: number; resetAt: number }>();
+  const deletionAllowed = (ip: string, now = Date.now()) => {
+    const b = deletionBuckets.get(ip);
+    if (!b || b.resetAt <= now) {
+      deletionBuckets.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+      return true;
+    }
+    b.count++;
+    return b.count <= 5;
+  };
+
+  router.post("/deletion-request", async (req, res) => {
+    if (!deletionAllowed(req.ip ?? "?")) return res.status(429).json({ error: "Çok fazla deneme. Lütfen biraz sonra tekrar deneyin." });
+    const parsed = z.object({ phone: z.string().trim().min(1, "Telefon numarası gerekli.").max(25), note: z.string().trim().max(500, "Not en fazla 500 karakter olabilir.").optional() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
+    const phone = normalizePhone(parsed.data.phone);
+    if (!phone) return res.status(400).json({ error: "Telefon numarası geçersiz görünüyor (örn. 0533 123 45 67)." });
+    // Aynı numaranın bekleyen talebi varsa yenisini açma. Yanıt hep aynı: numaranın kayıtlı olup olmadığı açıklanmaz.
+    const pending = await db.deletionRequest.findFirst({ where: { phone, status: "PENDING" } });
+    if (!pending) await db.deletionRequest.create({ data: { phone, note: parsed.data.note ?? "" } });
+    res.json({ ok: true });
   });
 
   return router;

@@ -5,10 +5,11 @@ import { resolveBrand } from "../services/brands";
 import { DEFAULT_TEMPLATES, MESSAGE_KEYS, templateKey, templateFor, type MessageKey } from "../services/order-messages";
 
 const ALL = "{ad}, {no}, {toplam}, {indirim}, {tutar}, {odeme}, {adres} kullanılabilir.";
+const KVKK = " {kvkk} ilk temasta müşteriye aydınlatma metni bağlantısını koyar (daha önce gönderildiyse boş kalır).";
 const DELIVERED_HINT = "Durum Teslim edildi olunca gider. {degerlendirme} sipariş için tek kullanımlık değerlendirme bağlantısını koyar. " + ALL;
 const LABELS: Record<MessageKey, { label: string; hint: string }> = {
-  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." },
-  NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL },
+  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." + KVKK },
+  NEW: { label: "Sipariş alındı + ödeme sorusu", hint: "Sepet geldiğinde gider, altında ödeme seçim listesi çıkar. " + ALL + KVKK },
   ASK_ADDRESS: { label: "Adres isteme", hint: "Ödeme seçilince gider. Müşteri adresi yazar ya da konum atar." },
   CONFIRM_ADDRESS: { label: "Kayıtlı adres onayı", hint: "Müşterinin kayıtlı adresi varsa gider; altında Evet / Yeni adres düğmeleri çıkar. {adres} kullanılabilir." },
   CHOOSE_ADDRESS: { label: "Adres seçimi (birden fazla kayıtlı adres)", hint: "Müşterinin birden fazla kayıtlı adresi varsa gider; altında adres listesi çıkar." },

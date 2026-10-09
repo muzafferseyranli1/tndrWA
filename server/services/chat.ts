@@ -1,6 +1,7 @@
 import type { Brand, Customer, Message, PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { renderTemplate, templateFor } from "./order-messages";
+import { markNoticeSent, noticeLine } from "./notice";
 import { recordOutbound } from "./outbound";
 import { contactFrom, upsertCustomer } from "./customers";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
@@ -126,9 +127,11 @@ export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloud
     const since = new Date(inbound.createdAt.getTime() - WELCOME_GAP_MS);
     const recent = await db.message.count({ where: { brandId: brand.id, customerId: customer.id, createdAt: { gte: since, lt: inbound.createdAt } } });
     if (recent > 0) return false;
-    const text = renderTemplate(await templateFor(db, brand.code, "WELCOME"), { ad: customer.name });
+    const kvkk = await noticeLine(db, customer);
+    const text = renderTemplate(await templateFor(db, brand.code, "WELCOME"), { ad: customer.name, kvkk });
     const id = await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text);
     await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: text, waMessageId: id });
+    if (kvkk) await markNoticeSent(db, customer.id);
     return true;
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "Hoş geldin mesajı gönderilemedi");

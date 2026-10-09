@@ -20,6 +20,9 @@ import { channelsRouter } from "./routes/channels";
 import { paymentsRouter } from "./routes/payments";
 import { ratingsRouter } from "./routes/ratings";
 import { customersRouter } from "./routes/customers";
+import { businessRouter } from "./routes/business";
+import { purgeExpired } from "./services/business";
+import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
 import { ensureDefaultPaymentTypes } from "./services/payment";
@@ -91,6 +94,7 @@ async function main() {
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);
   await ensureDefaultPaymentTypes(db);
+  configureNotice(env.publicBaseUrl);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);
   // Alan adı değiştiyse katalogdaki görsel adresleri yenilenir (arka planda, açılışı geciktirmez)
@@ -117,6 +121,7 @@ async function main() {
   app.use("/api/payments", paymentsRouter(db));
   app.use("/api/ratings", ratingsRouter(db));
   app.use("/api/customers", customersRouter(db));
+  app.use("/api/business", businessRouter(db, env.publicBaseUrl));
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
@@ -130,7 +135,12 @@ async function main() {
       .catch((err) => logger.error({ err }, "tükendi işareti temizlenemedi"));
   }, 60_000);
   // Kişisel veri içeren ham webhook olaylarını 14 gün sonra sil (açılışta ve saatte bir)
-  const purge = () => purgeOldWebhookEvents(db).then((n) => n > 0 && logger.info(`${n} eski webhook olayı silindi`)).catch((err) => logger.error({ err }, "eski olaylar silinemedi"));
+  const purge = () =>
+    purgeOldWebhookEvents(db)
+      .then((n) => n > 0 && logger.info(`${n} eski webhook olayı silindi`))
+      .then(() => purgeExpired(db))
+      .then((r) => (r.messages || r.orders || r.ratings) && logger.info(r, "Saklama süresi dolan kayıtlar silindi"))
+      .catch((err) => logger.error({ err }, "eski olaylar silinemedi"));
   void purge();
   const purgeTimer = setInterval(purge, 60 * 60 * 1000);
   logger.info(`WhatsApp (WAHA): ${env.waha ? "ayarlı" : "kapalı (WAHA ayarları eksik)"} | Cloud API: ${env.whatsappCloud ? (env.whatsappCloud.token ? "webhook + gönderim" : "yalnızca webhook (jeton yok)") : "kapalı"}`);

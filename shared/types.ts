@@ -242,3 +242,45 @@ export interface CustomerImportJobDto {
   };
   error: string | null;
 }
+
+export interface BusinessInfoDto {
+  legalName: string;
+  address: string;
+  email: string;
+  phone: string;
+  verbis: string;
+}
+
+export interface RetentionDto {
+  messagesDays: number;
+  ordersDays: number;
+  ratingsDays: number;
+}
+
+export interface BusinessSettingsDto {
+  info: BusinessInfoDto;
+  retention: RetentionDto;
+  /** Zorunlu bilgiler (ünvan, adres, e-posta, telefon) dolu: gizlilik sayfaları yayında */
+  ready: boolean;
+  policyUrl: string | null;
+  deletionUrl: string | null;
+}
+
+export interface LegalDto {
+  ready: boolean;
+  brandName: string;
+  sections: { title: string; paragraphs: string[] }[];
+  updatedNote: string;
+}
+
+export interface DeletionRequestDto {
+  id: number;
+  createdAt: string;
+  phone: string;
+  note: string;
+  status: "PENDING" | "DONE" | "REJECTED";
+  handledAt: string | null;
+  handledNote: string;
+  /** Bu telefonla kayıtlı müşteri sayısı */
+  matchingCustomers: number;
+}

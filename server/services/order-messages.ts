@@ -9,8 +9,8 @@ export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "NEW", "ASK_ADDRESS", "CON
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
-  WELCOME: "Merhaba {ad}, hoş geldiniz! Menümüzü görmek için aşağıdaki katalog düğmesine dokunabilirsiniz.",
-  NEW: "Merhaba {ad}, siparişinizi aldık (No: {no}). Sepet tutarı: {toplam}. Ödeme şeklinizi aşağıdan seçin. Nakit ve kapıda kredi kartı ödemelerinde %15 indirim uygulanır.",
+  WELCOME: "Merhaba {ad}, hoş geldiniz! Menümüzü görmek için aşağıdaki katalog düğmesine dokunabilirsiniz.\n\n{kvkk}",
+  NEW: "Merhaba {ad}, siparişinizi aldık (No: {no}). Sepet tutarı: {toplam}. Ödeme şeklinizi aşağıdan seçin. Nakit ve kapıda kredi kartı ödemelerinde %15 indirim uygulanır.\n\n{kvkk}",
   ASK_ADDRESS: "Teşekkürler. Teslimat adresinizi yazın ya da konumunuzu gönderin.",
   CONFIRM_ADDRESS: "Kayıtlı adresiniz:\n{adres}\n\nSiparişi bu adrese gönderelim mi?",
   CHOOSE_ADDRESS: "Siparişi hangi adrese gönderelim? Listeden seçebilir ya da yeni adres ekleyebilirsiniz.",
@@ -22,7 +22,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",
 };
 
-export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string; urunler?: string };
+export type TemplateVars = { ad?: string | null; no?: number | null; toplam?: string; indirim?: string; tutar?: string; odeme?: string; adres?: string; degerlendirme?: string; urunler?: string; kvkk?: string };
 
 /** Yer tutucuları doldurur; ad yoksa "Merhaba {ad}," gibi kalıplar düzgün kalsın diye boşluk ve virgül toparlanır. */
 export function renderTemplate(template: string, vars: TemplateVars): string {
@@ -36,6 +36,7 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
     adres: vars.adres ?? "",
     degerlendirme: vars.degerlendirme ?? "",
     urunler: vars.urunler ?? "",
+    kvkk: vars.kvkk ?? "",
   };
   let out = template;
   for (const [key, value] of Object.entries(values)) out = out.replaceAll(`{${key}}`, value);

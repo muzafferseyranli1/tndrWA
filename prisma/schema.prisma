@@ -116,6 +116,8 @@ model Customer {
   messages  Message[]
   // Personelin yazışmayı en son okuduğu an (okunmamış sayısı için); marka başına değil müşteri başına
   readAt    DateTime?
+  // Aydınlatma metni bağlantısı müşteriye ilk kez ne zaman gönderildi (her mesajda tekrarlanmaz)
+  noticeSentAt DateTime?
   // Eski tek adres alanları (yerini CustomerAddress aldı; yeni kodda kullanılmaz)
   address   String?
   lat       Float?
@@ -290,4 +292,18 @@ model OrderChange {
   createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
+}
+
+// KVKK: müşterinin veri silme talebi (herkese açık formdan). Personel panelden işler.
+model DeletionRequest {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  phone       String
+  note        String    @default("")
+  // PENDING | DONE | REJECTED
+  status      String    @default("PENDING")
+  handledAt   DateTime?
+  handledNote String    @default("")
+
+  @@index([status, createdAt])
 }

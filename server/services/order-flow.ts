@@ -1,6 +1,7 @@
 import type { Brand, Customer, Message, Order, PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
-import { orderVars, renderTemplate, templateFor, type MessageKey } from "./order-messages";
+import { markNoticeSent, noticeLine } from "./notice";
+import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { priceWithDiscount } from "./payment";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
@@ -37,8 +38,8 @@ function canSend(cloud: WhatsappCloudClient | null, o: FullOrder): cloud is What
   return !!cloud && !!o.brand.waPhoneNumberId && !!o.customer.waId;
 }
 
-async function render(db: PrismaClient, o: FullOrder, key: MessageKey): Promise<string> {
-  return renderTemplate(await templateFor(db, o.brand.code, key), orderVars(o, o.customer));
+async function render(db: PrismaClient, o: FullOrder, key: MessageKey, extra: TemplateVars = {}): Promise<string> {
+  return renderTemplate(await templateFor(db, o.brand.code, key), { ...orderVars(o, o.customer), ...extra });
 }
 
 async function log(db: PrismaClient, o: FullOrder, type: "text" | "catalog", body: string, id: string | null) {
@@ -57,13 +58,15 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
     }
     await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_PAYMENT" } });
     if (!canSend(cloud, order)) return;
-    const body = await render(db, order, "NEW");
+    const kvkk = await noticeLine(db, order.customer); // ilk temasta aydınlatma metni bağlantısı
+    const body = await render(db, order, "NEW", { kvkk });
     const id = await cloud.sendList(order.brand.waPhoneNumberId!, order.customer.waId!, {
       body,
       buttonText: "Ödeme şekli seç",
       rows: types.map((t) => ({ id: payId(order.id, t.id), title: t.name, description: t.discountPercent > 0 ? `%${t.discountPercent} indirimli` : undefined })),
     });
     await log(db, order, "text", body, id);
+    if (kvkk) await markNoticeSent(db, order.customerId);
   } catch (err) {
     const o = await load(db, orderId).catch(() => null);
     if (o) await reportFailure(db, o, "Ödeme şekli sorusu", "", err);
