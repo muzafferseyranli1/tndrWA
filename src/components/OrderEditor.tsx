@@ -18,12 +18,15 @@ export default function OrderEditor({ order, onChanged, onClose }: { order: Orde
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState(order.note);
   const [address, setAddress] = useState(order.address);
+  const [addressId, setAddressId] = useState<number | null>(null);
+  const [saved, setSaved] = useState<{ id: number; text: string; hasLocation: boolean }[]>([]);
   const [paymentTypeId, setPaymentTypeId] = useState<number | "">(order.paymentTypeId ?? "");
 
   useEffect(() => {
     api<ProductDto[]>(`/api/products?brandId=${order.brandId}`).then(setProducts).catch((e: Error) => setError(e.message));
     api<PaymentTypeDto[]>(`/api/payments?brandId=${order.brandId}`).then(setPayments).catch(() => undefined);
-  }, [order.brandId]);
+    api<{ id: number; text: string; hasLocation: boolean }[]>(`/api/customers/${order.customerId}/addresses`).then(setSaved).catch(() => undefined);
+  }, [order.brandId, order.customerId]);
 
   const choices = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr");
@@ -115,14 +118,45 @@ export default function OrderEditor({ order, onChanged, onClose }: { order: Orde
           <span className="mb-1 block text-xs text-slate-500">Sipariş notu</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={`${field} w-full`} />
         </label>
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs text-slate-500">Teslimat adresi</span>
-          <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={500} className={`${field} w-full`} />
-        </label>
+        <div className="sm:col-span-2">
+          <span className="mb-1 block text-xs text-slate-500">Teslimat adresi {order.address ? "" : <b className="text-red-600">(bu siparişte adres yok)</b>}</span>
+          {saved.length > 0 && (
+            <select
+              value={addressId ?? ""}
+              onChange={(e) => {
+                const picked = saved.find((a) => a.id === Number(e.target.value));
+                setAddressId(picked ? picked.id : null);
+                if (picked) setAddress(picked.text);
+              }}
+              aria-label="Kayıtlı adreslerden seç"
+              className={`${field} mb-2 w-full`}
+            >
+              <option value="">Kayıtlı adreslerden seç ({saved.length})</option>
+              {saved.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.text.length > 90 ? `${a.text.slice(0, 90)}…` : a.text}
+                  {a.hasLocation ? " 📍" : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          <textarea
+            value={address}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setAddressId(null); // elle yazıldı: yeni adres (kaydedilince müşterinin listesine eklenir)
+            }}
+            rows={2}
+            maxLength={500}
+            placeholder="Adresi yazın ya da yukarıdan kayıtlı adreslerden seçin"
+            className={`${field} w-full`}
+          />
+          <p className="mt-1 text-xs text-slate-500">Yeni yazdığınız adres kaydedilince müşterinin kayıtlı adreslerine eklenir, sonraki siparişte seçenek olarak çıkar.</p>
+        </div>
       </div>
       <button
         disabled={busy || !detailsDirty}
-        onClick={() => run(() => api(base, { method: "PATCH", json: { note, address, ...(paymentTypeId !== "" ? { paymentTypeId } : {}) } }))}
+        onClick={() => run(() => api(base, { method: "PATCH", json: { note, address, ...(addressId !== null ? { addressId } : {}), ...(paymentTypeId !== "" ? { paymentTypeId } : {}) } }))}
         className="mt-3 rounded-lg bg-brand-500 px-4 py-2 font-medium text-white hover:bg-brand-600 disabled:opacity-40"
       >
         Not / adres / ödeme kaydet

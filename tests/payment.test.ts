@@ -57,3 +57,13 @@ test("değerlendirme anahtarı: tahmin edilemez, URL'ye uygun, tekrar etmez", ()
   assert.match(a, /^[A-Za-z0-9_-]{12}$/);
   assert.notEqual(a, newRatingToken());
 });
+
+test("şablon: değeri boş 'Etiket: {değişken}' satırı gösterilmez; diğer satırlar ve etiket-yalnız satırlar korunur", () => {
+  assert.equal(renderTemplate("Toplam: {toplam}\nAdres: {adres}", { toplam: "1,00 TL", adres: "" }), "Toplam: 1,00 TL");
+  assert.equal(renderTemplate("Toplam: {toplam}\nAdres: {adres}", { toplam: "1,00 TL", adres: "Moda" }), "Toplam: 1,00 TL\nAdres: Moda");
+  assert.equal(renderTemplate("Ödeme: {odeme}\nToplam: {toplam}", { odeme: "", toplam: "5 TL" }), "Toplam: 5 TL");
+  // "Kayıtlı adresiniz:" tek başına etiket satırıdır ama değişken içermez: korunur
+  assert.equal(renderTemplate(DEFAULT_TEMPLATES.CONFIRM_ADDRESS, { adres: "Moda Mah. No:5" }), "Kayıtlı adresiniz:\nModa Mah. No:5\n\nSiparişi bu adrese gönderelim mi?");
+  // ad boşsa selamlama satırı atılmaz
+  assert.equal(renderTemplate("Merhaba {ad}, hoş geldiniz", { ad: null }), "Merhaba, hoş geldiniz");
+});

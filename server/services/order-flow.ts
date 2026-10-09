@@ -2,6 +2,7 @@ import type { Brand, Customer, Message, Order, PrismaClient } from "@prisma/clie
 import { logger } from "../lib/logger";
 import { formatTRY } from "../../shared/money";
 import { markNoticeSent, noticeLine } from "./notice";
+import { rememberAddress } from "./addresses";
 import { applyAnswer, nextQuestion } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
@@ -19,19 +20,7 @@ export const payId = (orderId: number, paymentTypeId: number) => `pay:${orderId}
 export const addrId = (orderId: number, choice: number | "new") => `addr:${orderId}:${choice}`;
 export const optId = (orderId: number, itemId: number, groupId: number, choiceId: number) => `opt:${orderId}:${itemId}:${groupId}:${choiceId}`;
 
-/** Aynı adresin farklı yazımlarını tek kayıtta toplamak için anahtar. */
-export const addressKey = (text: string) => text.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
-
-/** Müşterinin adres listesine ekler (varsa kullanım zamanını yeniler). */
-export async function rememberAddress(db: PrismaClient, customerId: number, text: string, lat?: number | null, lng?: number | null): Promise<void> {
-  const key = addressKey(text);
-  if (!key) return;
-  await db.customerAddress.upsert({
-    where: { customerId_key: { customerId, key } },
-    create: { customerId, text: text.trim(), key, lat: lat ?? null, lng: lng ?? null },
-    update: { lastUsedAt: new Date(), ...(lat != null && lng != null ? { lat, lng } : {}) },
-  });
-}
+export { addressKey, rememberAddress } from "./addresses";
 
 async function load(db: PrismaClient, orderId: number): Promise<FullOrder | null> {
   return db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true } });

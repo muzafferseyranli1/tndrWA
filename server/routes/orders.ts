@@ -34,6 +34,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     mapUrl: o.lat != null && o.lng != null ? `https://www.google.com/maps/search/?api=1&query=${o.lat},${o.lng}` : o.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}` : null,
     createdAt: o.createdAt.toISOString(),
     paymentTypeId: o.paymentTypeId,
+    customerId: o.customerId,
     canEdit: EDITABLE_STATUSES.includes(o.status),
     noticePending: o.noticePending,
     changes: (o.changes ?? []).map((c) => ({ text: c.text, createdAt: c.createdAt.toISOString() })),
@@ -120,7 +121,7 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
   router.patch(
     "/:id",
     run(async (id, req) => {
-      const parsed = z.object({ note: z.string().max(500).optional(), address: z.string().max(500).optional(), paymentTypeId: z.number().int().optional() }).safeParse(req.body ?? {});
+      const parsed = z.object({ note: z.string().max(500).optional(), address: z.string().max(500).optional(), addressId: z.number().int().optional(), paymentTypeId: z.number().int().optional() }).safeParse(req.body ?? {});
       if (!parsed.success) throw new EditError("Geçersiz istek.", 400);
       await editDetails(db, id, parsed.data);
     }),

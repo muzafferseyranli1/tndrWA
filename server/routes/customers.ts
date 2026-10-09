@@ -42,6 +42,14 @@ export function customersRouter(db: PrismaClient): Router {
     res.json({ total, items });
   });
 
+  // Müşterinin kayıtlı adresleri (sipariş düzenlerken seçmek için), en son kullanılan başta
+  router.get("/:id/addresses", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(404).json({ error: "Müşteri bulunamadı." });
+    const rows = await db.customerAddress.findMany({ where: { customerId: id }, orderBy: [{ lastUsedAt: "desc" }, { id: "desc" }], take: 20 });
+    res.json(rows.map((a) => ({ id: a.id, text: a.text, hasLocation: a.lat !== null && a.lng !== null })));
+  });
+
   router.post(
     "/import",
     (req: Request, res: Response, next: NextFunction) => {

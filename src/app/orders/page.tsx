@@ -284,6 +284,11 @@ export default function OrdersPage() {
                     )}
                   </div>
                 )}
+                {o.stage === "READY" && !o.address && tab === "active" && (
+                  <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                    Bu siparişte teslimat adresi yok. &quot;Düzenle&quot;den kayıtlı adreslerden seçin ya da yeni adres yazın.
+                  </p>
+                )}
                 {o.stage !== "READY" && <p className="mt-2 text-sm text-slate-500">Müşteri bu adımı tamamlamadı. Yazışmadan ya da telefonla öğrenip &quot;Bilgiler tamam&quot; ile işleme alabilirsiniz.</p>}
                 {o.note && <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Not: {o.note}</p>}
                 {o.noticePending && tab === "active" && (

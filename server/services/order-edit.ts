@@ -1,6 +1,7 @@
 import type { Brand, Customer, Order, OrderItem, OrderItemOption, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { formatTRY, percentOf } from "../../shared/money";
+import { rememberAddress } from "./addresses";
 import { describeOptions } from "./option-format";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
 import { recordOutbound } from "./outbound";
@@ -98,6 +99,8 @@ export async function removeItem(db: Db, orderId: number, itemId: number): Promi
 export interface DetailsPatch {
   note?: string;
   address?: string;
+  /** Müşterinin kayıtlı adreslerinden biri (konumuyla birlikte); address yerine kullanılır */
+  addressId?: number;
   paymentTypeId?: number;
 }
 
@@ -110,12 +113,21 @@ export async function editDetails(db: Db, orderId: number, patch: DetailsPatch):
     await db.order.update({ where: { id: orderId }, data: { note: patch.note.trim() } });
     await note(db, orderId, patch.note.trim() ? `Sipariş notu değişti: ${patch.note.trim()}` : "Sipariş notu silindi");
   }
-  if (patch.address !== undefined && patch.address.trim() !== order.address) {
-    const address = patch.address.trim();
-    if (!address) throw new EditError("Adres boş olamaz.", 400);
-    // Koordinat eski adrese aitti, yeni yazılı adresle çelişmesin
-    await db.order.update({ where: { id: orderId }, data: { address, lat: null, lng: null } });
-    await note(db, orderId, `Adres değişti: ${order.address || "(boş)"} → ${address}`);
+  // Adres: müşterinin kayıtlı adreslerinden biri (konumuyla birlikte) ya da elle yazılan yeni adres
+  let chosen: { text: string; lat: number | null; lng: number | null } | null = null;
+  if (patch.addressId !== undefined) {
+    chosen = await db.customerAddress.findFirst({ where: { id: patch.addressId, customerId: order.customerId } });
+    if (!chosen) throw new EditError("Seçilen adres bu müşteriye ait değil.", 404);
+  }
+  const newAddress = (chosen?.text ?? patch.address)?.trim();
+  if (newAddress !== undefined && newAddress !== order.address) {
+    if (!newAddress) throw new EditError("Adres boş olamaz.", 400);
+    // Yazılan adreste eski konum geçersizdir; kayıtlı adres seçildiyse onun konumu (varsa) gelir
+    const lat = chosen?.lat ?? null;
+    const lng = chosen?.lng ?? null;
+    await db.order.update({ where: { id: orderId }, data: { address: newAddress, lat, lng } });
+    await note(db, orderId, `Adres değişti: ${order.address || "(boş)"} → ${newAddress}`);
+    await rememberAddress(db, order.customerId, newAddress, lat, lng); // elle girilen yeni adres sonraki siparişte seçenek olarak çıksın
     noticeNeeded = true;
   }
   if (patch.paymentTypeId !== undefined && patch.paymentTypeId !== order.paymentTypeId) {

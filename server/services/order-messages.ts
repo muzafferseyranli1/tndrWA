@@ -38,7 +38,12 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
     urunler: vars.urunler ?? "",
     kvkk: vars.kvkk ?? "",
   };
-  let out = template;
+  // "Adres: {adres}" gibi tek değişkenli etiket satırında değer boşsa satırı hiç gösterme ("Adres:" boş kalmasın)
+  const lines = template.split("\n").filter((line) => {
+    const m = line.match(/^[^{}]*:\s*\{(\w+)\}\s*$/);
+    return !(m && m[1] in values && values[m[1]] === "");
+  });
+  let out = lines.join("\n");
   for (const [key, value] of Object.entries(values)) out = out.replaceAll(`{${key}}`, value);
   return out
     .replace(/[ \t]+,/g, ",")
