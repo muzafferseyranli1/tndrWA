@@ -30,6 +30,7 @@ export default function OrdersPage() {
   const { brand } = useBrands();
   const brandId = brand?.id;
   const [tab, setTab] = useState<"active" | "history">("active");
+  const [newestFirst, setNewestFirst] = useState<Record<"active" | "history", boolean>>({ active: false, history: true });
   const [orders, setOrders] = useState<OrderDto[] | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -221,6 +222,9 @@ export default function OrdersPage() {
               {t === "active" ? "Aktif" : "Geçmiş"}
             </button>
           ))}
+          <button onClick={() => setNewestFirst((p) => ({ ...p, [tab]: !p[tab] }))} className="ml-auto rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+            Sıralama: {newestFirst[tab] ? "Yeniden eskiye ↓" : "Eskiden yeniye ↑"}
+          </button>
         </div>
 
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -228,7 +232,7 @@ export default function OrdersPage() {
         {orders && orders.length === 0 && <p className="text-slate-500">{tab === "active" ? "Bekleyen sipariş yok." : "Henüz tamamlanan sipariş yok."}</p>}
 
         <ul className="space-y-4">
-          {orders?.map((o) => {
+          {(orders ? [...orders].sort((a, b) => (newestFirst[tab] ? b.id - a.id : a.id - b.id)) : []).map((o) => {
             const step = next[o.status];
             return (
               <li key={o.id} className={`rounded-xl border bg-white p-4 ${o.stage !== "READY" ? "border-slate-300 bg-slate-50" : o.status === "NEW" ? "border-red-400 ring-2 ring-red-100" : "border-slate-200"}`}>
