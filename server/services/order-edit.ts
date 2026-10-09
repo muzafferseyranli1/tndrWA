@@ -1,6 +1,7 @@
-import type { Brand, Customer, Order, OrderItem, PrismaClient } from "@prisma/client";
+import type { Brand, Customer, Order, OrderItem, OrderItemOption, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { formatTRY, percentOf } from "../../shared/money";
+import { describeOptions } from "./option-format";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
@@ -29,9 +30,9 @@ async function editable(db: Db, orderId: number): Promise<Order> {
 }
 
 /** Ürünlerden toplamı, indirim oranından indirimi yeniden hesaplar. */
-async function recalc(db: Db, orderId: number): Promise<void> {
+export async function recalc(db: Db, orderId: number): Promise<void> {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
-  const total = order.items.reduce((sum, i) => sum + i.unitKurus * i.quantity, 0);
+  const total = order.items.reduce((sum, i) => sum + (i.unitKurus + i.extraKurus) * i.quantity, 0);
   const discount = order.discountPercent > 0 ? percentOf(total, order.discountPercent) : 0;
   await db.order.update({ where: { id: orderId }, data: { totalKurus: total, discountKurus: discount } });
 }
@@ -135,15 +136,20 @@ export interface UpdateNotice {
 
 /** Güncel özeti müşteriye gönderir ("Siparişiniz güncellendi"). Başarılı olursa bekleyen bildirim işareti kalkar. */
 export async function sendUpdateNotice(db: Db, cloud: WhatsappCloudClient | null, orderId: number): Promise<UpdateNotice> {
-  const order = (await db.order.findUnique({ where: { id: orderId }, include: { items: { orderBy: { id: "asc" } }, brand: true, customer: true } })) as
-    | (Order & { items: OrderItem[]; brand: Brand; customer: Customer })
+  const order = (await db.order.findUnique({ where: { id: orderId }, include: { items: { orderBy: { id: "asc" }, include: { options: true } }, brand: true, customer: true } })) as
+    | (Order & { items: (OrderItem & { options: OrderItemOption[] })[]; brand: Brand; customer: Customer })
     | null;
   if (!order) throw new EditError("Sipariş bulunamadı.", 404);
   if (!cloud) return { sent: false, error: "WhatsApp gönderim jetonu tanımlı değil." };
   if (!order.brand.waPhoneNumberId) return { sent: false, error: "Markanın Cloud API numara kimliği girilmemiş." };
   if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok." };
   try {
-    const urunler = order.items.map((i) => `${i.quantity}× ${i.name} — ${formatTRY(i.unitKurus * i.quantity)}`).join("\n");
+    const urunler = order.items
+      .map((i) => {
+        const opts = describeOptions(i.options);
+        return `${i.quantity}× ${i.name}${opts.length ? ` (${opts.join(", ")})` : ""} — ${formatTRY((i.unitKurus + i.extraKurus) * i.quantity)}`;
+      })
+      .join("\n");
     const text = renderTemplate(await templateFor(db, order.brand.code, "ORDER_UPDATED"), { ...orderVars(order, order.customer), urunler });
     const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
     await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId });

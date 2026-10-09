@@ -13,6 +13,7 @@ const links = [
   { href: "/business", label: "İşletme/KVKK" },
   { href: "/backups", label: "Yedekler" },
   { href: "/ratings", label: "Değerlendirmeler" },
+  { href: "/options", label: "Seçenekler" },
   { href: "/payments", label: "Ödeme" },
   { href: "/messages", label: "Mesajlar" },
   { href: "/channels", label: "Kanallar" },

@@ -22,6 +22,7 @@ import { ratingsRouter } from "./routes/ratings";
 import { customersRouter } from "./routes/customers";
 import { businessRouter } from "./routes/business";
 import { backupsRouter } from "./routes/backups";
+import { optionsRouter } from "./routes/options";
 import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
@@ -121,6 +122,7 @@ async function main() {
   app.use("/api/chat", chatRouter(db, cloudClient));
   app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
   app.use("/api/payments", paymentsRouter(db));
+  app.use("/api/options", optionsRouter(db));
   app.use("/api/ratings", ratingsRouter(db));
   app.use("/api/customers", customersRouter(db));
   app.use("/api/business", businessRouter(db, env.publicBaseUrl));

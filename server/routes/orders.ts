@@ -1,7 +1,8 @@
 import express, { Router } from "express";
 import { z } from "zod";
-import type { Brand, Customer, Order, OrderChange, OrderItem, PrismaClient } from "@prisma/client";
+import type { Brand, Customer, Order, OrderChange, OrderItem, OrderItemOption, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
+import { describeOptions } from "../services/option-format";
 import type { OrderDto } from "../../shared/types";
 import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
@@ -12,9 +13,9 @@ import { priceWithDiscount } from "../services/payment";
 import { newRatingToken } from "../services/ratings";
 import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
-type OrderRow = Order & { items: OrderItem[]; customer: Customer; changes?: OrderChange[] };
+type OrderRow = Order & { items: (OrderItem & { options?: OrderItemOption[] })[]; customer: Customer; changes?: OrderChange[] };
 
-const INCLUDE = { items: { orderBy: { id: "asc" as const } }, customer: true, changes: { orderBy: { createdAt: "desc" as const }, take: 10 } };
+const INCLUDE = { items: { orderBy: { id: "asc" as const }, include: { options: { orderBy: { id: "asc" as const } } } }, customer: true, changes: { orderBy: { createdAt: "desc" as const }, take: 10 } };
 
 export function toOrderDto(o: OrderRow): OrderDto {
   return {
@@ -37,7 +38,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     noticePending: o.noticePending,
     changes: (o.changes ?? []).map((c) => ({ text: c.text, createdAt: c.createdAt.toISOString() })),
     customer: { name: o.customer.name, phone: o.customer.waId },
-    items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus), lineText: formatTRY(i.unitKurus * i.quantity) })),
+    items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus + i.extraKurus), lineText: formatTRY((i.unitKurus + i.extraKurus) * i.quantity), options: describeOptions(i.options ?? []) })),
   };
 }
 

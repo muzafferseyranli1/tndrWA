@@ -237,7 +237,7 @@ export default function OrdersPage() {
                   {o.stage === "READY" ? (
                     <span className={`rounded-full px-2 py-0.5 text-xs ${label[o.status].cls}`}>{label[o.status].text}</span>
                   ) : (
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
                   )}
                   <span className="text-sm text-slate-500">{time(o.createdAt)}</span>
                   <span className="ml-auto text-right">
@@ -259,7 +259,10 @@ export default function OrdersPage() {
                   {o.items.map((i) => (
                     <li key={i.id} className="flex items-center gap-3 py-1.5">
                       <span className="w-10 font-semibold tabular-nums">{i.quantity}×</span>
-                      <span className="flex-1">{i.name}</span>
+                      <span className="flex-1">
+                        {i.name}
+                        {i.options.length > 0 && <span className="block text-xs text-slate-500">{i.options.join(" · ")}</span>}
+                      </span>
                       <span className="tabular-nums text-slate-500">{i.unitText}</span>
                       <span className="w-24 text-right tabular-nums">{i.lineText}</span>
                     </li>

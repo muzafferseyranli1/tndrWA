@@ -25,6 +25,7 @@ model Brand {
   messages      Message[]
   channels      BrandChannel[]
   paymentTypes  PaymentType[]
+  optionGroups  OptionGroup[]
   ratings       Rating[]
 }
 
@@ -77,6 +78,8 @@ model Product {
 
   @@unique([brandId, retailerId])
   @@index([categoryId])
+  optionGroups ProductOptionGroup[]
+
   @@index([brandId, groupKey])
 }
 
@@ -171,7 +174,10 @@ model OrderItem {
   retailerId String
   name       String
   unitKurus  Int
+  // Seçilen seçeneklerin birim başına toplam ekstra ücreti (satır tutarı = (unitKurus + extraKurus) x quantity)
+  extraKurus Int      @default(0)
   quantity   Int
+  options    OrderItemOption[]
 }
 
 // WhatsApp yazışması: müşteriden gelen ve panelden/otomatik giden mesajlar. Kişisel veri içerir, KVKK gereği düzenli silinir.
@@ -306,4 +312,55 @@ model DeletionRequest {
   handledNote String    @default("")
 
   @@index([status, createdAt])
+}
+
+// Seçenek grubu: müşteriye sorulan tek seçimli soru (acı seviyesi, sos, boy...). Birden fazla ürüne bağlanabilir.
+model OptionGroup {
+  id        Int            @id @default(autoincrement())
+  brandId   Int
+  brand     Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  // Müşteriye gösterilen soru başlığı
+  name      String
+  // false: listede "Hiçbiri" seçeneği de çıkar
+  required  Boolean        @default(true)
+  enabled   Boolean        @default(true)
+  sortOrder Int            @default(0)
+  choices   OptionChoice[]
+  products  ProductOptionGroup[]
+
+  @@unique([brandId, name])
+}
+
+model OptionChoice {
+  id         Int         @id @default(autoincrement())
+  groupId    Int
+  group      OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name       String
+  // Birim başına ekstra ücret (kuruş), 0 = ücretsiz
+  extraKurus Int         @default(0)
+  enabled    Boolean     @default(true)
+  sortOrder  Int         @default(0)
+}
+
+model ProductOptionGroup {
+  productId Int
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  groupId   Int
+  group     OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, groupId])
+}
+
+// Siparişteki bir kalem için verilen cevap. Ad ve ücret sipariş anındaki halidir (grup sonradan değişse de sipariş okunur).
+model OrderItemOption {
+  id          Int       @id @default(autoincrement())
+  orderItemId Int
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  groupId     Int?
+  groupName   String
+  // "Hiçbiri" seçildiyse boş: soru yanıtlandı ama bir şey seçilmedi
+  choiceName  String
+  extraKurus  Int       @default(0)
+
+  @@unique([orderItemId, groupId])
 }

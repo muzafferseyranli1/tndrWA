@@ -68,7 +68,7 @@ export interface OrderDto {
   totalKurus: number;
   totalText: string;
   /** AWAITING_PAYMENT | AWAITING_ADDRESS: müşteriden bilgi bekleniyor; READY: personel işleyebilir */
-  stage: "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
+  stage: "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
   paymentLabel: string;
   discountPercent: number;
   discountText: string;
@@ -84,7 +84,7 @@ export interface OrderDto {
   /** Personelin yaptığı değişiklikler, en yeni başta */
   changes: { text: string; createdAt: string }[];
   customer: { name: string | null; phone: string | null };
-  items: { id: number; name: string; quantity: number; unitText: string; lineText: string }[];
+  items: { id: number; name: string; quantity: number; unitText: string; lineText: string; /** Müşterinin seçtiği seçenekler (ekstra ücretli olanlar fiyatıyla) */ options: string[] }[];
 }
 
 export interface OrderStatusResultDto {
@@ -288,4 +288,22 @@ export interface BackupDto {
   running: boolean;
   lastError: string | null;
   lastRunAt: string | null;
+}
+
+export interface OptionChoiceDto {
+  id: number;
+  name: string;
+  extraKurus: number;
+  priceText: string;
+  enabled: boolean;
+}
+
+export interface OptionGroupDto {
+  id: number;
+  name: string;
+  required: boolean;
+  enabled: boolean;
+  choices: OptionChoiceDto[];
+  /** Bu grubun sorulduğu ürünler */
+  productIds: number[];
 }

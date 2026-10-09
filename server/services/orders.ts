@@ -2,6 +2,7 @@ import type { Order, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
 import { contactFrom, upsertCustomer } from "./customers";
+import { needsOptions } from "./options";
 import { parseCloudOrder } from "./whatsapp-cloud";
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -39,6 +40,9 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
   const products = await db.product.findMany({ where: { brandId: brand.id, retailerId: { in: parsed.items.map((i) => i.retailerId) } } });
   const byRetailerId = new Map(products.map((p) => [p.retailerId, p]));
 
+  // Ürünlerden birine seçenek grubu bağlıysa önce seçenek soruları sorulur
+  const stage = (await needsOptions(db, products.map((p) => p.id))) ? "AWAITING_OPTIONS" : "AWAITING_PAYMENT";
+
   try {
     const order = await db.$transaction(async (tx) => {
       const customer = await upsertCustomer(tx, contact);
@@ -49,7 +53,7 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string): Pro
           customerId: customer.id,
           waMessageId,
           // Yeni sepet önce müşteriden ödeme/adres bilgisi toplar; tamamlanınca HAZIR olur ve panelde sesli uyarı verir
-          stage: "AWAITING_PAYMENT",
+          stage,
           note: parsed.note,
           totalKurus: parsed.totalKurus,
           items: {
