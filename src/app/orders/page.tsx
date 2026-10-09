@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import ChatThread from "@/components/ChatThread";
 import OrderEditor from "@/components/OrderEditor";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
@@ -34,6 +35,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderDto[] | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [chatOrder, setChatOrder] = useState<OrderDto | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [notices, setNotices] = useState<Record<number, string>>({});
   const [soundOn, setSoundOn] = useState(false);
@@ -64,6 +66,13 @@ export default function OrdersPage() {
     const t = setInterval(() => void load(), POLL_MS);
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    if (!chatOrder) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setChatOrder(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chatOrder]);
 
   const newCount = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW" && o.stage === "READY").length : 0;
 
@@ -321,8 +330,18 @@ export default function OrdersPage() {
                         {editingId === o.id ? "Düzenlemeyi kapat" : "Düzenle"}
                       </button>
                     )}
+                    <button onClick={() => setChatOrder(o)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+                      Yazış
+                    </button>
                     <button disabled={busyId === o.id} onClick={() => setStatus(o, "CANCELLED")} className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
                       İptal et
+                    </button>
+                  </div>
+                )}
+                {tab === "history" && (
+                  <div className="mt-3">
+                    <button onClick={() => setChatOrder(o)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+                      Yazış
                     </button>
                   </div>
                 )}
@@ -330,6 +349,22 @@ export default function OrdersPage() {
             );
           })}
         </ul>
+
+        {chatOrder && brandId !== undefined && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Sipariş #${chatOrder.id} yazışması`} onClick={() => setChatOrder(null)}>
+            <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center border-b border-slate-100 px-4 py-3">
+                <b>Sipariş #{chatOrder.id} · yazışma</b>
+                <button onClick={() => setChatOrder(null)} className="ml-auto rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">
+                  Kapat
+                </button>
+              </div>
+              <div className="overflow-y-auto">
+                <ChatThread brandId={brandId} customerId={chatOrder.customerId} maxHeight="50vh" />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
