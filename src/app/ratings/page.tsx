@@ -84,7 +84,6 @@ export default function RatingsPage() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [items, setItems] = useState<RatingDto[] | null>(null);
   const [summary, setSummary] = useState<RatingSummaryDto | null>(null);
-  const [minScore, setMinScore] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -107,22 +106,9 @@ export default function RatingsPage() {
   }, [load]);
 
   useEffect(() => {
-    api<{ minScore: number }>("/api/ratings/settings/links").then((s) => setMinScore(s.minScore)).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     const n = summary?.pendingCount ?? 0;
     document.title = n > 0 ? `(${n}) Aranacak · tndrWA` : "Değerlendirmeler · tndrWA";
   }, [summary]);
-
-  async function saveMin(value: number) {
-    try {
-      await api("/api/ratings/settings/links", { method: "PUT", json: { minScore: value } });
-      setMinScore(value);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
 
   const fmt = (n: number | null) => (n === null ? "-" : n.toFixed(1));
 
@@ -164,28 +150,6 @@ export default function RatingsPage() {
         {items && items.length === 0 && <p className="text-slate-500">{filter === "pending" ? "Aranacak kimse yok." : "Henüz değerlendirme yok."}</p>}
         <ul className="space-y-3">{items?.map((r) => <Item key={`${r.id}-${r.followUp}-${r.followNote}`} r={r} onChanged={() => void load()} />)}</ul>
 
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="mb-1 font-medium">Google değerlendirme bağlantısı</h2>
-          <p className="mb-3 text-slate-600">
-            Değerlendirme sonrası müşteriye Google yorum bağlantısı gösterilir (bağlantıyı Kanallar sayfasında &quot;Bizi değerlendirin&quot; satırına girin). Kimlere gösterileceğini seçin:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              [1, "Herkese (önerilen)"],
-              [4, "En düşük puanı 4 ve üstü olanlara"],
-              [5, "Yalnızca hepsine 5 verenlere"],
-            ].map(([v, label]) => (
-              <button key={v} onClick={() => void saveMin(Number(v))} className={`rounded-lg px-3 py-2 ${minScore === v ? "bg-brand-500 text-white" : "border border-slate-300 hover:bg-slate-50"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {minScore !== null && minScore > 1 && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
-              Dikkat: Google, yalnızca memnun müşterileri yorum yazmaya yönlendirmeyi (&quot;değerlendirme filtreleme&quot;) yasaklar. Fark ederse yorumlarınızı silebilir ya da işletme profilinizi kısıtlayabilir. Bu riski bilerek kullanın.
-            </p>
-          )}
-        </section>
       </main>
     </>
   );

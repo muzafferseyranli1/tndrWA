@@ -2,7 +2,7 @@ import express, { Router } from "express";
 import { z } from "zod";
 import type { DeletionRequest, PrismaClient } from "@prisma/client";
 import type { BusinessSettingsDto, DeletionRequestDto } from "../../shared/types";
-import { RETENTION_LIMITS, businessReady, eraseByPhone, getBusiness, getRetention, setBusiness, setRetention } from "../services/business";
+import { RETENTION_LIMITS, businessReady, eraseByPhone, getBusiness, getRetention, isProvisional, setBusiness, setRetention } from "../services/business";
 
 const toDto = (r: DeletionRequest, matching: number): DeletionRequestDto => ({
   id: r.id,
@@ -31,6 +31,7 @@ export function businessRouter(db: PrismaClient, publicBaseUrl: string | null): 
       info,
       retention: await getRetention(db),
       ready: businessReady(info),
+      provisional: await isProvisional(db),
       policyUrl: publicBaseUrl ? `${publicBaseUrl}/gizlilik` : null,
       deletionUrl: publicBaseUrl ? `${publicBaseUrl}/veri-silme` : null,
     };

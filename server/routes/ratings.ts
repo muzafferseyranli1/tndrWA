@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { PrismaClient, Rating } from "@prisma/client";
 import type { RatingDto, RatingSummaryDto } from "../../shared/types";
 import { resolveBrand } from "../services/brands";
-import { DEFAULT_REVIEW_MIN_SCORE, reviewMinScore, setReviewMinScore } from "../services/ratings";
 
 const FOLLOW_UP = ["PENDING", "CALLED", "RESOLVED"] as const;
 
@@ -62,16 +61,6 @@ export function ratingsRouter(db: PrismaClient): Router {
     if (!existing) return res.status(404).json({ error: "Değerlendirme bulunamadı." });
     const updated = await db.rating.update({ where: { id }, data: { followUp: parsed.data.followUp, ...(parsed.data.followNote !== undefined ? { followNote: parsed.data.followNote } : {}) } });
     res.json(toDto(updated));
-  });
-
-  // Dış değerlendirme bağlantıları (Google, platformlar) kimlere gösterilsin: en düşük puan bu değerden küçük olanlara gösterilmez
-  router.get("/settings/links", async (_req, res) => res.json({ minScore: await reviewMinScore(db), defaultMinScore: DEFAULT_REVIEW_MIN_SCORE }));
-
-  router.put("/settings/links", async (req, res) => {
-    const parsed = z.object({ minScore: z.number().int().min(1).max(5) }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "minScore 1-5 arasında olmalı." });
-    await setReviewMinScore(db, parsed.data.minScore);
-    res.json({ minScore: parsed.data.minScore });
   });
 
   return router;

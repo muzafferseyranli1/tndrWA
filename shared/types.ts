@@ -173,11 +173,6 @@ export interface PaymentTypeDto {
   enabled: boolean;
 }
 
-export interface RatingLinkDto {
-  label: string;
-  href: string;
-}
-
 export interface RatingContextDto {
   brandName: string;
   /** Bu bağlantıyla zaten değerlendirme yapıldı */
@@ -189,7 +184,6 @@ export interface RatingContextDto {
 export interface RatingResultDto {
   ok: true;
   low: boolean;
-  links: RatingLinkDto[];
 }
 
 export interface RatingDto {
@@ -262,6 +256,8 @@ export interface BusinessSettingsDto {
   retention: RetentionDto;
   /** Zorunlu bilgiler (ünvan, adres, e-posta, telefon) dolu: gizlilik sayfaları yayında */
   ready: boolean;
+  /** Ünvan/adres panelden girilmemiş; fişten alınan geçici varsayılanlar gösteriliyor */
+  provisional: boolean;
   policyUrl: string | null;
   deletionUrl: string | null;
 }
@@ -283,4 +279,13 @@ export interface DeletionRequestDto {
   handledNote: string;
   /** Bu telefonla kayıtlı müşteri sayısı */
   matchingCustomers: number;
+}
+
+export interface BackupDto {
+  dir: string;
+  keepDays: number;
+  files: { name: string; kind: "db" | "uploads"; sizeBytes: number; createdAt: string }[];
+  running: boolean;
+  lastError: string | null;
+  lastRunAt: string | null;
 }

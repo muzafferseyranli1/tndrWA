@@ -54,10 +54,12 @@ function Row({ c, first, last, onMove, onSaved, clicks }: { c: ChannelDto; first
           <span className="mb-1 block text-slate-600">Buton yazısı</span>
           <input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} maxLength={60} className={field} />
         </label>
+        {c.kind !== "REVIEW" && (
         <label className="block text-sm">
           <span className="mb-1 block text-slate-600">{c.valueType === "phone" ? "Numara" : c.valueType === "place" ? "Adres / harita bağlantısı" : "Bağlantı"}</span>
           <input value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder={c.valueHint} className={field} />
         </label>
+        )}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button disabled={!dirty || busy} onClick={save} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">

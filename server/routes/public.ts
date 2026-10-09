@@ -8,7 +8,7 @@ import { buildPolicySections } from "../../shared/legal";
 import type { LegalDto } from "../../shared/types";
 import { businessReady, getBusiness, getRetention } from "../services/business";
 import { publicBrand } from "../services/channels";
-import { isLow, reviewLinks, reviewMinScore } from "../services/ratings";
+import { isLow } from "../services/ratings";
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 120;
@@ -132,7 +132,7 @@ export function publicRouter(db: PrismaClient): Router {
       if ((err as { code?: string }).code === "P2002") return res.status(409).json({ error: "Bu sipariş için değerlendirmenizi zaten aldık, teşekkür ederiz.", alreadyRated: true });
       throw err;
     }
-    const result: RatingResultDto = { ok: true, low, links: await reviewLinks(db, brand.id, await reviewMinScore(db), Math.min(d.taste, d.care, d.delivery)) };
+    const result: RatingResultDto = { ok: true, low };
     res.json(result);
   });
 

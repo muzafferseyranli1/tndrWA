@@ -21,6 +21,8 @@ import { paymentsRouter } from "./routes/payments";
 import { ratingsRouter } from "./routes/ratings";
 import { customersRouter } from "./routes/customers";
 import { businessRouter } from "./routes/business";
+import { backupsRouter } from "./routes/backups";
+import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
@@ -122,6 +124,17 @@ async function main() {
   app.use("/api/ratings", ratingsRouter(db));
   app.use("/api/customers", customersRouter(db));
   app.use("/api/business", businessRouter(db, env.publicBaseUrl));
+  // Yedekler kalıcı diskte (yükleme klasörünün yanında): üretimde /data/backups
+  const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);
+  app.use("/api/backups", backupsRouter(backups));
+  // Günlük otomatik yedek: her 10 dakikada bugünkü yedek var mı bakılır (sabah 04:00'ten sonra, Türkiye saatiyle)
+  const backupCheck = () =>
+    backups
+      .list()
+      .then((files) => (backupDue(files, new Date()) ? backups.run().then((f) => logger.info({ dosyalar: f.map((x) => x.name) }, "Günlük yedek alındı")) : undefined))
+      .catch((err) => logger.error({ err: (err as Error).message }, "günlük yedek alınamadı"));
+  const backupTimer = setInterval(backupCheck, 10 * 60 * 1000);
+  setTimeout(backupCheck, 60_000);
 
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
@@ -155,6 +168,7 @@ async function main() {
   const shutdown = () => {
     clearInterval(expiryTimer);
     clearInterval(purgeTimer);
+    clearInterval(backupTimer);
     coordinator.stop();
     server.close(() => {
       db.$disconnect().finally(() => process.exit(0));

@@ -67,6 +67,11 @@ export default function BusinessPage() {
         </p>
         {msg && <p role="alert" className={`mb-4 rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
 
+        {data?.provisional && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Ünvan ve adres şu an <b>geçici</b> (fişten alınan kısaltmalı bilgiler). Vergi levhasındaki tam ünvan ve resmî adresi girip Kaydet&apos;e basın, Meta uygulamasını Live yapmadan ve gerçek müşteriye açmadan önce mutlaka güncelleyin.
+          </p>
+        )}
         {data && (
           <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${data.ready ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"}`}>
             {data.ready ? "Gizlilik sayfaları yayında." : "Eksik bilgi var: sayfalar henüz yayımlanmıyor."}

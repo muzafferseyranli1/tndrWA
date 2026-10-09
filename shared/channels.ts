@@ -18,7 +18,7 @@ export const CHANNEL_SPECS: ChannelSpec[] = [
   { kind: "TRENDYOLGO", label: "Trendyol Go", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
   { kind: "GETIR", label: "Getir", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
   { kind: "MAPS", label: "Yol tarifi al", valueHint: "Adres ya da Google Haritalar bağlantısı", valueType: "place" },
-  { kind: "REVIEW", label: "Bizi değerlendirin", valueHint: "Google yorum bağlantısı (değerlendirme sonrası gösterilir; boş bırakılırsa gösterilmez)", valueType: "url" },
+  { kind: "REVIEW", label: "Bizi değerlendirin", valueHint: "Kullanılmaz (buton dahili değerlendirme sayfasına gider)", valueType: "url" },
 ];
 
 export const isChannelKind = (v: unknown): v is ChannelKind => typeof v === "string" && (CHANNEL_KINDS as readonly string[]).includes(v);

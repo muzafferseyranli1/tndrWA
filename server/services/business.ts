@@ -22,7 +22,14 @@ const BUSINESS_KEYS: Record<keyof BusinessInfo, string> = {
   phone: "business.phone",
   verbis: "business.verbis",
 };
-const DEFAULT_BUSINESS: BusinessInfo = { legalName: "", address: "", email: "info@yerindepide.com", phone: "0216 362 00 55", verbis: "" };
+// Geçici varsayılanlar: şirketin fişinde yazan ünvan ve adres (kısaltmalı). Vergi levhasındaki tam ünvan ve resmî adresle panelden değiştirilmelidir.
+const DEFAULT_BUSINESS: BusinessInfo = {
+  legalName: "Yerinde Gıda Gay. Dan. Hiz. Ltd. Şti.",
+  address: "Suadiye Mah. Ş. Günaltay Cad. No:91 Kadıköy/İstanbul",
+  email: "info@yerindepide.com",
+  phone: "0216 362 00 55",
+  verbis: "",
+};
 
 export const DEFAULT_RETENTION: Retention = { messagesDays: 90, ordersDays: 730, ratingsDays: 730 };
 const RETENTION_KEYS: Record<keyof Retention, string> = { messagesDays: "retention.messagesDays", ordersDays: "retention.ordersDays", ratingsDays: "retention.ratingsDays" };
@@ -51,6 +58,12 @@ export async function setBusiness(db: PrismaClient, patch: Partial<BusinessInfo>
   for (const k of Object.keys(BUSINESS_KEYS) as (keyof BusinessInfo)[]) {
     if (patch[k] !== undefined) await write(db, BUSINESS_KEYS[k], patch[k]!.trim());
   }
+}
+
+/** Ünvan ve adres henüz panelden girilmemiş, geçici varsayılanlar kullanılıyor mu? */
+export async function isProvisional(db: PrismaClient): Promise<boolean> {
+  const map = await readAll(db, [BUSINESS_KEYS.legalName, BUSINESS_KEYS.address]);
+  return !map.get(BUSINESS_KEYS.legalName)?.trim() || !map.get(BUSINESS_KEYS.address)?.trim();
 }
 
 /** Gizlilik sayfalarının yayımlanması için zorunlu bilgiler dolu mu? (VERBIS isteğe bağlı) */

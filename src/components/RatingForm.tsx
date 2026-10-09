@@ -133,16 +133,6 @@ export default function RatingForm({ code, token }: { code: string; token: strin
             <p className="text-xl font-semibold">Teşekkür ederiz!</p>
             <p className="mt-1">{result.low ? "Geri bildiriminiz bize ulaştı. En kısa sürede sizinle ilgileneceğiz." : "Değerlendirmeniz bizim için çok değerli."}</p>
           </section>
-          {result.links.length > 0 && (
-            <>
-              <p className="text-center text-slate-600">İsterseniz deneyiminizi herkese açık olarak da paylaşabilirsiniz:</p>
-              {result.links.map((l) => (
-                <a key={l.href} href={l.href} className="flex min-h-[4.5rem] items-center justify-center rounded-2xl bg-brand-600 px-4 text-center text-lg font-semibold text-white shadow-md active:bg-brand-700">
-                  {l.label}
-                </a>
-              ))}
-            </>
-          )}
         </div>
       )}
     </main>

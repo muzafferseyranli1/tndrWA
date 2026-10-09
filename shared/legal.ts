@@ -61,7 +61,7 @@ export function buildPolicySections(info: PolicyInfo, retention: PolicyRetention
     {
       title: "5. Saklama süreleri",
       paragraphs: [
-        `Yazışma kayıtları ${humanDays(retention.messagesDays)}, sipariş kayıtları ${humanDays(retention.ordersDays)}, değerlendirmeler ${humanDays(retention.ratingsDays)} sonra silinir ya da anonim hale getirilir. Yasal saklama yükümlülüğü gerektiren kayıtlar ilgili mevzuattaki süre boyunca tutulur.`,
+        `Yazışma kayıtları ${humanDays(retention.messagesDays)}, sipariş kayıtları ${humanDays(retention.ordersDays)}, değerlendirmeler ${humanDays(retention.ratingsDays)} sonra silinir ya da anonim hale getirilir. Yasal saklama yükümlülüğü gerektiren kayıtlar ilgili mevzuattaki süre boyunca tutulur. Silinen kayıtlar, güvenlik amacıyla alınan günlük yedeklerde en fazla 14 gün daha bulunabilir ve sonra yedeklerle birlikte silinir.`,
       ],
     },
     {
