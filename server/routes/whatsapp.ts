@@ -116,6 +116,7 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
   });
 
   // ---- Resmi WhatsApp Cloud API ----
+  const phoneInfoCache = new Map<string, { at: number; info: CloudStatusDto["info"]; error: string | null }>();
   router.get("/cloud/status", async (req, res) => {
     const brand = await brandOf(req.query.brandId, res);
     if (!brand) return;
@@ -128,10 +129,20 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
       error: null,
     };
     if (cloud && brand.waPhoneNumberId) {
-      try {
-        dto.info = await cloud.phoneInfo(brand.waPhoneNumberId);
-      } catch (err) {
-        dto.error = (err as Error).message;
+      // Meta'ya her sayfa açılışında sormayalım: başarı 5 dk, hata 1 dk önbellekte kalır (kısıtlama varken istek yağdırmamak için)
+      const key = brand.waPhoneNumberId;
+      const hit = phoneInfoCache.get(key);
+      if (hit && Date.now() - hit.at < (hit.error ? 60_000 : 300_000)) {
+        dto.info = hit.info;
+        dto.error = hit.error;
+      } else {
+        try {
+          dto.info = await cloud.phoneInfo(key);
+          phoneInfoCache.set(key, { at: Date.now(), info: dto.info, error: null });
+        } catch (err) {
+          dto.error = (err as Error).message;
+          phoneInfoCache.set(key, { at: Date.now(), info: null, error: dto.error });
+        }
       }
     }
     res.json(dto);
