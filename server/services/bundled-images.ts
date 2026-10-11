@@ -1,0 +1,47 @@
+import { randomBytes } from "node:crypto";
+import { copyFile, mkdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import type { PrismaClient } from "@prisma/client";
+import { logger } from "../lib/logger";
+
+interface Entry {
+  category: string;
+  name: string;
+  file: string;
+}
+
+const DATA_DIR = path.resolve(process.cwd(), "prisma", "data", "pide-images");
+
+/**
+ * Pide menüsünün yerindepide.com'dan alınmış görsellerini ürünlere bir kez bağlar (`bundled-images.<marka>.v<sürüm>` ayarı ile).
+ * Yalnızca görseli olmayan ürünlere dokunur; sonradan panelden silinen/değiştirilen görsel geri gelmez. Hata fırlatmaz.
+ */
+export async function applyBundledImages(db: PrismaClient, brandCode: string, uploadDir: string): Promise<number> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(DATA_DIR, "map.json"), "utf8")) as { version: number; entries: Entry[] };
+    const flag = `bundled-images.${brandCode}.v${manifest.version}`;
+    if (await db.setting.findUnique({ where: { key: flag } })) return 0;
+    const brand = await db.brand.findUnique({ where: { code: brandCode } });
+    if (!brand) return 0;
+
+    const dir = path.resolve(uploadDir);
+    await mkdir(dir, { recursive: true });
+    let applied = 0;
+    for (const e of manifest.entries) {
+      if (e.file.includes("/") || e.file.includes("\\")) continue;
+      const products = await db.product.findMany({ where: { brandId: brand.id, name: e.name, category: { name: e.category }, imagePath: null } });
+      if (!products.length) continue;
+      const ext = path.extname(e.file).toLowerCase();
+      const fileName = `${brandCode}-${path.basename(e.file, ext)}-${randomBytes(4).toString("hex")}${ext}`;
+      await copyFile(path.join(DATA_DIR, e.file), path.join(dir, fileName));
+      await db.product.updateMany({ where: { id: { in: products.map((p) => p.id) } }, data: { imagePath: fileName, metaSyncState: "PENDING", metaError: null } });
+      applied += products.length;
+    }
+    await db.setting.create({ data: { key: flag, value: new Date().toISOString() } });
+    logger.info({ brand: brandCode, applied }, "Hazır görseller ürünlere bağlandı");
+    return applied;
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "Hazır görseller bağlanamadı");
+    return 0;
+  }
+}

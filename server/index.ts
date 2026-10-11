@@ -30,6 +30,7 @@ import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
+import { applyBundledImages } from "./services/bundled-images";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
@@ -106,6 +107,7 @@ async function main() {
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);
   await ensureDefaultPaymentTypes(db);
+  await applyBundledImages(db, "pide", env.uploadDir);
   configureNotice(env.publicBaseUrl);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);

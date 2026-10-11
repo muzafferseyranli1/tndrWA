@@ -1,0 +1,265 @@
+{
+ "version": 1,
+ "source": "yerindepide.com",
+ "entries": [
+  {
+   "category": "Kahvaltı > Kahvaltı tabakları",
+   "name": "Kahvaltı Tabağı (1 Kişilik)",
+   "file": "kahvalti-kahvalti-tabaklari-kahvalti-tabagi-1-kisilik.jpg",
+   "source": "Kahvaltı Tabağı",
+   "guess": false
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı tabakları",
+   "name": "Pideli Kahvaltı (2 Kişilik)",
+   "file": "kahvalti-kahvalti-tabaklari-pideli-kahvalti-2-kisilik.jpg",
+   "source": "Pideli Kahvaltı",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Ayran - Açık",
+   "file": "icecekler-ayran-acik.jpg",
+   "source": "Açık Ayran",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Ayran - Şişe",
+   "file": "icecekler-ayran-sise.jpg",
+   "source": "Şişe Ayran",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Ayran 1 lt",
+   "file": "icecekler-ayran-1-lt.jpg",
+   "source": "Şişe Ayran",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Çay",
+   "file": "icecekler-cay.jpg",
+   "source": "Çay",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Portakal Suyu",
+   "file": "icecekler-portakal-suyu.jpg",
+   "source": "Sıkma Portakal Suyu",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Soda",
+   "file": "icecekler-soda.jpg",
+   "source": "Soda",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Su",
+   "file": "icecekler-su.jpg",
+   "source": "Su",
+   "guess": false
+  },
+  {
+   "category": "İçecekler",
+   "name": "Şalgam",
+   "file": "icecekler-salgam.jpg",
+   "source": "Şalgam",
+   "guess": false
+  },
+  {
+   "category": "Yöresel Pideler",
+   "name": "Bahçeden",
+   "file": "yoresel-pideler-bahceden.jpg",
+   "source": "Bahçeden Pide",
+   "guess": false
+  },
+  {
+   "category": "Yöresel Pideler",
+   "name": "Diyet",
+   "file": "yoresel-pideler-diyet.jpg",
+   "source": "Diyet Pide",
+   "guess": false
+  },
+  {
+   "category": "Yerinde Pideler",
+   "name": "Kolbastı",
+   "file": "yerinde-pideler-kolbasti.jpg",
+   "source": "Kolbastı Pide",
+   "guess": false
+  },
+  {
+   "category": "Yerinde Pideler",
+   "name": "Patlıycan",
+   "file": "yerinde-pideler-patliycan.jpg",
+   "source": "Patlıycan Pide",
+   "guess": false
+  },
+  {
+   "category": "Yerinde Pideler",
+   "name": "Yerinde Pide -A",
+   "file": "yerinde-pideler-yerinde-pide-a.jpg",
+   "source": "Yerinde Pide",
+   "guess": false
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Çakallı Menemen",
+   "file": "kahvalti-kahvalti-sicaklar-cakalli-menemen.jpg",
+   "source": "Çakallı Menemen",
+   "guess": false
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Kuymak",
+   "file": "kahvalti-kahvalti-sicaklar-kuymak.jpg",
+   "source": "Kuymak",
+   "guess": false
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Patates Kavurma",
+   "file": "kahvalti-kahvalti-sicaklar-patates-kavurma.jpg",
+   "source": "Patates Kavurma",
+   "guess": false
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Turşu Kavurma",
+   "file": "kahvalti-kahvalti-sicaklar-tursu-kavurma.jpg",
+   "source": "Turşu Kavurma",
+   "guess": false
+  },
+  {
+   "category": "Tatlılar",
+   "name": "Çikolatalı Pide",
+   "file": "tatlilar-cikolatali-pide.jpg",
+   "source": "Çikolatalı Pide",
+   "guess": false
+  },
+  {
+   "category": "Tatlılar",
+   "name": "Fındıklı Burma",
+   "file": "tatlilar-findikli-burma.jpg",
+   "source": "Fındıklı Burma",
+   "guess": false
+  },
+  {
+   "category": "Tatlılar",
+   "name": "Fırın Sütlaç",
+   "file": "tatlilar-firin-sutlac.jpg",
+   "source": "Fırın Sütlaç",
+   "guess": false
+  },
+  {
+   "category": "Çorbalar",
+   "name": "Günün Çorbası",
+   "file": "corbalar-gunun-corbasi.jpg",
+   "source": "Günün Çorbası",
+   "guess": false
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Harman Peynirli",
+   "file": "acik-pideler-harman-peynirli.jpg",
+   "source": "Harman Peynirli Pide",
+   "guess": false
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Kavurmalı",
+   "file": "acik-pideler-kavurmali.jpg",
+   "source": "Kavurmalı Pide",
+   "guess": false
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Kuşbaşılı",
+   "file": "acik-pideler-kusbasili.jpg",
+   "source": "Kuşbaşılı Pide",
+   "guess": false
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Pastırmalı",
+   "file": "acik-pideler-pastirmali.jpg",
+   "source": "Pastırmalı Pide",
+   "guess": false
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Tullumi",
+   "file": "acik-pideler-tullumi.jpg",
+   "source": "Tullumi Pide",
+   "guess": false
+  },
+  {
+   "category": "Salatalar",
+   "name": "Turşu Kavurma",
+   "file": "salatalar-tursu-kavurma.jpg",
+   "source": "Turşu Kavurma",
+   "guess": false
+  },
+  {
+   "category": "Lahmacunlar",
+   "name": "Lahmacun",
+   "file": "lahmacunlar-lahmacun.jpg",
+   "source": "Klasik Lahmacun",
+   "guess": true
+  },
+  {
+   "category": "Lahmacunlar",
+   "name": "Patlıcan Lhmcn",
+   "file": "lahmacunlar-patlican-lhmcn.jpg",
+   "source": "Patlıycan Lahmacun",
+   "guess": true
+  },
+  {
+   "category": "Lahmacunlar",
+   "name": "Ispanak Harman Peynir Lhmcn",
+   "file": "lahmacunlar-ispanak-harman-peynir-lhmcn.jpg",
+   "source": "Ispanak Harman Peynirli Lahmacun",
+   "guess": true
+  },
+  {
+   "category": "Açık Pideler",
+   "name": "Kıymalı -Açık",
+   "file": "acik-pideler-kiymali-acik.jpg",
+   "source": "Kıymalı Pide",
+   "guess": true
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Kavurmalı yum",
+   "file": "kahvalti-kahvalti-sicaklar-kavurmali-yum.jpg",
+   "source": "Sahanda Kavurmalı Yumurta",
+   "guess": true
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Kıymalı Yum",
+   "file": "kahvalti-kahvalti-sicaklar-kiymali-yum.jpg",
+   "source": "Sahanda Kıymalı Yumurta",
+   "guess": true
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Pastırmalı Yum",
+   "file": "kahvalti-kahvalti-sicaklar-pastirmali-yum.jpg",
+   "source": "Sahanda Pastırmalı Yumurta",
+   "guess": true
+  },
+  {
+   "category": "Kahvaltı > Kahvaltı Sıcaklar",
+   "name": "Sucuklu Yum",
+   "file": "kahvalti-kahvalti-sicaklar-sucuklu-yum.jpg",
+   "source": "Sahanda Sucuklu Yumurta",
+   "guess": true
+  }
+ ]
+}
