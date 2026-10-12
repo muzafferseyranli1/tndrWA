@@ -8,13 +8,15 @@ interface Entry {
   category: string;
   name: string;
   file: string;
+  /** true: ürünün mevcut görseli (önceki hazır görsel) bununla değiştirilir */
+  override?: boolean;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), "prisma", "data", "pide-images");
 
 /**
  * Pide menüsünün yerindepide.com'dan alınmış görsellerini ürünlere bir kez bağlar (`bundled-images.<marka>.v<sürüm>` ayarı ile).
- * Yalnızca görseli olmayan ürünlere dokunur; sonradan panelden silinen/değiştirilen görsel geri gelmez. Hata fırlatmaz.
+ * Görseli olmayan ürünlere bağlanır (`override` işaretli girişler mevcut hazır görselin yerine geçer); her sürüm bir kez uygulanır, sonradan panelden silinen/değiştirilen görsel geri gelmez. Hata fırlatmaz.
  */
 export async function applyBundledImages(db: PrismaClient, brandCode: string, uploadDir: string): Promise<number> {
   try {
@@ -29,7 +31,7 @@ export async function applyBundledImages(db: PrismaClient, brandCode: string, up
     let applied = 0;
     for (const e of manifest.entries) {
       if (e.file.includes("/") || e.file.includes("\\")) continue;
-      const products = await db.product.findMany({ where: { brandId: brand.id, name: e.name, category: { name: e.category }, imagePath: null } });
+      const products = await db.product.findMany({ where: { brandId: brand.id, name: e.name, category: { name: e.category }, ...(e.override ? {} : { imagePath: null }) } });
       if (!products.length) continue;
       const ext = path.extname(e.file).toLowerCase();
       const fileName = `${brandCode}-${path.basename(e.file, ext)}-${randomBytes(4).toString("hex")}${ext}`;
