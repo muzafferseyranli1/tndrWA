@@ -982,6 +982,24 @@
      "source": "kullanıcının gönderdiği görsel"
     }
    ]
+  },
+  {
+   "id": "v4",
+   "entries": [
+    {
+     "category": "İçecekler",
+     "name": "Soda",
+     "file": "sembol-inisdibi-maden-suyu.jpg",
+     "source": "sembolik görsel: Inisdibi_Maden_Suyu.png",
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Yerinde Atom",
+     "file": "sembol-tirnak-pide-bal-kaymak-ceviz.jpg",
+     "source": "sembolik görsel: tirnak-pide-bal-kaymak-ceviz-400x400.png"
+    }
+   ]
   }
  ]
 }
