@@ -1,5 +1,6 @@
 import express, { Router } from "express";
 import { timingSafeEqual } from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
 import { verifyPassword } from "../lib/password";
 import { AttemptLimiter } from "../lib/attempt-limiter";
@@ -11,7 +12,10 @@ function safeEqual(a: string, b: string): boolean {
   return ba.length === bb.length && timingSafeEqual(ba, bb);
 }
 
-export function authRouter(env: Env, limiter = new AttemptLimiter(5, 15 * 60 * 1000)): Router {
+// Kullanıcı bulunamasa da şifre doğrulaması çalışsın diye karşılaştırılan sahte özet
+const DUMMY_HASH = "scrypt:16384:8:1:AAAAAAAAAAAAAAAAAAAAAA:" + "A".repeat(86);
+
+export function authRouter(env: Env, db: PrismaClient, limiter = new AttemptLimiter(5, 15 * 60 * 1000)): Router {
   const router = Router();
   const secure = env.nodeEnv === "production";
   const cookieBase = `${SESSION_COOKIE}=`;
@@ -33,8 +37,11 @@ export function authRouter(env: Env, limiter = new AttemptLimiter(5, 15 * 60 * 1
     }
 
     // Kullanıcı adı yanlış olsa bile şifre doğrulaması çalışsın (süre farkı sızdırmasın)
-    const passwordOk = await verifyPassword(password, env.adminPasswordHash);
-    const ok = safeEqual(username, env.adminUsername) && passwordOk;
+    const isEnvAdmin = safeEqual(username, env.adminUsername);
+    const staff = isEnvAdmin ? null : await db.staffUser.findUnique({ where: { username: username.trim().toLowerCase() } }).catch(() => null);
+    const passwordOk = await verifyPassword(password, isEnvAdmin ? env.adminPasswordHash : (staff?.passwordHash ?? DUMMY_HASH));
+    const ok = passwordOk && (isEnvAdmin || (!!staff && staff.active));
+    const role = isEnvAdmin ? "ADMIN" : (staff?.role ?? "USER");
 
     if (!ok) {
       limiter.recordFailure(ip);
@@ -43,9 +50,9 @@ export function authRouter(env: Env, limiter = new AttemptLimiter(5, 15 * 60 * 1
     }
 
     limiter.reset(ip);
-    const token = createSessionToken(env.sessionSecret, env.adminUsername);
+    const token = createSessionToken(env.sessionSecret, isEnvAdmin ? env.adminUsername : staff!.username);
     res.setHeader("Set-Cookie", `${cookieBase}${encodeURIComponent(token)}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; ${attrs}`);
-    res.json({ ok: true });
+    res.json({ ok: true, role });
   });
 
   router.post("/logout", (_req, res) => {
@@ -54,7 +61,7 @@ export function authRouter(env: Env, limiter = new AttemptLimiter(5, 15 * 60 * 1
   });
 
   router.get("/me", (_req, res) => {
-    res.json({ username: res.locals.username as string });
+    res.json({ username: res.locals.username as string, role: (res.locals.role as string | undefined) ?? "ADMIN" });
   });
 
   return router;

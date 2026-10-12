@@ -308,3 +308,11 @@ export interface OptionGroupDto {
   /** Bu grubun sorulduğu ürünler */
   productIds: number[];
 }
+
+export interface StaffUserDto {
+  id: number;
+  username: string;
+  role: "ADMIN" | "USER";
+  active: boolean;
+  createdAt: string;
+}

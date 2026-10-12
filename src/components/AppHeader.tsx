@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import LogoutButton from "./LogoutButton";
 import { useBrands } from "@/lib/brand";
 
@@ -19,18 +20,30 @@ const links = [
   { href: "/messages", label: "Mesajlar" },
   { href: "/channels", label: "Kanallar" },
   { href: "/whatsapp", label: "WhatsApp" },
+  { href: "/staff", label: "Personel" },
   { href: "/brands", label: "Markalar" },
 ];
 
+// Kasa/mutfak personeli (USER rolü) yalnızca bu bağlantıları görür
+const USER_LINKS = new Set(["/orders", "/chat"]);
+
 export default function AppHeader() {
   const { brands, brand, select } = useBrands();
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { role?: string } | null) => setRole(d?.role ?? null))
+      .catch(() => undefined);
+  }, []);
+  const visible = role === "USER" ? links.filter((l) => USER_LINKS.has(l.href)) : links;
 
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <nav className="flex flex-wrap items-center gap-4">
           <span className="font-semibold text-brand-600">tndrWA</span>
-          {links.map((l) => (
+          {visible.map((l) => (
             <Link key={l.href} href={l.href} className="text-sm text-slate-600 hover:text-brand-600">
               {l.label}
             </Link>

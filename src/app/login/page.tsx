@@ -18,7 +18,8 @@ export default function LoginPage() {
         body: JSON.stringify({ username: form.get("username"), password: form.get("password") }),
       });
       if (res.ok) {
-        window.location.href = "/panel";
+        const data = (await res.json().catch(() => ({}))) as { role?: string };
+        window.location.href = data.role === "USER" ? "/orders" : "/panel";
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };

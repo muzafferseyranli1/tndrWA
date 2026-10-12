@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { db } from "./lib/db";
 import { requireAuth } from "./middleware/require-auth";
 import { authRouter } from "./routes/auth";
+import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
 import { metaRouter } from "./routes/meta";
@@ -101,8 +102,17 @@ async function main() {
 
   app.use("/api/public", publicRouter(db));
 
-  app.use(requireAuth(env.sessionSecret));
-  app.use("/api/auth", authRouter(env));
+  app.use(
+    requireAuth(env.sessionSecret, {
+      adminUsername: env.adminUsername,
+      lookup: async (name) => {
+        const u = await db.staffUser.findUnique({ where: { username: name } });
+        return u?.active ? { role: u.role === "ADMIN" ? "ADMIN" : "USER" } : null;
+      },
+    }),
+  );
+  app.use("/api/auth", authRouter(env, db));
+  app.use("/api/staff", staffRouter(db, env));
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);

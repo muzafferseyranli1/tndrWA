@@ -364,3 +364,14 @@ model OrderItemOption {
 
   @@unique([orderItemId, groupId])
 }
+
+// Panel personeli (yönetici ortamdan gelir ve burada tutulmaz). ADMIN: her şey, USER: yalnızca Siparişler ve Yazışma.
+model StaffUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  role         String   @default("USER") // ADMIN | USER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
