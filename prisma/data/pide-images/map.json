@@ -1,961 +1,987 @@
 {
- "version": 2,
- "source": "yerindepide.com + sembolik görseller",
- "entries": [
-  {
-   "category": "Kahvaltı > Kahvaltı tabakları",
-   "name": "Kahvaltı Tabağı (1 Kişilik)",
-   "file": "kahvalti-kahvalti-tabaklari-kahvalti-tabagi-1-kisilik.jpg",
-   "source": "Kahvaltı Tabağı",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı tabakları",
-   "name": "Pideli Kahvaltı (2 Kişilik)",
-   "file": "kahvalti-kahvalti-tabaklari-pideli-kahvalti-2-kisilik.jpg",
-   "source": "Pideli Kahvaltı",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ayran - Açık",
-   "file": "icecekler-ayran-acik.jpg",
-   "source": "Açık Ayran",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ayran - Şişe",
-   "file": "icecekler-ayran-sise.jpg",
-   "source": "Şişe Ayran",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ayran 1 lt",
-   "file": "icecekler-ayran-1-lt.jpg",
-   "source": "Şişe Ayran",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Çay",
-   "file": "icecekler-cay.jpg",
-   "source": "Çay",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Portakal Suyu",
-   "file": "icecekler-portakal-suyu.jpg",
-   "source": "Sıkma Portakal Suyu",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Soda",
-   "file": "icecekler-soda.jpg",
-   "source": "Soda",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Su",
-   "file": "icecekler-su.jpg",
-   "source": "Su",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Şalgam",
-   "file": "icecekler-salgam.jpg",
-   "source": "Şalgam",
-   "guess": false
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Bahçeden",
-   "file": "yoresel-pideler-bahceden.jpg",
-   "source": "Bahçeden Pide",
-   "guess": false
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Diyet",
-   "file": "yoresel-pideler-diyet.jpg",
-   "source": "Diyet Pide",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Kolbastı",
-   "file": "yerinde-pideler-kolbasti.jpg",
-   "source": "Kolbastı Pide",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Patlıycan",
-   "file": "yerinde-pideler-patliycan.jpg",
-   "source": "Patlıycan Pide",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Yerinde Pide -A",
-   "file": "yerinde-pideler-yerinde-pide-a.jpg",
-   "source": "Yerinde Pide",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Çakallı Menemen",
-   "file": "kahvalti-kahvalti-sicaklar-cakalli-menemen.jpg",
-   "source": "Çakallı Menemen",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kuymak",
-   "file": "kahvalti-kahvalti-sicaklar-kuymak.jpg",
-   "source": "Kuymak",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Patates Kavurma",
-   "file": "kahvalti-kahvalti-sicaklar-patates-kavurma.jpg",
-   "source": "Patates Kavurma",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Turşu Kavurma",
-   "file": "kahvalti-kahvalti-sicaklar-tursu-kavurma.jpg",
-   "source": "Turşu Kavurma",
-   "guess": false
-  },
-  {
-   "category": "Tatlılar",
-   "name": "Çikolatalı Pide",
-   "file": "tatlilar-cikolatali-pide.jpg",
-   "source": "Çikolatalı Pide",
-   "guess": false
-  },
-  {
-   "category": "Tatlılar",
-   "name": "Fındıklı Burma",
-   "file": "tatlilar-findikli-burma.jpg",
-   "source": "Fındıklı Burma",
-   "guess": false
-  },
-  {
-   "category": "Tatlılar",
-   "name": "Fırın Sütlaç",
-   "file": "tatlilar-firin-sutlac.jpg",
-   "source": "Fırın Sütlaç",
-   "guess": false
-  },
-  {
-   "category": "Çorbalar",
-   "name": "Günün Çorbası",
-   "file": "corbalar-gunun-corbasi.jpg",
-   "source": "Günün Çorbası",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Harman Peynirli",
-   "file": "acik-pideler-harman-peynirli.jpg",
-   "source": "Harman Peynirli Pide",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kavurmalı",
-   "file": "acik-pideler-kavurmali.jpg",
-   "source": "Kavurmalı Pide",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kuşbaşılı",
-   "file": "acik-pideler-kusbasili.jpg",
-   "source": "Kuşbaşılı Pide",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Pastırmalı",
-   "file": "acik-pideler-pastirmali.jpg",
-   "source": "Pastırmalı Pide",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Tullumi",
-   "file": "acik-pideler-tullumi.jpg",
-   "source": "Tullumi Pide",
-   "guess": false
-  },
-  {
-   "category": "Salatalar",
-   "name": "Turşu Kavurma",
-   "file": "salatalar-tursu-kavurma.jpg",
-   "source": "Turşu Kavurma",
-   "guess": false
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Lahmacun",
-   "file": "lahmacunlar-lahmacun.jpg",
-   "source": "Klasik Lahmacun",
-   "guess": true
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Patlıcan Lhmcn",
-   "file": "lahmacunlar-patlican-lhmcn.jpg",
-   "source": "Patlıycan Lahmacun",
-   "guess": true
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Ispanak Harman Peynir Lhmcn",
-   "file": "lahmacunlar-ispanak-harman-peynir-lhmcn.jpg",
-   "source": "Ispanak Harman Peynirli Lahmacun",
-   "guess": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kıymalı -Açık",
-   "file": "acik-pideler-kiymali-acik.jpg",
-   "source": "Kıymalı Pide",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kavurmalı yum",
-   "file": "kahvalti-kahvalti-sicaklar-kavurmali-yum.jpg",
-   "source": "Sahanda Kavurmalı Yumurta",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kıymalı Yum",
-   "file": "kahvalti-kahvalti-sicaklar-kiymali-yum.jpg",
-   "source": "Sahanda Kıymalı Yumurta",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Pastırmalı Yum",
-   "file": "kahvalti-kahvalti-sicaklar-pastirmali-yum.jpg",
-   "source": "Sahanda Pastırmalı Yumurta",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Sucuklu Yum",
-   "file": "kahvalti-kahvalti-sicaklar-sucuklu-yum.jpg",
-   "source": "Sahanda Sucuklu Yumurta",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı tabakları",
-   "name": "ALL STAR (2-3 Kişilik)",
-   "file": "sembol-all-star-kahvalti-400x400.jpg",
-   "source": "sembolik görsel: all-star-kahvalti-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı tabakları",
-   "name": "Kahvaltı Tabağı (1 Kişilik)",
-   "file": "sembol-kahvalti-tabagi-1-kisilik-400x400.jpg",
-   "source": "sembolik görsel: kahvalti-tabagi-1-kisilik-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı tabakları",
-   "name": "Pideli Kahvaltı (2 Kişilik)",
-   "file": "sembol-2-kisilik-pideli-kahvalti-400x400.jpg",
-   "source": "sembolik görsel: 2-kisilik-pideli-kahvalti-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ayran - Özerhisar",
-   "file": "sembol-ozerhisar-ayran.jpg",
-   "source": "sembolik görsel: Ozerhisar_Ayran.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ayran - Şişe",
-   "file": "sembol-sutas-ayran.jpg",
-   "source": "sembolik görsel: Sutas_Ayran.png",
-   "guess": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Coca Cola",
-   "file": "sembol-coca-cola.jpg",
-   "source": "sembolik görsel: Coca_Cola.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Coca Cola - Şişe",
-   "file": "sembol-coca-cola-sise.jpg",
-   "source": "sembolik görsel: Coca_Cola_Sise.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Coca Cola Zero",
-   "file": "sembol-coca-cola-zero.jpg",
-   "source": "sembolik görsel: Coca_Cola_Zero.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Coca Cola Zero - Şişe",
-   "file": "sembol-coca-cola-zero-sise.jpg",
-   "source": "sembolik görsel: Coca_Cola_Zero_Sise.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Coca-Cola 1 lt",
-   "file": "sembol-coca-cola-sise.jpg",
-   "source": "sembolik görsel: Coca_Cola_Sise.png",
-   "guess": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Fanta",
-   "file": "sembol-fanta.jpg",
-   "source": "sembolik görsel: Fanta.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Sprite",
-   "file": "sembol-sprite.jpg",
-   "source": "sembolik görsel: Sprite.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ice Tea Limon",
-   "file": "sembol-fuse-tea-limon.jpg",
-   "source": "sembolik görsel: Fuse_Tea_Limon.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Ice Tea Şeftali",
-   "file": "sembol-fuse-tea-seftali.jpg",
-   "source": "sembolik görsel: Fuse_Tea_Seftali.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Limonata",
-   "file": "sembol-pngtree-delicious-lemon-juice-in-summer-png-image-12344071.jpg",
-   "source": "sembolik görsel: pngtree-delicious-lemon-juice-in-summer-png-image_12344071.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Türk Kahvesi",
-   "file": "sembol-turk-kahvesi.jpg",
-   "source": "sembolik görsel: Turk_Kahvesi.png",
-   "guess": false
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Ispanak Harman Peynir",
-   "file": "sembol-ispanak-harman.jpg",
-   "source": "sembolik görsel: Ispanak_Harman.png",
-   "guess": false
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Ispanaklı -Kapalı",
-   "file": "sembol-ispanakli.jpg",
-   "source": "sembolik görsel: ıspanaklı.png",
-   "guess": false
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Köz Köz",
-   "file": "sembol-patlican-ezme-tulum.jpg",
-   "source": "sembolik görsel: Patlican_Ezme_Tulum.png",
-   "guess": true
-  },
-  {
-   "category": "Yöresel Pideler",
-   "name": "Mantar / Kaşar",
-   "file": "sembol-mantar-kasar.jpg",
-   "source": "sembolik görsel: Mantar_Kasar.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Bal Kaymak",
-   "file": "sembol-bal-kaymak-400x400.jpg",
-   "source": "sembolik görsel: bal-kaymak-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Beyaz Peynir",
-   "file": "sembol-beyaz-peynir-400x400.jpg",
-   "source": "sembolik görsel: beyaz-peynir-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Kolot Peynir",
-   "file": "sembol-kolot-peyniri-400x400.jpg",
-   "source": "sembolik görsel: kolot-peyniri-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Peynir Tabağı",
-   "file": "sembol-peynir-tabagi-dortlu-400x400.jpg",
-   "source": "sembolik görsel: peynir-tabagi-dortlu-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Peynirli Söğüş",
-   "file": "sembol-sogus-beyaz-peynir-400x400.jpg",
-   "source": "sembolik görsel: sogus-beyaz-peynir-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Siyah Zeytin",
-   "file": "sembol-siyah-zeytin-400x400.jpg",
-   "source": "sembolik görsel: siyah-zeytin-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Telli Peynir",
-   "file": "sembol-telli-cecil-peyniri-400x400.jpg",
-   "source": "sembolik görsel: telli-cecil-peyniri-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Yeşil Zeytin",
-   "file": "sembol-yesilzeytin.jpg",
-   "source": "sembolik görsel: yeşilzeytin.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Soğuklar",
-   "name": "Zeytinli Söğüş",
-   "file": "sembol-sogus-yesil-siyah-zeytin-400x400.jpg",
-   "source": "sembolik görsel: sogus-yesil-siyah-zeytin-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pazar",
-   "name": "Beyaz Peynir -Paket",
-   "file": "sembol-beyaz-peynir-400x400.jpg",
-   "source": "sembolik görsel: beyaz-peynir-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pazar",
-   "name": "Kolot Peynir -Paket",
-   "file": "sembol-kolot-peyniri-400x400.jpg",
-   "source": "sembolik görsel: kolot-peyniri-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pazar",
-   "name": "Telli Peynir -Paket",
-   "file": "sembol-telli-cecil-peyniri-400x400.jpg",
-   "source": "sembolik görsel: telli-cecil-peyniri-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pazar",
-   "name": "Çay -Paket",
-   "file": "sembol-cay.jpg",
-   "source": "sembolik görsel: Cay.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Dört Mevsim",
-   "file": "sembol-4-mevsim.jpg",
-   "source": "sembolik görsel: 4 mevsim.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Evci Pide",
-   "file": "sembol-evci.jpg",
-   "source": "sembolik görsel: evci.png",
-   "guess": false
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Karışık",
-   "file": "sembol-kiyma-kusbasi-pastirma.jpg",
-   "source": "sembolik görsel: Kiyma_Kusbasi_Pastirma.png",
-   "guess": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Kuzuumm -K",
-   "file": "sembol-tandir.jpg",
-   "source": "sembolik görsel: Tandir.png",
-   "guess": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Şefin Pidesi",
-   "file": "sembol-kiyma-kusbasi-pastirma-yerinde.jpg",
-   "source": "sembolik görsel: Kiyma_Kusbasi_Pastirma_Yerinde.png",
-   "guess": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Türk İşi -A",
-   "file": "sembol-kasar-sucuk-mantar-zeytin.jpg",
-   "source": "sembolik görsel: Kasar_Sucuk_Mantar_Zeytin.png",
-   "guess": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "XXX -K",
-   "file": "sembol-kavurma-kasar-mantar-xxxl.jpg",
-   "source": "sembolik görsel: Kavurma_Kasar_Mantar_XXXL.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Yengen -K",
-   "file": "sembol-yengen.jpg",
-   "source": "sembolik görsel: Yengen.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Klasik Menemen",
-   "file": "sembol-menemen-yuvarlak.jpg",
-   "source": "sembolik görsel: Menemen_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Omlet",
-   "file": "sembol-omlet-yuvarlak.jpg",
-   "source": "sembolik görsel: Omlet_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Özel Omlet",
-   "file": "sembol-omlet-kisisellestirilebilir-yuvarlak.jpg",
-   "source": "sembolik görsel: Omlet_Kisisellestirilebilir_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Peynirli Yum",
-   "file": "sembol-kasarli-yumurta-2-yuvarlak.jpg",
-   "source": "sembolik görsel: Kasarli_Yumurta_2_Yuvarlak.png",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Sahanda Yumurta",
-   "file": "sembol-sahanda-yumurta-yuvarlak.jpg",
-   "source": "sembolik görsel: Sahanda_Yumurta_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Sucuk Tava",
-   "file": "sembol-sucuk-yuvarlak.jpg",
-   "source": "sembolik görsel: Sucuk_Yuvarlak.png",
-   "guess": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Yerinde Omlet",
-   "file": "sembol-omlet-yuvarlak-yerinde.jpg",
-   "source": "sembolik görsel: Omlet_Yuvarlak_Yerinde.png",
-   "guess": false
-  },
-  {
-   "category": "Çorbalar",
-   "name": "Düğün Çorba",
-   "file": "sembol-dugun-corbasi-400x400.jpg",
-   "source": "sembolik görsel: dugun-corbasi-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Ana Yemekler",
-   "name": "Güveçte Et Sote",
-   "file": "sembol-et-sote-yuvarlak.jpg",
-   "source": "sembolik görsel: Et_Sote_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Ana Yemekler",
-   "name": "Güveçte Köfte",
-   "file": "sembol-kofte-sote-yuvarlak.jpg",
-   "source": "sembolik görsel: Kofte_Sote_Yuvarlak.png",
-   "guess": false
-  },
-  {
-   "category": "Ana Yemekler",
-   "name": "Kuzu Tandır",
-   "file": "sembol-tandir.jpg",
-   "source": "sembolik görsel: Tandir.png",
-   "guess": false
-  },
-  {
-   "category": "Ana Yemekler",
-   "name": "Kuzu Tandır - Dürüm",
-   "file": "sembol-kuzu-tandir-durum-kesit-400x400.jpg",
-   "source": "sembolik görsel: kuzu-tandir-durum-kesit-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Ana Yemekler",
-   "name": "Kuzu Tandır - Sandviç",
-   "file": "sembol-kuzu-tandir-burger-yakin-cekim-400x400.jpg",
-   "source": "sembolik görsel: kuzu-tandir-burger-yakin-cekim-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kaşar Peynirli",
-   "file": "sembol-kasarli.jpg",
-   "source": "sembolik görsel: Kaşarlı.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kavurma / Kaşar",
-   "file": "sembol-kavurma-kasar-400x400.jpg",
-   "source": "sembolik görsel: kavurma-kasar-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kıyma / Kaşar",
-   "file": "sembol-kiyma-kasar-400x400-v2.jpg",
-   "source": "sembolik görsel: kiyma-kasar-400x400-v2.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kuşbaşı / Kaşar",
-   "file": "sembol-kusbasi-kasar.jpg",
-   "source": "sembolik görsel: Kusbasi_Kasar.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Pastırma / Kaşar",
-   "file": "sembol-pastirma-kasar-pastirma.jpg",
-   "source": "sembolik görsel: Pastirma_Kasar_Pastirma.png",
-   "guess": false
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Sucuk/Kaşar",
-   "file": "sembol-sucuk-kasar.jpg",
-   "source": "sembolik görsel: Sucuk_Kasar.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Harman Peynirli -Kapalı",
-   "file": "sembol-harman.jpg",
-   "source": "sembolik görsel: Harman.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Kaşar Peynirli -Kapalı",
-   "file": "sembol-kasarli.jpg",
-   "source": "sembolik görsel: Kaşarlı.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Kavurma / Kaşar - Kapalı",
-   "file": "sembol-kavurma-kasar-400x400.jpg",
-   "source": "sembolik görsel: kavurma-kasar-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Kavurmalı - Kapalı",
-   "file": "sembol-kavurmmali.jpg",
-   "source": "sembolik görsel: kavurmmalı.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Kıyma / Kaşar -Kapalı",
-   "file": "sembol-kiyma-kasar-400x400-v2.jpg",
-   "source": "sembolik görsel: kiyma-kasar-400x400-v2.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Kıymalı -Kapalı",
-   "file": "sembol-kiymali.jpg",
-   "source": "sembolik görsel: Kıymalı.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Pastırma / Kaşar -Kapalı",
-   "file": "sembol-pastirma-kasar-pastirma.jpg",
-   "source": "sembolik görsel: Pastirma_Kasar_Pastirma.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Pastırmalı -Kapalı",
-   "file": "sembol-pastirmali.jpg",
-   "source": "sembolik görsel: Pastırmalı.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Patatesli  -K",
-   "file": "sembol-patatesli.jpg",
-   "source": "sembolik görsel: patatesli.png",
-   "guess": false
-  },
-  {
-   "category": "Kapalı Pideler",
-   "name": "Sucuk/Kaşar -Kapalı",
-   "file": "sembol-sucuk-kasar.jpg",
-   "source": "sembolik görsel: Sucuk_Kasar.png",
-   "guess": false
-  },
-  {
-   "category": "Çocuklara",
-   "name": "Köfte Patates",
-   "file": "sembol-kofte-patates-kizartmasi-tabaksiz-400x400.jpg",
-   "source": "sembolik görsel: kofte-patates-kizartmasi-tabaksiz-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "Salatalar",
-   "name": "Söğüş",
-   "file": "sembol-sogus-dilimli-400x400.jpg",
-   "source": "sembolik görsel: sogus-dilimli-400x400.png",
-   "guess": false
-  },
-  {
-   "category": "İçecekler",
-   "name": "Çay",
-   "file": "sembol-cay.jpg",
-   "source": "sembolik görsel: Cay.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Su",
-   "file": "sembol-erikli-su.jpg",
-   "source": "sembolik görsel: Erikli_Su.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Soda",
-   "file": "sembol-sade-soda.jpg",
-   "source": "sembolik görsel: Sade_Soda.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Şalgam",
-   "file": "sembol-doganay-salgam.jpg",
-   "source": "sembolik görsel: Doganay_Salgam.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "İçecekler",
-   "name": "Portakal Suyu",
-   "file": "sembol-portakal.jpg",
-   "source": "sembolik görsel: portakal.jfif",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kıymalı -Açık",
-   "file": "sembol-kiymali.jpg",
-   "source": "sembolik görsel: Kıymalı.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kavurmalı",
-   "file": "sembol-kavurmmali.jpg",
-   "source": "sembolik görsel: kavurmmalı.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Kuşbaşılı",
-   "file": "sembol-kusbasili.jpg",
-   "source": "sembolik görsel: Kuşbaşılı.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Pastırmalı",
-   "file": "sembol-pastirmali.jpg",
-   "source": "sembolik görsel: Pastırmalı.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Açık Pideler",
-   "name": "Harman Peynirli",
-   "file": "sembol-harman.jpg",
-   "source": "sembolik görsel: Harman.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Tatlılar",
-   "name": "Çikolatalı Pide",
-   "file": "sembol-cikolatali.jpg",
-   "source": "sembolik görsel: Çikolatalı.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Tatlılar",
-   "name": "Fındıklı Burma",
-   "file": "sembol-burma-baklava.jpg",
-   "source": "sembolik görsel: Burma_Baklava.png",
-   "guess": true,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Çakallı Menemen",
-   "file": "sembol-menemen-yumurtasiz-yuvarlak.jpg",
-   "source": "sembolik görsel: Menemen_Yumurtasiz_Yuvarlak.png",
-   "guess": true,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kuymak",
-   "file": "sembol-muhlama-kuymak-400x400.jpg",
-   "source": "sembolik görsel: muhlama-kuymak-400x400.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Patates Kavurma",
-   "file": "sembol-patatesli.jpg",
-   "source": "sembolik görsel: patatesli.png",
-   "guess": true,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kavurmalı yum",
-   "file": "sembol-kavurmali-yumurta-2-yuvarlak.jpg",
-   "source": "sembolik görsel: Kavurmali_Yumurta_2_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Kıymalı Yum",
-   "file": "sembol-kiymali-yumurta-2-yuvarlak.jpg",
-   "source": "sembolik görsel: Kiymali_Yumurta_2_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Pastırmalı Yum",
-   "file": "sembol-pastirmali-yumurta-2-yuvarlak.jpg",
-   "source": "sembolik görsel: Pastirmali_Yumurta_2_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Kahvaltı > Kahvaltı Sıcaklar",
-   "name": "Sucuklu Yum",
-   "file": "sembol-sucuklu-yumurta-2-yuvarlak.jpg",
-   "source": "sembolik görsel: Sucuklu_Yumurta_2_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Lahmacun",
-   "file": "sembol-lahmacun-yuvarlak.jpg",
-   "source": "sembolik görsel: Lahmacun_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Ispanak Harman Peynir Lhmcn",
-   "file": "sembol-harman-ispanak-yuvarlak.jpg",
-   "source": "sembolik görsel: Harman_Ispanak_Yuvarlak.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Lahmacunlar",
-   "name": "Patlıcan Lhmcn",
-   "file": "sembol-ezilmis-patlican-tulum-kavurma-yuvarlak.jpg",
-   "source": "sembolik görsel: Ezilmis_Patlican_Tulum_Kavurma_Yuvarlak.png",
-   "guess": true,
-   "override": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Yerinde Pide -A",
-   "file": "sembol-yerinde.jpg",
-   "source": "sembolik görsel: Yerinde.png",
-   "guess": false,
-   "override": true
-  },
-  {
-   "category": "Yerinde Pideler",
-   "name": "Kolbastı",
-   "file": "sembol-kiyma-sucuk-kasar.jpg",
-   "source": "sembolik görsel: Kiyma_Sucuk_Kasar.png",
-   "guess": true,
-   "override": true
+ "batches": [
+  {
+   "id": "v2",
+   "entries": [
+    {
+     "category": "Kahvaltı > Kahvaltı tabakları",
+     "name": "Kahvaltı Tabağı (1 Kişilik)",
+     "file": "kahvalti-kahvalti-tabaklari-kahvalti-tabagi-1-kisilik.jpg",
+     "source": "Kahvaltı Tabağı",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı tabakları",
+     "name": "Pideli Kahvaltı (2 Kişilik)",
+     "file": "kahvalti-kahvalti-tabaklari-pideli-kahvalti-2-kisilik.jpg",
+     "source": "Pideli Kahvaltı",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran - Açık",
+     "file": "icecekler-ayran-acik.jpg",
+     "source": "Açık Ayran",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran - Şişe",
+     "file": "icecekler-ayran-sise.jpg",
+     "source": "Şişe Ayran",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran 1 lt",
+     "file": "icecekler-ayran-1-lt.jpg",
+     "source": "Şişe Ayran",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Çay",
+     "file": "icecekler-cay.jpg",
+     "source": "Çay",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Portakal Suyu",
+     "file": "icecekler-portakal-suyu.jpg",
+     "source": "Sıkma Portakal Suyu",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Soda",
+     "file": "icecekler-soda.jpg",
+     "source": "Soda",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Su",
+     "file": "icecekler-su.jpg",
+     "source": "Su",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Şalgam",
+     "file": "icecekler-salgam.jpg",
+     "source": "Şalgam",
+     "guess": false
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Bahçeden",
+     "file": "yoresel-pideler-bahceden.jpg",
+     "source": "Bahçeden Pide",
+     "guess": false
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Diyet",
+     "file": "yoresel-pideler-diyet.jpg",
+     "source": "Diyet Pide",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Kolbastı",
+     "file": "yerinde-pideler-kolbasti.jpg",
+     "source": "Kolbastı Pide",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Patlıycan",
+     "file": "yerinde-pideler-patliycan.jpg",
+     "source": "Patlıycan Pide",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Yerinde Pide -A",
+     "file": "yerinde-pideler-yerinde-pide-a.jpg",
+     "source": "Yerinde Pide",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Çakallı Menemen",
+     "file": "kahvalti-kahvalti-sicaklar-cakalli-menemen.jpg",
+     "source": "Çakallı Menemen",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kuymak",
+     "file": "kahvalti-kahvalti-sicaklar-kuymak.jpg",
+     "source": "Kuymak",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Patates Kavurma",
+     "file": "kahvalti-kahvalti-sicaklar-patates-kavurma.jpg",
+     "source": "Patates Kavurma",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Turşu Kavurma",
+     "file": "kahvalti-kahvalti-sicaklar-tursu-kavurma.jpg",
+     "source": "Turşu Kavurma",
+     "guess": false
+    },
+    {
+     "category": "Tatlılar",
+     "name": "Çikolatalı Pide",
+     "file": "tatlilar-cikolatali-pide.jpg",
+     "source": "Çikolatalı Pide",
+     "guess": false
+    },
+    {
+     "category": "Tatlılar",
+     "name": "Fındıklı Burma",
+     "file": "tatlilar-findikli-burma.jpg",
+     "source": "Fındıklı Burma",
+     "guess": false
+    },
+    {
+     "category": "Tatlılar",
+     "name": "Fırın Sütlaç",
+     "file": "tatlilar-firin-sutlac.jpg",
+     "source": "Fırın Sütlaç",
+     "guess": false
+    },
+    {
+     "category": "Çorbalar",
+     "name": "Günün Çorbası",
+     "file": "corbalar-gunun-corbasi.jpg",
+     "source": "Günün Çorbası",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Harman Peynirli",
+     "file": "acik-pideler-harman-peynirli.jpg",
+     "source": "Harman Peynirli Pide",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kavurmalı",
+     "file": "acik-pideler-kavurmali.jpg",
+     "source": "Kavurmalı Pide",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kuşbaşılı",
+     "file": "acik-pideler-kusbasili.jpg",
+     "source": "Kuşbaşılı Pide",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Pastırmalı",
+     "file": "acik-pideler-pastirmali.jpg",
+     "source": "Pastırmalı Pide",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Tullumi",
+     "file": "acik-pideler-tullumi.jpg",
+     "source": "Tullumi Pide",
+     "guess": false
+    },
+    {
+     "category": "Salatalar",
+     "name": "Turşu Kavurma",
+     "file": "salatalar-tursu-kavurma.jpg",
+     "source": "Turşu Kavurma",
+     "guess": false
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Lahmacun",
+     "file": "lahmacunlar-lahmacun.jpg",
+     "source": "Klasik Lahmacun",
+     "guess": true
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Patlıcan Lhmcn",
+     "file": "lahmacunlar-patlican-lhmcn.jpg",
+     "source": "Patlıycan Lahmacun",
+     "guess": true
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Ispanak Harman Peynir Lhmcn",
+     "file": "lahmacunlar-ispanak-harman-peynir-lhmcn.jpg",
+     "source": "Ispanak Harman Peynirli Lahmacun",
+     "guess": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kıymalı -Açık",
+     "file": "acik-pideler-kiymali-acik.jpg",
+     "source": "Kıymalı Pide",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kavurmalı yum",
+     "file": "kahvalti-kahvalti-sicaklar-kavurmali-yum.jpg",
+     "source": "Sahanda Kavurmalı Yumurta",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kıymalı Yum",
+     "file": "kahvalti-kahvalti-sicaklar-kiymali-yum.jpg",
+     "source": "Sahanda Kıymalı Yumurta",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Pastırmalı Yum",
+     "file": "kahvalti-kahvalti-sicaklar-pastirmali-yum.jpg",
+     "source": "Sahanda Pastırmalı Yumurta",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Sucuklu Yum",
+     "file": "kahvalti-kahvalti-sicaklar-sucuklu-yum.jpg",
+     "source": "Sahanda Sucuklu Yumurta",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı tabakları",
+     "name": "ALL STAR (2-3 Kişilik)",
+     "file": "sembol-all-star-kahvalti-400x400.jpg",
+     "source": "sembolik görsel: all-star-kahvalti-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı tabakları",
+     "name": "Kahvaltı Tabağı (1 Kişilik)",
+     "file": "sembol-kahvalti-tabagi-1-kisilik-400x400.jpg",
+     "source": "sembolik görsel: kahvalti-tabagi-1-kisilik-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı tabakları",
+     "name": "Pideli Kahvaltı (2 Kişilik)",
+     "file": "sembol-2-kisilik-pideli-kahvalti-400x400.jpg",
+     "source": "sembolik görsel: 2-kisilik-pideli-kahvalti-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran - Özerhisar",
+     "file": "sembol-ozerhisar-ayran.jpg",
+     "source": "sembolik görsel: Ozerhisar_Ayran.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran - Şişe",
+     "file": "sembol-sutas-ayran.jpg",
+     "source": "sembolik görsel: Sutas_Ayran.png",
+     "guess": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca Cola",
+     "file": "sembol-coca-cola.jpg",
+     "source": "sembolik görsel: Coca_Cola.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca Cola - Şişe",
+     "file": "sembol-coca-cola-sise.jpg",
+     "source": "sembolik görsel: Coca_Cola_Sise.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca Cola Zero",
+     "file": "sembol-coca-cola-zero.jpg",
+     "source": "sembolik görsel: Coca_Cola_Zero.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca Cola Zero - Şişe",
+     "file": "sembol-coca-cola-zero-sise.jpg",
+     "source": "sembolik görsel: Coca_Cola_Zero_Sise.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca-Cola 1 lt",
+     "file": "sembol-coca-cola-sise.jpg",
+     "source": "sembolik görsel: Coca_Cola_Sise.png",
+     "guess": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Fanta",
+     "file": "sembol-fanta.jpg",
+     "source": "sembolik görsel: Fanta.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Sprite",
+     "file": "sembol-sprite.jpg",
+     "source": "sembolik görsel: Sprite.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ice Tea Limon",
+     "file": "sembol-fuse-tea-limon.jpg",
+     "source": "sembolik görsel: Fuse_Tea_Limon.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ice Tea Şeftali",
+     "file": "sembol-fuse-tea-seftali.jpg",
+     "source": "sembolik görsel: Fuse_Tea_Seftali.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Limonata",
+     "file": "sembol-pngtree-delicious-lemon-juice-in-summer-png-image-12344071.jpg",
+     "source": "sembolik görsel: pngtree-delicious-lemon-juice-in-summer-png-image_12344071.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Türk Kahvesi",
+     "file": "sembol-turk-kahvesi.jpg",
+     "source": "sembolik görsel: Turk_Kahvesi.png",
+     "guess": false
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Ispanak Harman Peynir",
+     "file": "sembol-ispanak-harman.jpg",
+     "source": "sembolik görsel: Ispanak_Harman.png",
+     "guess": false
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Ispanaklı -Kapalı",
+     "file": "sembol-ispanakli.jpg",
+     "source": "sembolik görsel: ıspanaklı.png",
+     "guess": false
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Köz Köz",
+     "file": "sembol-patlican-ezme-tulum.jpg",
+     "source": "sembolik görsel: Patlican_Ezme_Tulum.png",
+     "guess": true
+    },
+    {
+     "category": "Yöresel Pideler",
+     "name": "Mantar / Kaşar",
+     "file": "sembol-mantar-kasar.jpg",
+     "source": "sembolik görsel: Mantar_Kasar.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Bal Kaymak",
+     "file": "sembol-bal-kaymak-400x400.jpg",
+     "source": "sembolik görsel: bal-kaymak-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Beyaz Peynir",
+     "file": "sembol-beyaz-peynir-400x400.jpg",
+     "source": "sembolik görsel: beyaz-peynir-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Kolot Peynir",
+     "file": "sembol-kolot-peyniri-400x400.jpg",
+     "source": "sembolik görsel: kolot-peyniri-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Peynir Tabağı",
+     "file": "sembol-peynir-tabagi-dortlu-400x400.jpg",
+     "source": "sembolik görsel: peynir-tabagi-dortlu-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Peynirli Söğüş",
+     "file": "sembol-sogus-beyaz-peynir-400x400.jpg",
+     "source": "sembolik görsel: sogus-beyaz-peynir-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Siyah Zeytin",
+     "file": "sembol-siyah-zeytin-400x400.jpg",
+     "source": "sembolik görsel: siyah-zeytin-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Telli Peynir",
+     "file": "sembol-telli-cecil-peyniri-400x400.jpg",
+     "source": "sembolik görsel: telli-cecil-peyniri-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Yeşil Zeytin",
+     "file": "sembol-yesilzeytin.jpg",
+     "source": "sembolik görsel: yeşilzeytin.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Soğuklar",
+     "name": "Zeytinli Söğüş",
+     "file": "sembol-sogus-yesil-siyah-zeytin-400x400.jpg",
+     "source": "sembolik görsel: sogus-yesil-siyah-zeytin-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Beyaz Peynir -Paket",
+     "file": "sembol-beyaz-peynir-400x400.jpg",
+     "source": "sembolik görsel: beyaz-peynir-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Kolot Peynir -Paket",
+     "file": "sembol-kolot-peyniri-400x400.jpg",
+     "source": "sembolik görsel: kolot-peyniri-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Telli Peynir -Paket",
+     "file": "sembol-telli-cecil-peyniri-400x400.jpg",
+     "source": "sembolik görsel: telli-cecil-peyniri-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Çay -Paket",
+     "file": "sembol-cay.jpg",
+     "source": "sembolik görsel: Cay.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Dört Mevsim",
+     "file": "sembol-4-mevsim.jpg",
+     "source": "sembolik görsel: 4 mevsim.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Evci Pide",
+     "file": "sembol-evci.jpg",
+     "source": "sembolik görsel: evci.png",
+     "guess": false
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Karışık",
+     "file": "sembol-kiyma-kusbasi-pastirma.jpg",
+     "source": "sembolik görsel: Kiyma_Kusbasi_Pastirma.png",
+     "guess": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Kuzuumm -K",
+     "file": "sembol-tandir.jpg",
+     "source": "sembolik görsel: Tandir.png",
+     "guess": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Şefin Pidesi",
+     "file": "sembol-kiyma-kusbasi-pastirma-yerinde.jpg",
+     "source": "sembolik görsel: Kiyma_Kusbasi_Pastirma_Yerinde.png",
+     "guess": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Türk İşi -A",
+     "file": "sembol-kasar-sucuk-mantar-zeytin.jpg",
+     "source": "sembolik görsel: Kasar_Sucuk_Mantar_Zeytin.png",
+     "guess": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "XXX -K",
+     "file": "sembol-kavurma-kasar-mantar-xxxl.jpg",
+     "source": "sembolik görsel: Kavurma_Kasar_Mantar_XXXL.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Yengen -K",
+     "file": "sembol-yengen.jpg",
+     "source": "sembolik görsel: Yengen.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Klasik Menemen",
+     "file": "sembol-menemen-yuvarlak.jpg",
+     "source": "sembolik görsel: Menemen_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Omlet",
+     "file": "sembol-omlet-yuvarlak.jpg",
+     "source": "sembolik görsel: Omlet_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Özel Omlet",
+     "file": "sembol-omlet-kisisellestirilebilir-yuvarlak.jpg",
+     "source": "sembolik görsel: Omlet_Kisisellestirilebilir_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Peynirli Yum",
+     "file": "sembol-kasarli-yumurta-2-yuvarlak.jpg",
+     "source": "sembolik görsel: Kasarli_Yumurta_2_Yuvarlak.png",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Sahanda Yumurta",
+     "file": "sembol-sahanda-yumurta-yuvarlak.jpg",
+     "source": "sembolik görsel: Sahanda_Yumurta_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Sucuk Tava",
+     "file": "sembol-sucuk-yuvarlak.jpg",
+     "source": "sembolik görsel: Sucuk_Yuvarlak.png",
+     "guess": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Yerinde Omlet",
+     "file": "sembol-omlet-yuvarlak-yerinde.jpg",
+     "source": "sembolik görsel: Omlet_Yuvarlak_Yerinde.png",
+     "guess": false
+    },
+    {
+     "category": "Çorbalar",
+     "name": "Düğün Çorba",
+     "file": "sembol-dugun-corbasi-400x400.jpg",
+     "source": "sembolik görsel: dugun-corbasi-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Ana Yemekler",
+     "name": "Güveçte Et Sote",
+     "file": "sembol-et-sote-yuvarlak.jpg",
+     "source": "sembolik görsel: Et_Sote_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Ana Yemekler",
+     "name": "Güveçte Köfte",
+     "file": "sembol-kofte-sote-yuvarlak.jpg",
+     "source": "sembolik görsel: Kofte_Sote_Yuvarlak.png",
+     "guess": false
+    },
+    {
+     "category": "Ana Yemekler",
+     "name": "Kuzu Tandır",
+     "file": "sembol-tandir.jpg",
+     "source": "sembolik görsel: Tandir.png",
+     "guess": false
+    },
+    {
+     "category": "Ana Yemekler",
+     "name": "Kuzu Tandır - Dürüm",
+     "file": "sembol-kuzu-tandir-durum-kesit-400x400.jpg",
+     "source": "sembolik görsel: kuzu-tandir-durum-kesit-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Ana Yemekler",
+     "name": "Kuzu Tandır - Sandviç",
+     "file": "sembol-kuzu-tandir-burger-yakin-cekim-400x400.jpg",
+     "source": "sembolik görsel: kuzu-tandir-burger-yakin-cekim-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kaşar Peynirli",
+     "file": "sembol-kasarli.jpg",
+     "source": "sembolik görsel: Kaşarlı.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kavurma / Kaşar",
+     "file": "sembol-kavurma-kasar-400x400.jpg",
+     "source": "sembolik görsel: kavurma-kasar-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kıyma / Kaşar",
+     "file": "sembol-kiyma-kasar-400x400-v2.jpg",
+     "source": "sembolik görsel: kiyma-kasar-400x400-v2.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kuşbaşı / Kaşar",
+     "file": "sembol-kusbasi-kasar.jpg",
+     "source": "sembolik görsel: Kusbasi_Kasar.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Pastırma / Kaşar",
+     "file": "sembol-pastirma-kasar-pastirma.jpg",
+     "source": "sembolik görsel: Pastirma_Kasar_Pastirma.png",
+     "guess": false
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Sucuk/Kaşar",
+     "file": "sembol-sucuk-kasar.jpg",
+     "source": "sembolik görsel: Sucuk_Kasar.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Harman Peynirli -Kapalı",
+     "file": "sembol-harman.jpg",
+     "source": "sembolik görsel: Harman.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Kaşar Peynirli -Kapalı",
+     "file": "sembol-kasarli.jpg",
+     "source": "sembolik görsel: Kaşarlı.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Kavurma / Kaşar - Kapalı",
+     "file": "sembol-kavurma-kasar-400x400.jpg",
+     "source": "sembolik görsel: kavurma-kasar-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Kavurmalı - Kapalı",
+     "file": "sembol-kavurmmali.jpg",
+     "source": "sembolik görsel: kavurmmalı.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Kıyma / Kaşar -Kapalı",
+     "file": "sembol-kiyma-kasar-400x400-v2.jpg",
+     "source": "sembolik görsel: kiyma-kasar-400x400-v2.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Kıymalı -Kapalı",
+     "file": "sembol-kiymali.jpg",
+     "source": "sembolik görsel: Kıymalı.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Pastırma / Kaşar -Kapalı",
+     "file": "sembol-pastirma-kasar-pastirma.jpg",
+     "source": "sembolik görsel: Pastirma_Kasar_Pastirma.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Pastırmalı -Kapalı",
+     "file": "sembol-pastirmali.jpg",
+     "source": "sembolik görsel: Pastırmalı.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Patatesli  -K",
+     "file": "sembol-patatesli.jpg",
+     "source": "sembolik görsel: patatesli.png",
+     "guess": false
+    },
+    {
+     "category": "Kapalı Pideler",
+     "name": "Sucuk/Kaşar -Kapalı",
+     "file": "sembol-sucuk-kasar.jpg",
+     "source": "sembolik görsel: Sucuk_Kasar.png",
+     "guess": false
+    },
+    {
+     "category": "Çocuklara",
+     "name": "Köfte Patates",
+     "file": "sembol-kofte-patates-kizartmasi-tabaksiz-400x400.jpg",
+     "source": "sembolik görsel: kofte-patates-kizartmasi-tabaksiz-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "Salatalar",
+     "name": "Söğüş",
+     "file": "sembol-sogus-dilimli-400x400.jpg",
+     "source": "sembolik görsel: sogus-dilimli-400x400.png",
+     "guess": false
+    },
+    {
+     "category": "İçecekler",
+     "name": "Çay",
+     "file": "sembol-cay.jpg",
+     "source": "sembolik görsel: Cay.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Su",
+     "file": "sembol-erikli-su.jpg",
+     "source": "sembolik görsel: Erikli_Su.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Soda",
+     "file": "sembol-sade-soda.jpg",
+     "source": "sembolik görsel: Sade_Soda.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Şalgam",
+     "file": "sembol-doganay-salgam.jpg",
+     "source": "sembolik görsel: Doganay_Salgam.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Portakal Suyu",
+     "file": "sembol-portakal.jpg",
+     "source": "sembolik görsel: portakal.jfif",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kıymalı -Açık",
+     "file": "sembol-kiymali.jpg",
+     "source": "sembolik görsel: Kıymalı.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kavurmalı",
+     "file": "sembol-kavurmmali.jpg",
+     "source": "sembolik görsel: kavurmmalı.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Kuşbaşılı",
+     "file": "sembol-kusbasili.jpg",
+     "source": "sembolik görsel: Kuşbaşılı.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Pastırmalı",
+     "file": "sembol-pastirmali.jpg",
+     "source": "sembolik görsel: Pastırmalı.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Açık Pideler",
+     "name": "Harman Peynirli",
+     "file": "sembol-harman.jpg",
+     "source": "sembolik görsel: Harman.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Tatlılar",
+     "name": "Çikolatalı Pide",
+     "file": "sembol-cikolatali.jpg",
+     "source": "sembolik görsel: Çikolatalı.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Tatlılar",
+     "name": "Fındıklı Burma",
+     "file": "sembol-burma-baklava.jpg",
+     "source": "sembolik görsel: Burma_Baklava.png",
+     "guess": true,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Çakallı Menemen",
+     "file": "sembol-menemen-yumurtasiz-yuvarlak.jpg",
+     "source": "sembolik görsel: Menemen_Yumurtasiz_Yuvarlak.png",
+     "guess": true,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kuymak",
+     "file": "sembol-muhlama-kuymak-400x400.jpg",
+     "source": "sembolik görsel: muhlama-kuymak-400x400.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Patates Kavurma",
+     "file": "sembol-patatesli.jpg",
+     "source": "sembolik görsel: patatesli.png",
+     "guess": true,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kavurmalı yum",
+     "file": "sembol-kavurmali-yumurta-2-yuvarlak.jpg",
+     "source": "sembolik görsel: Kavurmali_Yumurta_2_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Kıymalı Yum",
+     "file": "sembol-kiymali-yumurta-2-yuvarlak.jpg",
+     "source": "sembolik görsel: Kiymali_Yumurta_2_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Pastırmalı Yum",
+     "file": "sembol-pastirmali-yumurta-2-yuvarlak.jpg",
+     "source": "sembolik görsel: Pastirmali_Yumurta_2_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Kahvaltı > Kahvaltı Sıcaklar",
+     "name": "Sucuklu Yum",
+     "file": "sembol-sucuklu-yumurta-2-yuvarlak.jpg",
+     "source": "sembolik görsel: Sucuklu_Yumurta_2_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Lahmacun",
+     "file": "sembol-lahmacun-yuvarlak.jpg",
+     "source": "sembolik görsel: Lahmacun_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Ispanak Harman Peynir Lhmcn",
+     "file": "sembol-harman-ispanak-yuvarlak.jpg",
+     "source": "sembolik görsel: Harman_Ispanak_Yuvarlak.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Lahmacunlar",
+     "name": "Patlıcan Lhmcn",
+     "file": "sembol-ezilmis-patlican-tulum-kavurma-yuvarlak.jpg",
+     "source": "sembolik görsel: Ezilmis_Patlican_Tulum_Kavurma_Yuvarlak.png",
+     "guess": true,
+     "override": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Yerinde Pide -A",
+     "file": "sembol-yerinde.jpg",
+     "source": "sembolik görsel: Yerinde.png",
+     "guess": false,
+     "override": true
+    },
+    {
+     "category": "Yerinde Pideler",
+     "name": "Kolbastı",
+     "file": "sembol-kiyma-sucuk-kasar.jpg",
+     "source": "sembolik görsel: Kiyma_Sucuk_Kasar.png",
+     "guess": true,
+     "override": true
+    }
+   ]
+  },
+  {
+   "id": "v3",
+   "entries": [
+    {
+     "category": "İçecekler",
+     "name": "Cappy Vişne",
+     "file": "sembol-cappy-visne.jpg",
+     "source": "kullanıcının gönderdiği görsel"
+    },
+    {
+     "category": "İçecekler",
+     "name": "Cappy Şeftali",
+     "file": "sembol-cappy-seftali.jpg",
+     "source": "kullanıcının gönderdiği görsel"
+    },
+    {
+     "category": "İçecekler",
+     "name": "Cappy Karışık",
+     "file": "sembol-cappy-karisik.jpg",
+     "source": "kullanıcının gönderdiği görsel"
+    }
+   ]
   }
  ]
 }
