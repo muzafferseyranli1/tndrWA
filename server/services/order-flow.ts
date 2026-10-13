@@ -1,9 +1,9 @@
 import type { Brand, Customer, Message, Order, PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { formatTRY } from "../../shared/money";
-import { markNoticeSent, noticeLine } from "./notice";
+import { markNoticeSent, noticeLine, policyUrl } from "./notice";
 import { rememberAddress } from "./addresses";
-import { applyAnswer, nextQuestion } from "./options";
+import { applyAnswer, needsOptions, nextQuestion } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { orderCampaignAvailable, orderDiscount } from "./discount";
@@ -20,6 +20,22 @@ type FullOrder = Order & { brand: Brand; customer: Customer };
 export const payId = (orderId: number, paymentTypeId: number) => `pay:${orderId}:${paymentTypeId}`;
 export const addrId = (orderId: number, choice: number | "new") => `addr:${orderId}:${choice}`;
 export const optId = (orderId: number, itemId: number, groupId: number, choiceId: number) => `opt:${orderId}:${itemId}:${groupId}:${choiceId}`;
+export const kvkkId = (orderId: number, choice: "ok" | "text") => `kvkk:${orderId}:${choice}`;
+
+/** Müşteriden yanıt beklenen aşamalar (KVKK bilgilendirme onayı, seçenek, ödeme, adres). */
+export const WAITING_STAGES = ["AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"];
+/** "Okudum, devam" butonu yerine yazıyla onay */
+const ACK_TEXT = /^(okudum|tamam|onay(l[ıi]yorum)?|devam|evet|ok)\b/i;
+const NOTICE_STEP_KEY = "kvkk.noticeStep";
+
+/** İlk siparişte KVKK bilgilendirme onayı sorulsun mu (İşletme/KVKK sayfasından kapatılabilir; varsayılan açık). */
+export async function noticeStepEnabled(db: PrismaClient): Promise<boolean> {
+  return (await db.setting.findUnique({ where: { key: NOTICE_STEP_KEY } }))?.value !== "off";
+}
+
+export async function setNoticeStep(db: PrismaClient, enabled: boolean): Promise<void> {
+  await db.setting.upsert({ where: { key: NOTICE_STEP_KEY }, create: { key: NOTICE_STEP_KEY, value: enabled ? "on" : "off" }, update: { value: enabled ? "on" : "off" } });
+}
 
 export { addressKey, rememberAddress } from "./addresses";
 
@@ -45,7 +61,7 @@ async function log(db: PrismaClient, o: FullOrder, type: "text" | "catalog", bod
 export async function resendPendingQuestion(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number): Promise<void> {
   const order = await load(db, orderId);
   if (!order || order.status !== "NEW") return;
-  if (order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
+  if (order.stage === "AWAITING_NOTICE" || order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
   if (order.stage === "AWAITING_ADDRESS") return askAddress(db, cloud, order);
 }
 
@@ -57,6 +73,18 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
   try {
     let order = await load(db, orderId);
     if (!order || order.stage === "READY") return;
+
+    // İlk siparişte KVKK bilgilendirmesi: müşteri "Okudum, devam" deyince sipariş adımları başlar (bir kez sorulur)
+    if (order.stage !== "AWAITING_ADDRESS" && !order.customer.noticeAckAt && policyUrl() && (await noticeStepEnabled(db))) {
+      if (order.stage !== "AWAITING_NOTICE") await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_NOTICE" } });
+      return await askNotice(db, cloud, (await load(db, orderId))!);
+    }
+    if (order.stage === "AWAITING_NOTICE") {
+      const items = await db.orderItem.findMany({ where: { orderId: order.id }, select: { productId: true } });
+      const stage = (await needsOptions(db, items.map((i) => i.productId).filter((id): id is number => id !== null))) ? "AWAITING_OPTIONS" : "AWAITING_PAYMENT";
+      await db.order.update({ where: { id: order.id }, data: { stage } });
+      order = (await load(db, orderId))!;
+    }
 
     if (order.stage === "AWAITING_OPTIONS") {
       const question = await nextQuestion(db, order.id);
@@ -90,6 +118,39 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
     if (o) await reportFailure(db, o, "Ödeme şekli sorusu", "", err);
     else logger.warn({ err: (err as Error).message, orderId }, "Ödeme sorusu gönderilemedi");
   }
+}
+
+/** KVKK bilgilendirmesi: aydınlatma metni bağlantısı + "Okudum, devam" / "KVKK Metni" düğmeleri (düğme gönderilemezse yazıyla onay istenir). */
+async function askNotice(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
+  if (!canSend(cloud, order)) return;
+  const phoneId = order.brand.waPhoneNumberId!;
+  const to = order.customer.waId!;
+  const body = await render(db, order, "KVKK_NOTICE", { link: policyUrl() ?? "" });
+  try {
+    const id = await cloud.sendButtons(phoneId, to, body, [
+      { id: kvkkId(order.id, "ok"), title: "Okudum, devam ✅" },
+      { id: kvkkId(order.id, "text"), title: "KVKK Metni 📄" },
+    ]);
+    await log(db, order, "text", body, id);
+    await markNoticeSent(db, order.customerId);
+  } catch (err) {
+    await reportFailure(db, order, "KVKK bilgilendirmesi (düğme)", body, err);
+    const text = `${body}\n\nDevam etmek için "okudum" yazmanız yeterli.`;
+    try {
+      const id = await cloud.sendText(phoneId, to, text);
+      await log(db, order, "text", text, id);
+      await markNoticeSent(db, order.customerId);
+    } catch (err2) {
+      await reportFailure(db, order, "KVKK bilgilendirmesi", text, err2);
+    }
+  }
+}
+
+/** "Okudum, devam": müşterinin bilgilendirmeyi okuduğu kaydedilir, sipariş adımlarına geçilir. */
+async function acknowledgeNotice(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
+  const now = new Date();
+  await db.customer.update({ where: { id: order.customerId }, data: { noticeAckAt: now, noticeSentAt: order.customer.noticeSentAt ?? now } });
+  await startOrderConversation(db, cloud, order.id);
 }
 
 /** Bir seçenek sorusunu liste olarak gönderir. İlk soruda "siparişinizi aldık" karşılaması ve (ilk temasta) aydınlatma bağlantısı eklenir. */
@@ -170,7 +231,7 @@ async function finish(db: PrismaClient, cloud: WhatsappCloudClient | null, order
   await log(db, order, "text", body, id);
 }
 
-const OPEN = { status: "NEW", stage: { in: ["AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"] } };
+const OPEN = { status: "NEW", stage: { in: WAITING_STAGES } };
 
 /** Düğme/liste yanıtı: kimliğindeki siparişe işlenir (müşterinin başka yarım siparişi olsa da karışmaz). */
 async function orderById(db: PrismaClient, brandId: number, customerId: number, orderId: number, now: Date): Promise<FullOrder | null> {
@@ -178,13 +239,14 @@ async function orderById(db: PrismaClient, brandId: number, customerId: number, 
   return db.order.findFirst({ where: { id: orderId, brandId, customerId, ...OPEN, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } }, include: { brand: true, customer: true } });
 }
 
-/** Yazı ve konum: önce adres bekleyen en yeni sipariş, sonra seçenek bekleyen, sonra ödeme bekleyen. */
+/** Yazı ve konum: önce adres bekleyen en yeni sipariş, sonra seçenek, ödeme, KVKK bilgilendirmesi bekleyen. */
 async function orderForFreeText(db: PrismaClient, brandId: number, customerId: number, now: Date): Promise<FullOrder | null> {
   const where = { brandId, customerId, status: "NEW", createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } };
   return (
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_ADDRESS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_OPTIONS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
-    (await db.order.findFirst({ where: { ...where, stage: "AWAITING_PAYMENT" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } }))
+    (await db.order.findFirst({ where: { ...where, stage: "AWAITING_PAYMENT" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
+    (await db.order.findFirst({ where: { ...where, stage: "AWAITING_NOTICE" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } }))
   );
 }
 
@@ -212,6 +274,16 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
         await applyAnswer(db, order.id, Number(itemId), Number(groupId), Number(choiceId)); // eski/geçersiz cevap yok sayılır, aşağıda mevcut soru yeniden sorulur
         return await startOrderConversation(db, cloud, order.id);
       }
+      if (kind === "kvkk" && order.stage === "AWAITING_NOTICE") {
+        if (arg === "ok") return await acknowledgeNotice(db, cloud, order);
+        // "KVKK Metni": bağlantıyı ayrıca gönder, ardından düğmeleri yeniden göster
+        if (canSend(cloud, order)) {
+          const body = `Aydınlatma metnimiz: ${policyUrl() ?? ""}`;
+          const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, body);
+          await log(db, order, "text", body, id);
+        }
+        return await askNotice(db, cloud, order);
+      }
       if (kind === "pay" && order.stage === "AWAITING_PAYMENT") return await choosePayment(db, cloud, order, Number(arg));
       if (kind === "addr" && order.stage === "AWAITING_ADDRESS") {
         const chosen = arg === "new" ? null : await db.customerAddress.findFirst({ where: { id: Number(arg), customerId: customer.id } });
@@ -227,6 +299,13 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
 
     const order = await orderForFreeText(db, brand.id, customer.id, now);
     if (!order) return;
+
+    if (order.stage === "AWAITING_NOTICE") {
+      // Düğme yerine yazdı: "okudum/tamam" onay sayılır, başka bir şeyse bilgilendirme yeniden gönderilir
+      if (message.type === "text" && ACK_TEXT.test((m.text?.body ?? "").trim())) return await acknowledgeNotice(db, cloud, order);
+      if (message.type === "text") await askNotice(db, cloud, order);
+      return;
+    }
 
     if (order.stage === "AWAITING_PAYMENT" || order.stage === "AWAITING_OPTIONS") {
       // Liste yerine yazı yazdı: aynı soruyu (seçenek ya da ödeme) yeniden gönder

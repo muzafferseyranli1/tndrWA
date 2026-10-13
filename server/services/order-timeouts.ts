@@ -1,13 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
-import { resendPendingQuestion } from "./order-flow";
+import { WAITING_STAGES, resendPendingQuestion } from "./order-flow";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 /** Müşteri soruya bu süre yanıt vermezse soru tekrarlanır; hatırlatmadan sonra yine bu süre yanıt yoksa sipariş iptal edilir. */
 export const REPLY_TIMEOUT_MS = Number(process.env.ORDER_REPLY_TIMEOUT_MS) || 5 * 60 * 1000;
-const WAITING_STAGES = ["AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"];
 
 export type TimeoutAction = "remind" | "cancel" | null;
 

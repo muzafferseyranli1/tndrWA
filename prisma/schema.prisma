@@ -121,6 +121,8 @@ model Customer {
   readAt    DateTime?
   // Aydınlatma metni bağlantısı müşteriye ilk kez ne zaman gönderildi (her mesajda tekrarlanmaz)
   noticeSentAt DateTime?
+  // Müşteri KVKK bilgilendirmesinde "Okudum, devam" dedi (ilk siparişte bir kez sorulur)
+  noticeAckAt  DateTime?
   // Eski tek adres alanları (yerini CustomerAddress aldı; yeni kodda kullanılmaz)
   address   String?
   lat       Float?

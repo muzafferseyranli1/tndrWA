@@ -32,7 +32,7 @@ const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("tr-TR", { hour: "2
 
 /** Müşteri WhatsApp adımlarını bitirmedi: ne bekleniyor, hatırlatma ve otomatik iptal ne zaman. */
 function WaitingNote({ order }: { order: OrderDto }) {
-  const what = order.stage === "AWAITING_OPTIONS" ? "seçenek" : order.stage === "AWAITING_PAYMENT" ? "ödeme şekli" : "adres";
+  const what = order.stage === "AWAITING_NOTICE" ? "KVKK bilgilendirmesi (\"Okudum, devam\")" : order.stage === "AWAITING_OPTIONS" ? "seçenek" : order.stage === "AWAITING_PAYMENT" ? "ödeme şekli" : "adres";
   let plan = "";
   if (order.reminderSentAt) plan = `Hatırlatma ${hhmm(Date.parse(order.reminderSentAt))}'de gitti; yanıt gelmezse ${hhmm(Date.parse(order.reminderSentAt) + REPLY_TIMEOUT_MS)}'de otomatik iptal edilir.`;
   else if (order.promptedAt) plan = `Yanıt gelmezse ${hhmm(Date.parse(order.promptedAt) + REPLY_TIMEOUT_MS)}'de soru tekrarlanır, 5 dk sonra sipariş otomatik iptal edilir.`;
@@ -253,7 +253,7 @@ export default function OrdersPage() {
                   {o.stage === "READY" ? (
                     <span className={`rounded-full px-2 py-0.5 text-xs ${label[o.status].cls}`}>{label[o.status].text}</span>
                   ) : (
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_NOTICE" ? "KVKK onayı bekleniyor" : o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
                   )}
                   <span className="text-sm text-slate-500">{time(o.createdAt)}</span>
                   <span className="ml-auto text-right">

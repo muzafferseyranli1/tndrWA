@@ -11,6 +11,7 @@ export default function BusinessPage() {
   const [data, setData] = useState<BusinessSettingsDto | null>(null);
   const [info, setInfo] = useState({ legalName: "", address: "", email: "", phone: "", verbis: "" });
   const [ret, setRet] = useState({ messagesDays: "90", ordersDays: "730", ratingsDays: "730" });
+  const [noticeStep, setNoticeStep] = useState(true);
   const [requests, setRequests] = useState<DeletionRequestDto[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,6 +22,7 @@ export default function BusinessPage() {
       setData(s);
       setInfo(s.info);
       setRet({ messagesDays: String(s.retention.messagesDays), ordersDays: String(s.retention.ordersDays), ratingsDays: String(s.retention.ratingsDays) });
+      setNoticeStep(s.noticeStep);
       setRequests(r);
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -35,7 +37,7 @@ export default function BusinessPage() {
     setBusy(true);
     setMsg(null);
     try {
-      await api("/api/business", { method: "PUT", json: { info, retention: { messagesDays: Number(ret.messagesDays), ordersDays: Number(ret.ordersDays), ratingsDays: Number(ret.ratingsDays) } } });
+      await api("/api/business", { method: "PUT", json: { info, retention: { messagesDays: Number(ret.messagesDays), ordersDays: Number(ret.ordersDays), ratingsDays: Number(ret.ratingsDays) }, noticeStep } });
       setMsg({ ok: true, text: "Kaydedildi." });
       await load();
     } catch (e) {
@@ -119,6 +121,16 @@ export default function BusinessPage() {
               </label>
             ))}
           </div>
+        </section>
+
+        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-1 font-medium">WhatsApp siparişinde KVKK bilgilendirmesi</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={noticeStep} onChange={(e) => setNoticeStep(e.target.checked)} className="mt-0.5" />
+            <span>
+              Müşterinin ilk siparişinde, ödeme sorusundan önce aydınlatma metni bağlantısıyla bilgilendirme gönder; müşteri &quot;Okudum, devam&quot; dedikten sonra sipariş adımlarına geç. Bir kez sorulur, okuma zamanı kaydedilir. Metni Ayarlar → Mesajlar&apos;dan değiştirebilirsiniz.
+            </span>
+          </label>
         </section>
 
         <button disabled={busy} onClick={save} className="mb-8 rounded-lg bg-brand-500 px-5 py-2.5 font-medium text-white hover:bg-brand-600 disabled:opacity-50">

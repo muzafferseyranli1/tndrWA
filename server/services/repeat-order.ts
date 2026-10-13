@@ -3,7 +3,7 @@ import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
 import { brandOrderingState, getMinBasket, sendClosedNotice, sendMinBasketNotice } from "./hours";
-import { OPEN_ORDER_WINDOW_MS, startOrderConversation } from "./order-flow";
+import { WAITING_STAGES, OPEN_ORDER_WINDOW_MS, startOrderConversation } from "./order-flow";
 import { needsOptions } from "./options";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
@@ -34,7 +34,7 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
       return true;
     }
     const open = await db.order.findFirst({
-      where: { brandId: brand.id, customerId: customer.id, status: "NEW", stage: { in: ["AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"] }, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } },
+      where: { brandId: brand.id, customerId: customer.id, status: "NEW", stage: { in: WAITING_STAGES }, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } },
     });
     if (open) return false;
     const last = last0;

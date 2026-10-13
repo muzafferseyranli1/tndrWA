@@ -25,7 +25,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     note: o.note,
     totalKurus: o.totalKurus,
     totalText: formatTRY(o.totalKurus),
-    stage: o.stage === "AWAITING_PAYMENT" || o.stage === "AWAITING_ADDRESS" ? o.stage : "READY",
+    stage: (["AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"].includes(o.stage) ? o.stage : "READY") as OrderDto["stage"],
     paymentLabel: o.paymentLabel,
     discountPercent: o.discountPercent,
     discountText: o.discountKurus > 0 ? `-${formatTRY(o.discountKurus)}` : "",

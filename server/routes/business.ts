@@ -2,6 +2,7 @@ import express, { Router } from "express";
 import { z } from "zod";
 import type { DeletionRequest, PrismaClient } from "@prisma/client";
 import type { BusinessSettingsDto, DeletionRequestDto } from "../../shared/types";
+import { noticeStepEnabled, setNoticeStep } from "../services/order-flow";
 import { RETENTION_LIMITS, businessReady, eraseByPhone, getBusiness, getRetention, isProvisional, setBusiness, setRetention } from "../services/business";
 
 const toDto = (r: DeletionRequest, matching: number): DeletionRequestDto => ({
@@ -30,6 +31,7 @@ export function businessRouter(db: PrismaClient, publicBaseUrl: string | null): 
     return {
       info,
       retention: await getRetention(db),
+      noticeStep: await noticeStepEnabled(db),
       ready: businessReady(info),
       provisional: await isProvisional(db),
       policyUrl: publicBaseUrl ? `${publicBaseUrl}/gizlilik` : null,
@@ -53,11 +55,13 @@ export function businessRouter(db: PrismaClient, publicBaseUrl: string | null): 
           .partial()
           .optional(),
         retention: z.object({ messagesDays: days("messagesDays"), ordersDays: days("ordersDays"), ratingsDays: days("ratingsDays") }).partial().optional(),
+        noticeStep: z.boolean().optional(),
       })
       .safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Geçersiz istek." });
     if (parsed.data.info) await setBusiness(db, parsed.data.info);
     if (parsed.data.retention) await setRetention(db, parsed.data.retention);
+    if (parsed.data.noticeStep !== undefined) await setNoticeStep(db, parsed.data.noticeStep);
     res.json(await settings());
   });
 

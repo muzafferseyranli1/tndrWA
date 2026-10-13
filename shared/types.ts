@@ -68,7 +68,7 @@ export interface OrderDto {
   totalKurus: number;
   totalText: string;
   /** AWAITING_PAYMENT | AWAITING_ADDRESS: müşteriden bilgi bekleniyor; READY: personel işleyebilir */
-  stage: "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
+  stage: "AWAITING_NOTICE" | "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
   paymentLabel: string;
   discountPercent: number;
   discountText: string;
@@ -261,6 +261,8 @@ export interface RetentionDto {
 export interface BusinessSettingsDto {
   info: BusinessInfoDto;
   retention: RetentionDto;
+  /** İlk siparişte KVKK bilgilendirmesi + "Okudum, devam" düğmesi sorulsun mu */
+  noticeStep: boolean;
   /** Zorunlu bilgiler (ünvan, adres, e-posta, telefon) dolu: gizlilik sayfaları yayında */
   ready: boolean;
   /** Ünvan/adres panelden girilmemiş; fişten alınan geçici varsayılanlar gösteriliyor */
