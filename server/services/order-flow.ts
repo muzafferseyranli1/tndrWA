@@ -37,6 +37,16 @@ async function render(db: PrismaClient, o: FullOrder, key: MessageKey, extra: Te
 
 async function log(db: PrismaClient, o: FullOrder, type: "text" | "catalog", body: string, id: string | null) {
   await recordOutbound(db, { brandId: o.brandId, customerId: o.customerId, type, body, waMessageId: id, orderId: o.id });
+  // Müşteriye soru gitti: yanıt bekleme süresi buradan başlar (yanıt gelmezse hatırlatma, sonra iptal; bkz. order-timeouts)
+  await db.order.update({ where: { id: o.id }, data: { promptedAt: new Date(), reminderSentAt: null } });
+}
+
+/** Müşterinin yanıt vermediği soruyu (seçenek, ödeme ya da adres) yeniden gönderir. */
+export async function resendPendingQuestion(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number): Promise<void> {
+  const order = await load(db, orderId);
+  if (!order || order.status !== "NEW") return;
+  if (order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
+  if (order.stage === "AWAITING_ADDRESS") return askAddress(db, cloud, order);
 }
 
 /**

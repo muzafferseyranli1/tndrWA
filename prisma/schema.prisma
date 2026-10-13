@@ -158,6 +158,9 @@ model Order {
   ratingRef      Rating?
   // Personel siparişi düzenledi ama müşteriye güncel özet henüz gönderilmedi
   noticePending  Boolean     @default(false)
+  // Müşteriye son soru (seçenek/ödeme/adres) ne zaman gitti; 5 dk yanıt yoksa soru tekrarlanır, 5 dk daha yoksa sipariş iptal edilir
+  promptedAt     DateTime?
+  reminderSentAt DateTime?
   changes        OrderChange[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt

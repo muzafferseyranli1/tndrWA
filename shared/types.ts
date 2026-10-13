@@ -84,6 +84,10 @@ export interface OrderDto {
   canEdit: boolean;
   /** Personel düzenledi ama müşteriye güncel özet henüz gönderilmedi */
   noticePending: boolean;
+  /** Müşteriye son soru ne zaman gitti (yanıt bekleniyorsa) */
+  promptedAt: string | null;
+  /** Yanıt gelmediği için hatırlatma ne zaman gitti (5 dk sonra hâlâ yanıt yoksa otomatik iptal) */
+  reminderSentAt: string | null;
   /** Personelin yaptığı değişiklikler, en yeni başta */
   changes: { text: string; createdAt: string }[];
   customer: { name: string | null; phone: string | null };

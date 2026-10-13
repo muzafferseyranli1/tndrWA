@@ -27,6 +27,22 @@ const ALARM_MS = 7000;
 
 const time = (iso: string) => new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+const REPLY_TIMEOUT_MS = 5 * 60 * 1000;
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+
+/** Müşteri WhatsApp adımlarını bitirmedi: ne bekleniyor, hatırlatma ve otomatik iptal ne zaman. */
+function WaitingNote({ order }: { order: OrderDto }) {
+  const what = order.stage === "AWAITING_OPTIONS" ? "seçenek" : order.stage === "AWAITING_PAYMENT" ? "ödeme şekli" : "adres";
+  let plan = "";
+  if (order.reminderSentAt) plan = `Hatırlatma ${hhmm(Date.parse(order.reminderSentAt))}'de gitti; yanıt gelmezse ${hhmm(Date.parse(order.reminderSentAt) + REPLY_TIMEOUT_MS)}'de otomatik iptal edilir.`;
+  else if (order.promptedAt) plan = `Yanıt gelmezse ${hhmm(Date.parse(order.promptedAt) + REPLY_TIMEOUT_MS)}'de soru tekrarlanır, 5 dk sonra sipariş otomatik iptal edilir.`;
+  return (
+    <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">
+      Müşteriden {what} yanıtı bekleniyor. {plan} Bilgileri müşteri WhatsApp&apos;tan kendisi seçer; gerekirse &quot;Yazış&quot; ile yardımcı olun.
+    </p>
+  );
+}
+
 export default function OrdersPage() {
   const { brand } = useBrands();
   const brandId = brand?.id;
@@ -163,30 +179,6 @@ export default function OrdersPage() {
     }
   }
 
-  async function markReady(order: OrderDto) {
-    if (order.paymentTypeId === null) {
-      setError(`#${order.id}: ödeme şekli seçilmemiş. Düzenle'den ödeme şeklini (ve gerekiyorsa adresi) seçip kaydedin, sonra işleme alın.`);
-      if (order.canEdit) setEditingId(order.id);
-      return;
-    }
-    let address: string | undefined;
-    if (!order.address) {
-      const typed = window.prompt(`#${order.id} için teslimat adresi (müşteriden alın):`);
-      if (!typed?.trim()) return;
-      address = typed.trim();
-    }
-    setBusyId(order.id);
-    setError("");
-    try {
-      await api(`/api/orders/${order.id}/ready`, { method: "POST", json: address ? { address } : {} });
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function setStatus(order: OrderDto, status: OrderStatusDto) {
     if (status === "CANCELLED" && !window.confirm(`#${order.id} numaralı sipariş iptal edilsin ve müşteriye bildirilsin mi?`)) return;
     setBusyId(order.id);
@@ -314,7 +306,7 @@ export default function OrdersPage() {
                     Bu siparişte teslimat adresi yok. &quot;Düzenle&quot;den kayıtlı adreslerden seçin ya da yeni adres yazın.
                   </p>
                 )}
-                {o.stage !== "READY" && <p className="mt-2 text-sm text-slate-500">Müşteri bu adımı tamamlamadı. Yazışmadan ya da telefonla öğrenip &quot;Bilgiler tamam&quot; ile işleme alabilirsiniz.</p>}
+                {o.stage !== "READY" && tab === "active" && <WaitingNote order={o} />}
                 {o.note && <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Not: {o.note}</p>}
                 {o.noticePending && tab === "active" && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -327,11 +319,6 @@ export default function OrdersPage() {
                 {notices[o.id] && <p className={`mt-2 text-sm ${notices[o.id].includes("GİTMEDİ") ? "text-red-600" : "text-green-700"}`}>{notices[o.id]}</p>}
                 {tab === "active" && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {o.stage !== "READY" && (
-                      <button disabled={busyId === o.id} onClick={() => markReady(o)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
-                        Bilgiler tamam, işleme al
-                      </button>
-                    )}
                     {o.stage === "READY" && step && (
                       <button disabled={busyId === o.id} onClick={() => setStatus(o, step.to)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
                         {step.text}

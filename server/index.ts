@@ -34,6 +34,7 @@ import { ensureDefaultChannels } from "./services/channels";
 import { handleOrderReply, startOrderConversation } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { applyBundledImages } from "./services/bundled-images";
+import { startOrderTimeouts } from "./services/order-timeouts";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
@@ -153,6 +154,8 @@ async function main() {
   app.use("/api/hours", hoursRouter(db));
   app.use("/api/business", businessRouter(db, env.publicBaseUrl));
   // Yedekler kalıcı diskte (yükleme klasörünün yanında): üretimde /data/backups
+  // Yanıt vermeyen müşteri: 5 dk sonra soru tekrarı + hatırlatma, 5 dk daha yanıt yoksa otomatik iptal
+  startOrderTimeouts(db, cloudForAck, Number(process.env.ORDER_TIMEOUT_TICK_MS) || 20_000);
   const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);
   app.use("/api/backups", backupsRouter(backups));
   // Günlük otomatik yedek: her 10 dakikada bugünkü yedek var mı bakılır (sabah 04:00'ten sonra, Türkiye saatiyle)

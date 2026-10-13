@@ -28,6 +28,8 @@ async function editable(db: Db, orderId: number): Promise<Order> {
   const order = await db.order.findUnique({ where: { id: orderId } });
   if (!order) throw new EditError("Sipariş bulunamadı.", 404);
   if (!EDITABLE_STATUSES.includes(order.status)) throw new EditError("Yola çıkmış, teslim edilmiş ya da iptal edilmiş sipariş düzenlenemez.");
+  // Ödeme/adres/seçenekleri müşteri kendisi seçer; adımlar bitmeden panelden değiştirmek yanlış bilgiye yol açar
+  if (order.stage !== "READY") throw new EditError("Müşteri sipariş adımlarını (seçenek, ödeme, adres) tamamlamadan sipariş düzenlenemez.", 409);
   return order;
 }
 

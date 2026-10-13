@@ -4,8 +4,8 @@ import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
-export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET";
-export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
+export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET" | "ORDER_REMINDER" | "ORDER_TIMEOUT";
+export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_REMINDER", "ORDER_TIMEOUT", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
@@ -18,6 +18,8 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   CONFIRM_ADDRESS: "Kayıtlı adresiniz:\n{adres}\n\nSiparişi bu adrese gönderelim mi?",
   CHOOSE_ADDRESS: "Siparişi hangi adrese gönderelim? Listeden seçebilir ya da yeni adres ekleyebilirsiniz.",
   CONFIRMED: "Siparişiniz onaylandı (No: {no}).\nÖdeme: {odeme}\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}\n\nHazırlanmaya başlayınca haber vereceğiz.",
+  ORDER_REMINDER: "⏳ Siparişinize (No: {no}) devam edebilmemiz için yukarıdaki soruyu yanıtlamanız gerekiyor. 5 dakika içinde yanıt alamazsak sipariş süreci duracaktır.",
+  ORDER_TIMEOUT: "Yanıt alamadığımız için siparişiniz (No: {no}) sonlandırılmıştır. Yeniden sipariş vermek için katalogdan sepetinizi gönderebilirsiniz.",
   ORDER_UPDATED: "Siparişiniz güncellendi (No: {no}).\n\n{urunler}\n\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}",
   PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",

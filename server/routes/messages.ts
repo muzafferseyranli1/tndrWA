@@ -17,6 +17,8 @@ const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   CONFIRM_ADDRESS: { label: "Kayıtlı adres onayı", hint: "Müşterinin kayıtlı adresi varsa gider; altında Evet / Yeni adres düğmeleri çıkar. {adres} kullanılabilir." },
   CHOOSE_ADDRESS: { label: "Adres seçimi (birden fazla kayıtlı adres)", hint: "Müşterinin birden fazla kayıtlı adresi varsa gider; altında adres listesi çıkar." },
   CONFIRMED: { label: "Sipariş onayı", hint: "Ödeme ve adres tamamlanınca gider, sipariş panelde yeni olur. " + ALL },
+  ORDER_REMINDER: { label: "Yanıt hatırlatması", hint: "Müşteri seçenek, ödeme ya da adres sorusuna 5 dakika yanıt vermezse soru yeniden gönderilir, ardından bu mesaj gider. {no} kullanılabilir." },
+  ORDER_TIMEOUT: { label: "Yanıt gelmedi, sipariş sonlandı", hint: "Hatırlatmadan sonra 5 dakika daha yanıt gelmezse gider ve sipariş otomatik iptal edilir. {no} kullanılabilir." },
   ORDER_UPDATED: { label: "Sipariş güncellendi", hint: "Personel siparişi düzenleyip \"Müşteriye güncel özeti gönder\"e basınca gider. {urunler} güncel ürün listesidir. " + ALL },
   PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
   ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },
