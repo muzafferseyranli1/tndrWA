@@ -6,6 +6,11 @@ import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
 import type { MessageTemplateDto } from "@shared/types";
 
+interface ThumbData {
+  retailerId: string | null;
+  products: { retailerId: string; name: string; imageUrl: string }[];
+}
+
 export default function MessagesPage() {
   const { brand } = useBrands();
   const brandId = brand?.id;
@@ -13,6 +18,8 @@ export default function MessagesPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [thumb, setThumb] = useState<ThumbData | null>(null);
+  const [thumbMsg, setThumbMsg] = useState("");
 
   const load = useCallback(async () => {
     if (brandId === undefined) return;
@@ -25,6 +32,22 @@ export default function MessagesPage() {
       setError((e as Error).message);
     }
   }, [brandId]);
+
+  useEffect(() => {
+    if (brandId === undefined) return;
+    setThumb(null);
+    api<ThumbData>(`/api/catalog-thumbnail?brandId=${brandId}`).then(setThumb).catch(() => undefined);
+  }, [brandId]);
+
+  async function saveThumb(retailerId: string | null) {
+    setThumbMsg("");
+    try {
+      setThumb(await api<ThumbData>("/api/catalog-thumbnail", { method: "PUT", json: { brandId, retailerId } }));
+      setThumbMsg(retailerId ? "Kaydedildi. Bundan sonra giden katalog mesajlarında bu ürün görünür." : "Varsayılana döndü (katalogdaki ilk ürün).");
+    } catch (e) {
+      setThumbMsg((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     setItems(null);
@@ -52,6 +75,27 @@ export default function MessagesPage() {
         <p className="mb-6 text-sm text-slate-500">
           Müşteriye giden otomatik mesajların metinleri. Her marka için ayrıdır. <code>{"{ad}"}</code> müşterinin WhatsApp adı, <code>{"{no}"}</code> sipariş numarasıdır. Metni silip kaydederseniz varsayılana döner.
         </p>
+        {thumb && (
+          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="font-medium">Katalog mesajı görseli</h2>
+            <p className="mb-3 text-sm text-slate-500">Müşteriye giden &quot;Kataloğu görüntüle&quot; mesajının üstünde görünen görsel. Seçmezseniz WhatsApp katalogdaki ilk ürünü gösterir. Yalnızca görseli olan, aktif ürünler seçilebilir.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={thumb.retailerId ?? ""} onChange={(e) => saveThumb(e.target.value || null)} className="min-w-60 rounded-lg border border-slate-300 px-3 py-2 text-sm" aria-label="Katalog mesajı görseli">
+                <option value="">Varsayılan (ilk ürün)</option>
+                {thumb.products.map((p) => (
+                  <option key={p.retailerId} value={p.retailerId}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              {thumb.retailerId && thumb.products.find((p) => p.retailerId === thumb.retailerId) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={thumb.products.find((p) => p.retailerId === thumb.retailerId)!.imageUrl} alt="Seçilen görsel" className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+              )}
+              {thumbMsg && <span className="text-sm text-slate-600">{thumbMsg}</span>}
+            </div>
+          </section>
+        )}
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {!items && !error && <p className="text-slate-500">Yükleniyor…</p>}
         <ul className="space-y-4">

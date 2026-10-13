@@ -1,4 +1,5 @@
 import express, { Router, type Response } from "express";
+import { getCatalogThumbnail } from "../services/catalog-thumb";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
@@ -160,7 +161,7 @@ export function whatsappRouter(db: PrismaClient, env: Env, client: WahaClient | 
     if (!brand.waPhoneNumberId) return res.status(503).json({ error: `${brand.name} için Cloud API telefon numarası kimliği girilmemiş (Markalar sayfası).` });
     try {
       const to = parsed.data.to.replace(/^\+/, "");
-      const id = parsed.data.catalog ? await cloud.sendCatalog(brand.waPhoneNumberId, to, parsed.data.text) : await cloud.sendText(brand.waPhoneNumberId, to, parsed.data.text);
+      const id = parsed.data.catalog ? await cloud.sendCatalog(brand.waPhoneNumberId, to, parsed.data.text, await getCatalogThumbnail(db, brand.code)) : await cloud.sendText(brand.waPhoneNumberId, to, parsed.data.text);
       res.json({ ok: true, messageId: id });
     } catch (err) {
       res.status(err instanceof CloudApiError ? 502 : 500).json({ error: (err as Error).message });

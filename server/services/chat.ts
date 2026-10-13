@@ -1,4 +1,5 @@
 import type { Brand, Customer, Message, PrismaClient } from "@prisma/client";
+import { getCatalogThumbnail } from "./catalog-thumb";
 import { getHours } from "./hours";
 import { hoursSummary, nextOpeningText, orderingState } from "../../shared/hours";
 import { findRepeatable, REPEAT_HINT } from "./repeat-order";
@@ -136,7 +137,7 @@ export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloud
     const hours = await getHours(db, brand.code);
     const state = orderingState(hours, new Date());
     const text = [base, state === "closed" ? `Şu an kapalıyız (${hoursSummary(hours)}). Bir sonraki açılış: ${nextOpeningText(hours, new Date())}. Siparişleri açılıştan 1 saat önce almaya başlıyoruz.` : state === "pre" ? `Henüz açılmadık, ${nextOpeningText(hours, new Date())} açılıyoruz. Şimdi sipariş verebilirsiniz; siparişiniz açılışta hazırlanmaya başlar.` : repeatable ? REPEAT_HINT : ""].filter(Boolean).join("\n\n");
-    const id = await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text);
+    const id = await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text, await getCatalogThumbnail(db, brand.code));
     await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: text, waMessageId: id });
     if (kvkk) await markNoticeSent(db, customer.id);
     return true;

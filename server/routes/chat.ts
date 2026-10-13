@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import { getCatalogThumbnail } from "../services/catalog-thumb";
 import { z } from "zod";
 import type { Customer, Message, PrismaClient } from "@prisma/client";
 import type { ChatConversationDto, ChatMessageDto, ChatThreadDto } from "../../shared/types";
@@ -114,7 +115,7 @@ export function chatRouter(db: PrismaClient, cloud: WhatsappCloudClient | null):
 
     try {
       const text = kind === "catalog" ? parsed.data.text ?? CATALOG_TEXT : parsed.data.text!;
-      const id = kind === "catalog" ? await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text) : await cloud.sendText(brand.waPhoneNumberId, customer.waId, text);
+      const id = kind === "catalog" ? await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text, await getCatalogThumbnail(db, brand.code)) : await cloud.sendText(brand.waPhoneNumberId, customer.waId, text);
       const saved = await recordOutbound(db, { brandId: brand.id, customerId, type: kind, body: text, waMessageId: id });
       res.json(toMessageDto(saved));
     } catch (err) {

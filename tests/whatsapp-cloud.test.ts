@@ -146,3 +146,9 @@ test("katalog mesajı: interactive catalog_message gövdesi", async () => {
   assert.equal(id, "wamid.CAT1");
   assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive, { type: "catalog_message", body: { text: "Menümüz" }, action: { name: "catalog_message" } });
 });
+
+test("katalog mesajı: görsel için seçilen ürün parametresi gönderilir", async () => {
+  const { fn, calls } = fake(() => ({ body: { messages: [{ id: "wamid.CAT2" }] } }));
+  await new WhatsappCloudClient(cfg, fn).sendCatalog("1408635558995998", "905551112233", "Menümüz", "ayran-30-cl");
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive.action, { name: "catalog_message", parameters: { thumbnail_product_retailer_id: "ayran-30-cl" } });
+});

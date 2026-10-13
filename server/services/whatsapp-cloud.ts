@@ -151,10 +151,11 @@ export class WhatsappCloudClient {
   }
 
   /** Numaraya bağlı kataloğu açan düğmeli mesaj (müşteri katalogdan sepet kurup sipariş verir). */
-  async sendCatalog(phoneNumberId: string, to: string, text: string): Promise<string | null> {
+  /** thumbnailRetailerId: katalog mesajında görseli gösterilecek ürün; boşsa WhatsApp katalogdaki ilk ürünü kullanır. */
+  async sendCatalog(phoneNumberId: string, to: string, text: string, thumbnailRetailerId?: string | null): Promise<string | null> {
     const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
       method: "POST",
-      json: { messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive", interactive: { type: "catalog_message", body: { text }, action: { name: "catalog_message" } } },
+      json: { messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive", interactive: { type: "catalog_message", body: { text }, action: { name: "catalog_message", ...(thumbnailRetailerId ? { parameters: { thumbnail_product_retailer_id: thumbnailRetailerId } } : {}) } } },
     });
     return out.messages?.[0]?.id ?? null;
   }
