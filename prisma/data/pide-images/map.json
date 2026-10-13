@@ -1000,6 +1000,81 @@
      "source": "sembolik görsel: tirnak-pide-bal-kaymak-ceviz-400x400.png"
     }
    ]
+  },
+  {
+   "id": "v5",
+   "entries": [
+    {
+     "category": "Yerinde Pazar",
+     "name": "Yumurta -Paket",
+     "file": "paket-yumurta.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Çay -Paket",
+     "file": "paket-cay.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Beyaz Peynir -Paket",
+     "file": "paket-beyaz-peynir.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Telli Peynir -Paket",
+     "file": "paket-telli-peynir.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Tullumi -Paket",
+     "file": "paket-tullumi.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Kolot Peynir -Paket",
+     "file": "paket-kolot-peynir.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Tereyağ -Paket",
+     "file": "paket-tereyag.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "Yerinde Pazar",
+     "name": "Pastırma -Paket",
+     "file": "paket-pastirma.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Ayran 1 lt",
+     "file": "paket-sutas-ayran-1lt.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    },
+    {
+     "category": "İçecekler",
+     "name": "Coca-Cola 1 lt",
+     "file": "paket-coca-cola-1lt.jpg",
+     "source": "kullanıcının paketli ürün görseli",
+     "override": true
+    }
+   ]
   }
  ]
 }
