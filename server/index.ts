@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { db } from "./lib/db";
 import { requireAuth } from "./middleware/require-auth";
 import { authRouter } from "./routes/auth";
+import { reportsRouter } from "./routes/reports";
 import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
@@ -113,6 +114,7 @@ async function main() {
   );
   app.use("/api/auth", authRouter(env, db));
   app.use("/api/staff", staffRouter(db, env));
+  app.use("/api/reports", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), reportsRouter(db));
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);

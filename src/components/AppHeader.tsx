@@ -10,6 +10,7 @@ const links = [
   { href: "/orders", label: "Siparişler" },
   { href: "/chat", label: "Yazışma" },
   { href: "/products", label: "Ürünler" },
+  { href: "/reports", label: "Raporlar" },
   { href: "/customers", label: "Müşteriler" },
   { href: "/business", label: "İşletme/KVKK" },
   { href: "/backups", label: "Yedekler" },
