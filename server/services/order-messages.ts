@@ -78,7 +78,7 @@ export function orderVars(order: Order, customer: Pick<Customer, "name">, rating
     ad: customer.name,
     no: order.id,
     toplam: formatTRY(order.totalKurus),
-    indirim: order.discountKurus > 0 ? `-${formatTRY(order.discountKurus)} (%${order.discountPercent})` : "yok",
+    indirim: order.discountKurus > 0 ? `-${formatTRY(order.discountKurus)} (${order.discountNote || `%${order.discountPercent}`})` : "yok",
     tutar: formatTRY(payable),
     odeme: order.paymentLabel,
     adres: order.address,

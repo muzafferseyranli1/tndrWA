@@ -164,6 +164,11 @@ export default function OrdersPage() {
   }
 
   async function markReady(order: OrderDto) {
+    if (order.paymentTypeId === null) {
+      setError(`#${order.id}: ödeme şekli seçilmemiş. Düzenle'den ödeme şeklini (ve gerekiyorsa adresi) seçip kaydedin, sonra işleme alın.`);
+      if (order.canEdit) setEditingId(order.id);
+      return;
+    }
     let address: string | undefined;
     if (!order.address) {
       const typed = window.prompt(`#${order.id} için teslimat adresi (müşteriden alın):`);
@@ -263,9 +268,10 @@ export default function OrdersPage() {
                     <span className="block text-lg font-semibold tabular-nums">{o.discountText ? o.payableText : o.totalText}</span>
                     {o.discountText && (
                       <span className="block text-xs text-slate-500">
-                        {o.totalText} {o.discountText} (%{o.discountPercent})
+                        {o.totalText} {o.discountText} {o.discountNote ? "" : `(%${o.discountPercent})`}
                       </span>
                     )}
+                    {o.discountNote && <span className="mt-0.5 block rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">🎉 {o.discountNote}</span>}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-700">

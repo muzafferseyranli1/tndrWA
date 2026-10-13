@@ -6,7 +6,8 @@ import { rememberAddress } from "./addresses";
 import { applyAnswer, nextQuestion } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
-import { priceWithDiscount } from "./payment";
+import { orderCampaignAvailable, orderDiscount } from "./discount";
+import { ET_TANDIR_CAMPAIGN } from "../../shared/campaigns";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 /** Müşteri bu süreden sonra yazarsa eski yarım sipariş artık beklemede sayılmaz (personel elle tamamlar). */
@@ -62,7 +63,11 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
     await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_PAYMENT" } });
     if (!canSend(cloud, order)) return;
     const kvkk = await noticeLine(db, order.customer); // ilk temasta aydınlatma metni bağlantısı
-    const body = await render(db, order, "NEW", { kvkk });
+    const base = await render(db, order, "NEW", { kvkk });
+    // Kampanya bu sepete uygunsa ödeme sorusunda söylenir (nakit/kart seçilirse uygulanır)
+    const body = (await orderCampaignAvailable(db, order.id)) ? `${base}
+
+🎉 ${ET_TANDIR_CAMPAIGN.name}: nakit veya kapıda kredi kartıyla ödemede siparişinizdeki ${ET_TANDIR_CAMPAIGN.category} ürünlerine %${ET_TANDIR_CAMPAIGN.percent} indirim uygulanır.` : base;
     const id = await cloud.sendList(order.brand.waPhoneNumberId!, order.customer.waId!, {
       body,
       buttonText: "Ödeme şekli seç",
@@ -242,7 +247,7 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
 async function choosePayment(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, paymentTypeId: number): Promise<void> {
   const type = await db.paymentType.findFirst({ where: { id: paymentTypeId, brandId: order.brandId, enabled: true } });
   if (!type) return;
-  const { discountKurus } = priceWithDiscount(order.totalKurus, type.discountPercent);
-  await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_ADDRESS", paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus } });
+  const { discountKurus, note } = await orderDiscount(db, order.id, type.discountPercent);
+  await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_ADDRESS", paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus, discountNote: note } });
   await askAddress(db, cloud, (await load(db, order.id))!);
 }

@@ -2,6 +2,7 @@ import type { Brand, Customer, Order, OrderItem, OrderItemOption, PrismaClient }
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { formatTRY, percentOf } from "../../shared/money";
 import { rememberAddress } from "./addresses";
+import { orderDiscount } from "./discount";
 import { describeOptions } from "./option-format";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
 import { recordOutbound } from "./outbound";
@@ -30,12 +31,12 @@ async function editable(db: Db, orderId: number): Promise<Order> {
   return order;
 }
 
-/** Ürünlerden toplamı, indirim oranından indirimi yeniden hesaplar. */
+/** Ürünlerden toplamı, ödeme şekli oranı ve kampanyalardan indirimi yeniden hesaplar. */
 export async function recalc(db: Db, orderId: number): Promise<void> {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
   const total = order.items.reduce((sum, i) => sum + (i.unitKurus + i.extraKurus) * i.quantity, 0);
-  const discount = order.discountPercent > 0 ? percentOf(total, order.discountPercent) : 0;
-  await db.order.update({ where: { id: orderId }, data: { totalKurus: total, discountKurus: discount } });
+  const { discountKurus, note } = await orderDiscount(db, orderId, order.discountPercent);
+  await db.order.update({ where: { id: orderId }, data: { totalKurus: total, discountKurus, discountNote: note } });
 }
 
 const note = (db: Db, orderId: number, text: string) => db.orderChange.create({ data: { orderId, text: text.slice(0, 300) } });

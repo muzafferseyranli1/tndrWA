@@ -9,7 +9,7 @@ import { resolveBrand } from "../services/brands";
 import { notifyOrderStatus } from "../services/order-messages";
 import { EDITABLE_STATUSES, EditError, addItem, editDetails, removeItem, sendUpdateNotice, setQuantity } from "../services/order-edit";
 import { ORDER_STATUSES, type OrderStatus } from "../services/orders";
-import { priceWithDiscount } from "../services/payment";
+import { orderDiscount } from "../services/discount";
 import { newRatingToken } from "../services/ratings";
 import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
@@ -29,6 +29,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     paymentLabel: o.paymentLabel,
     discountPercent: o.discountPercent,
     discountText: o.discountKurus > 0 ? `-${formatTRY(o.discountKurus)}` : "",
+    discountNote: o.discountNote,
     payableText: formatTRY(o.totalKurus - o.discountKurus),
     address: o.address,
     mapUrl: o.lat != null && o.lng != null ? `https://www.google.com/maps/search/?api=1&query=${o.lat},${o.lng}` : o.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}` : null,
@@ -94,13 +95,17 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     if (!existing) return res.status(404).json({ error: "Sipariş bulunamadı." });
     if (existing.stage === "READY") return res.status(409).json({ error: "Sipariş zaten işleme hazır." });
     if (!existing.address.trim() && !parsed.data.address) return res.status(400).json({ error: "Teslimat adresi olmadan işleme alınamaz. Adresi yazın (müşteriden telefonla alabilirsiniz)." });
+    // Ödeme şekli de seçilmeli: indirim ve kampanya ona göre hesaplanır
+    if (existing.paymentTypeId === null && parsed.data.paymentTypeId === undefined && (await db.paymentType.count({ where: { brandId: existing.brandId, enabled: true } })) > 0) {
+      return res.status(400).json({ error: "Ödeme şekli seçilmeden işleme alınamaz. Önce Düzenle'den ödeme şeklini seçin." });
+    }
     const data: Record<string, unknown> = { stage: "READY" };
     if (parsed.data.address) data.address = parsed.data.address;
     if (parsed.data.paymentTypeId !== undefined) {
       const type = await db.paymentType.findFirst({ where: { id: parsed.data.paymentTypeId, brandId: existing.brandId } });
       if (!type) return res.status(400).json({ error: "Ödeme şekli bulunamadı." });
-      const { discountKurus } = priceWithDiscount(existing.totalKurus, type.discountPercent);
-      Object.assign(data, { paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus });
+      const { discountKurus, note } = await orderDiscount(db, existing.id, type.discountPercent);
+      Object.assign(data, { paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus, discountNote: note });
     }
     const updated = await db.order.update({ where: { id }, data, include: INCLUDE });
     res.json(toOrderDto(updated));

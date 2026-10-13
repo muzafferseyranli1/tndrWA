@@ -72,6 +72,8 @@ export interface OrderDto {
   paymentLabel: string;
   discountPercent: number;
   discountText: string;
+  /** Kampanya uygulandıysa açıklaması (boşsa yalnızca ödeme şekli indirimi) */
+  discountNote: string;
   payableText: string;
   address: string;
   mapUrl: string | null;

@@ -148,6 +148,8 @@ model Order {
   paymentLabel   String      @default("")
   discountPercent Int        @default(0)
   discountKurus  Int         @default(0)
+  // Kampanya uygulandıysa açıklaması (ör. Perşembe kampanyası: Et Tandırlar %50); boşsa yalnızca ödeme şekli indirimi
+  discountNote   String      @default("")
   address        String      @default("")
   lat            Float?
   lng            Float?
