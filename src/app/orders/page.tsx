@@ -164,10 +164,16 @@ export default function OrdersPage() {
   }
 
   async function markReady(order: OrderDto) {
+    let address: string | undefined;
+    if (!order.address) {
+      const typed = window.prompt(`#${order.id} için teslimat adresi (müşteriden alın):`);
+      if (!typed?.trim()) return;
+      address = typed.trim();
+    }
     setBusyId(order.id);
     setError("");
     try {
-      await api(`/api/orders/${order.id}/ready`, { method: "POST", json: {} });
+      await api(`/api/orders/${order.id}/ready`, { method: "POST", json: address ? { address } : {} });
       await load();
     } catch (e) {
       setError((e as Error).message);

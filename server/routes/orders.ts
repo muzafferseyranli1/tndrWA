@@ -73,6 +73,8 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     if (existing.status === status) return res.status(409).json({ error: "Sipariş zaten bu durumda." });
     if (existing.stage !== "READY" && status !== "CANCELLED") return res.status(409).json({ error: "Müşteriden ödeme/adres bilgisi bekleniyor. Bilgiler tamamlanınca ya da \"Bilgiler tamam\" ile işleme alabilirsiniz." });
 
+    if ((status === "ON_THE_WAY" || status === "DELIVERED") && !existing.address.trim()) return res.status(409).json({ error: "Teslimat adresi yok. Önce \"Düzenle\"den adres ekleyin, sonra yola çıkarın." });
+
     const updated = await db.order.update({
       where: { id },
       // Teslim edilince müşteriye gidecek değerlendirme bağlantısının anahtarı (bir kez üretilir)
@@ -91,6 +93,7 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     const existing = Number.isInteger(id) ? await db.order.findUnique({ where: { id } }) : null;
     if (!existing) return res.status(404).json({ error: "Sipariş bulunamadı." });
     if (existing.stage === "READY") return res.status(409).json({ error: "Sipariş zaten işleme hazır." });
+    if (!existing.address.trim() && !parsed.data.address) return res.status(400).json({ error: "Teslimat adresi olmadan işleme alınamaz. Adresi yazın (müşteriden telefonla alabilirsiniz)." });
     const data: Record<string, unknown> = { stage: "READY" };
     if (parsed.data.address) data.address = parsed.data.address;
     if (parsed.data.paymentTypeId !== undefined) {
