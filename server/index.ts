@@ -112,6 +112,7 @@ async function main() {
         const u = await db.staffUser.findUnique({ where: { username: name } });
         return u?.active ? { role: u.role === "ADMIN" ? "ADMIN" : "USER" } : null;
       },
+      secureCookie: env.nodeEnv === "production",
     }),
   );
   app.use("/api/auth", authRouter(env, db));

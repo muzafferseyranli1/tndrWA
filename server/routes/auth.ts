@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { Env } from "../lib/env";
 import { verifyPassword } from "../lib/password";
 import { AttemptLimiter } from "../lib/attempt-limiter";
-import { SESSION_COOKIE, SESSION_TTL_MS, createSessionToken } from "../lib/session";
+import { createSessionToken, sessionCookieHeader } from "../lib/session";
 
 function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
@@ -18,8 +18,6 @@ const DUMMY_HASH = "scrypt:16384:8:1:AAAAAAAAAAAAAAAAAAAAAA:" + "A".repeat(86);
 export function authRouter(env: Env, db: PrismaClient, limiter = new AttemptLimiter(5, 15 * 60 * 1000)): Router {
   const router = Router();
   const secure = env.nodeEnv === "production";
-  const cookieBase = `${SESSION_COOKIE}=`;
-  const attrs = `Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 
   router.use(express.json({ limit: "10kb" }));
 
@@ -51,12 +49,12 @@ export function authRouter(env: Env, db: PrismaClient, limiter = new AttemptLimi
 
     limiter.reset(ip);
     const token = createSessionToken(env.sessionSecret, isEnvAdmin ? env.adminUsername : staff!.username);
-    res.setHeader("Set-Cookie", `${cookieBase}${encodeURIComponent(token)}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; ${attrs}`);
+    res.setHeader("Set-Cookie", sessionCookieHeader(token, secure));
     res.json({ ok: true, role });
   });
 
   router.post("/logout", (_req, res) => {
-    res.setHeader("Set-Cookie", `${cookieBase}; Max-Age=0; ${attrs}`);
+    res.setHeader("Set-Cookie", sessionCookieHeader(null, secure));
     res.json({ ok: true });
   });
 

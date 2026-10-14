@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1f6b46" />
+    <title>Bağlantı yok</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #0f172a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 420px; padding: 24px; text-align: center; }
+      img { width: 72px; height: 72px; }
+      h1 { font-size: 22px; margin: 16px 0 8px; }
+      p { color: #475569; line-height: 1.5; }
+      button { margin-top: 12px; border: 0; border-radius: 10px; background: #1f6b46; color: #fff; font-size: 16px; padding: 12px 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" alt="" />
+      <h1>İnternet bağlantısı yok</h1>
+      <p>Siparişler ve sesli uyarı bağlantı gelince devam eder. Wi-Fi'yi kontrol edin; sayfa birkaç saniyede bir kendiliğinden yeniden dener.</p>
+      <button onclick="location.reload()">Şimdi yeniden dene</button>
+    </main>
+    <script>
+      setInterval(function () {
+        if (navigator.onLine) location.reload();
+      }, 10000);
+    </script>
+  </body>
+</html>

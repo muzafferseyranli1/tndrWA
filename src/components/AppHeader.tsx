@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import LogoutButton from "./LogoutButton";
+import PwaSetup from "./PwaSetup";
 import { useBrands } from "@/lib/brand";
 
 interface NavItem {
@@ -102,6 +103,7 @@ export default function AppHeader() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <PwaSetup />
           {brands && brand && (
             <select
               value={brand.id}

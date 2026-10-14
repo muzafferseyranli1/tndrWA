@@ -6,6 +6,7 @@ import ChatThread from "@/components/ChatThread";
 import OrderEditor from "@/components/OrderEditor";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
+import { isStandalone, readPref, useWakeLock, writePref } from "@/lib/pwa";
 import type { OrderDto, OrderStatusDto, OrderStatusResultDto } from "@shared/types";
 
 const label: Record<OrderStatusDto, { text: string; cls: string }> = {
@@ -24,6 +25,10 @@ const next: Partial<Record<OrderStatusDto, { to: OrderStatusDto; text: string }>
 
 const POLL_MS = 4000;
 const ALARM_MS = 7000;
+// Bu cihazda hatırlanan tercihler (tablet yeniden açılınca ayarlar kaybolmasın)
+const PREF_SOUND = "tndrwa_sound";
+const PREF_AWAKE = "tndrwa_awake";
+const PREF_OTHER = "tndrwa_alarm_other_brands";
 
 const time = (iso: string) => new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -44,7 +49,7 @@ function WaitingNote({ order }: { order: OrderDto }) {
 }
 
 export default function OrdersPage() {
-  const { brand } = useBrands();
+  const { brands, brand, select } = useBrands();
   const brandId = brand?.id;
   const [tab, setTab] = useState<"active" | "history">("active");
   const [newestFirst, setNewestFirst] = useState<Record<"active" | "history", boolean>>({ active: false, history: true });
@@ -54,22 +59,34 @@ export default function OrdersPage() {
   const [chatOrder, setChatOrder] = useState<OrderDto | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [notices, setNotices] = useState<Record<number, string>>({});
+  // soundOn: tarayıcı gerçekten ses çalabiliyor; soundWanted: kullanıcı bu cihazda sesi açık bıraktı (yeniden açılışta ilk dokunuşta kendiliğinden başlar)
   const [soundOn, setSoundOn] = useState(false);
+  const [soundWanted, setSoundWanted] = useState(false);
   const audio = useRef<AudioContext | null>(null);
+  const soundBuffer = useRef<AudioBuffer | null>(null);
   const [soundUrl, setSoundUrl] = useState<string | null>(null);
   const [soundMsg, setSoundMsg] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+  const [keepAwake, setKeepAwake] = useState(false);
+  const [alarmOtherBrands, setAlarmOtherBrands] = useState(true);
+  const [newCounts, setNewCounts] = useState<{ brandId: number; count: number }[]>([]);
+  const wake = useWakeLock(keepAwake);
 
   useEffect(() => {
     api<{ url: string | null }>("/api/sound")
       .then((s) => setSoundUrl(s.url))
       .catch(() => undefined);
+    setSoundWanted(readPref(PREF_SOUND, false));
+    setKeepAwake(readPref(PREF_AWAKE, isStandalone()));
+    setAlarmOtherBrands(readPref(PREF_OTHER, true));
   }, []);
 
   const load = useCallback(async () => {
     if (brandId === undefined) return;
     try {
-      setOrders(await api<OrderDto[]>(`/api/orders?brandId=${brandId}&scope=${tab}`));
+      const [list, counts] = await Promise.all([api<OrderDto[]>(`/api/orders?brandId=${brandId}&scope=${tab}`), api<{ brandId: number; count: number }[]>("/api/orders/new-counts").catch(() => null)]);
+      setOrders(list);
+      if (counts) setNewCounts(counts);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -90,14 +107,40 @@ export default function OrdersPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [chatOrder]);
 
-  const newCount = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW" && o.stage === "READY").length : 0;
+  const listNew = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW" && o.stage === "READY").length : 0;
+  const newCount = Math.max(listNew, newCounts.find((c) => c.brandId === brandId)?.count ?? 0);
+  const otherNew = newCounts.filter((c) => c.brandId !== brandId && c.count > 0).map((c) => ({ ...c, brand: brands?.find((b) => b.id === c.brandId) }));
+  const alarmCount = newCount + (alarmOtherBrands ? otherNew.reduce((n, c) => n + c.count, 0) : 0);
+
+  // Özel ses dosyası da ses motoruyla çalınır: iPad/iPhone'da ilk dokunuştan sonra her uyarıda yeniden izin istemez
+  useEffect(() => {
+    soundBuffer.current = null;
+    const ctx = audio.current;
+    if (!soundUrl || !ctx || !soundOn) return;
+    let cancelled = false;
+    fetch(soundUrl)
+      .then((r) => r.arrayBuffer())
+      .then((b) => ctx.decodeAudioData(b))
+      .then((buf) => {
+        if (!cancelled) soundBuffer.current = buf;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [soundUrl, soundOn]);
 
   const beep = useCallback(() => {
+    const ctx = audio.current;
     if (soundUrl) {
-      new Audio(soundUrl).play().catch(() => undefined);
+      if (ctx && soundBuffer.current) {
+        const src = ctx.createBufferSource();
+        src.buffer = soundBuffer.current;
+        src.connect(ctx.destination);
+        src.start();
+      } else new Audio(soundUrl).play().catch(() => undefined);
       return;
     }
-    const ctx = audio.current;
     if (!ctx) return;
     const now = ctx.currentTime;
     [880, 1175].forEach((freq, i) => {
@@ -115,25 +158,65 @@ export default function OrdersPage() {
 
   // Yeni (henüz işlenmemiş) sipariş varken ses tekrar tekrar çalar; sipariş işleme alınınca durur
   useEffect(() => {
-    if (!soundOn || newCount === 0) return;
+    if (!soundOn || alarmCount === 0) return;
     beep();
     const t = setInterval(beep, ALARM_MS);
     return () => clearInterval(t);
-  }, [soundOn, newCount, beep]);
+  }, [soundOn, alarmCount, beep]);
 
   useEffect(() => {
-    document.title = newCount > 0 ? `(${newCount}) Yeni sipariş · tndrWA` : "Siparişler · tndrWA";
-  }, [newCount]);
+    document.title = alarmCount > 0 ? `(${alarmCount}) Yeni sipariş · tndrWA` : "Siparişler · tndrWA";
+  }, [alarmCount]);
+
+  // Ses bu cihazda açık bırakıldıysa: kurulu uygulamada tarayıcı hemen izin verebilir, vermezse ekrana ilk dokunuşta başlar
+  useEffect(() => {
+    if (!soundWanted || soundOn) return;
+    const tryStart = () => {
+      try {
+        audio.current ??= new AudioContext();
+        const ctx = audio.current;
+        if (ctx.state === "running") setSoundOn(true);
+        else void ctx.resume().then(() => ctx.state === "running" && setSoundOn(true));
+      } catch {
+        /* tarayıcı ses motorunu açmadı; "Sesi aç" düğmesi duruyor */
+      }
+    };
+    tryStart();
+    window.addEventListener("pointerdown", tryStart);
+    window.addEventListener("keydown", tryStart);
+    return () => {
+      window.removeEventListener("pointerdown", tryStart);
+      window.removeEventListener("keydown", tryStart);
+    };
+  }, [soundWanted, soundOn]);
 
   function enableSound() {
     try {
       audio.current ??= new AudioContext();
       void audio.current.resume();
       setSoundOn(true);
+      setSoundWanted(true);
+      writePref(PREF_SOUND, true);
       beep();
     } catch {
       setError("Tarayıcı ses çalmaya izin vermedi.");
     }
+  }
+
+  function disableSound() {
+    setSoundOn(false);
+    setSoundWanted(false);
+    writePref(PREF_SOUND, false);
+  }
+
+  function toggleKeepAwake() {
+    writePref(PREF_AWAKE, !keepAwake);
+    setKeepAwake(!keepAwake);
+  }
+
+  function toggleOtherBrands(on: boolean) {
+    writePref(PREF_OTHER, on);
+    setAlarmOtherBrands(on);
   }
 
   async function uploadSound(file: File | undefined) {
@@ -200,12 +283,23 @@ export default function OrdersPage() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold">Siparişler{brand ? ` · ${brand.name}` : ""}</h1>
-          <button
-            onClick={soundOn ? () => setSoundOn(false) : enableSound}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium ${soundOn ? "border-green-600 bg-green-50 text-green-800" : "border-amber-500 bg-amber-50 text-amber-800"}`}
-          >
-            {soundOn ? "🔔 Ses açık (kapat)" : "🔕 Sesi aç"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {wake.supported && (
+              <button
+                onClick={toggleKeepAwake}
+                title="Tablet ekranı kararıp kilitlenmesin (sayfa açıkken)"
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${keepAwake ? "border-green-600 bg-green-50 text-green-800" : "border-slate-300 bg-white text-slate-700"}`}
+              >
+                {keepAwake ? (wake.active ? "☀️ Ekran açık kalıyor" : "☀️ Ekran açık tut") : "🌙 Ekran kapanabilir"}
+              </button>
+            )}
+            <button
+              onClick={soundOn ? disableSound : enableSound}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium ${soundOn ? "border-green-600 bg-green-50 text-green-800" : "border-amber-500 bg-amber-50 text-amber-800"}`}
+            >
+              {soundOn ? "🔔 Ses açık (kapat)" : "🔕 Sesi aç"}
+            </button>
+          </div>
         </div>
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
           <span>
@@ -225,8 +319,45 @@ export default function OrdersPage() {
           )}
           <span className="text-xs text-slate-400">MP3, WAV, OGG veya M4A, en fazla 2 MB</span>
           {soundMsg && <span className="text-slate-700">{soundMsg}</span>}
+          {brands && brands.length > 1 && (
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={alarmOtherBrands} onChange={(e) => toggleOtherBrands(e.target.checked)} />
+              Diğer markanın yeni siparişinde de çal
+            </label>
+          )}
         </div>
-        {!soundOn && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Yeni sipariş geldiğinde sesli uyarı için bu sayfayı açık tutun ve &quot;Sesi aç&quot;a bir kez basın (tarayıcı kuralı).</p>}
+        <details className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <summary className="cursor-pointer font-medium">📱 Tablete kurulum</summary>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            <li>
+              Tablette bu sayfayı açıp personel hesabıyla giriş yapın (Ayarlar → Personel). Oturum, kullanıldıkça açık kalır.
+            </li>
+            <li>
+              <b>Android (Chrome):</b> üstteki &quot;📲 Uygulamayı yükle&quot; düğmesine ya da Chrome menüsü (⋮) → &quot;Uygulamayı yükle&quot;ye basın. <b>iPad (Safari):</b> Paylaş → &quot;Ana Ekrana Ekle&quot;.
+            </li>
+            <li>Ana ekrandaki &quot;Yerinde Panel&quot; simgesiyle açın: adres çubuğu olmadan doğrudan siparişler gelir, ekran açık kalır.</li>
+            <li>&quot;Sesi aç&quot;a bir kez basın. Ses ve ekran tercihi bu cihazda hatırlanır; uygulama yeniden açılınca ekrana bir dokunuş sesi başlatır.</li>
+            <li>Tablet ayarları: ses yüksek, &quot;Rahatsız etmeyin&quot; kapalı, şarja takılı; pil tasarrufu bu uygulama için kapalı. Uygulama önde açık durmalı (arka plana alınınca tarayıcı sesi durdurabilir).</li>
+          </ol>
+        </details>
+        {!soundOn &&
+          (soundWanted ? (
+            <p className="mb-4 rounded-lg border border-amber-400 bg-amber-50 px-3 py-3 text-base font-medium text-amber-900">👆 Sesli uyarıyı başlatmak için ekrana bir kez dokunun.</p>
+          ) : (
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Yeni sipariş geldiğinde sesli uyarı için bu sayfayı açık tutun ve &quot;Sesi aç&quot;a bir kez basın (tarayıcı kuralı). Tercih bu cihazda hatırlanır.</p>
+          ))}
+        {otherNew.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {otherNew.map((c) => (
+              <span key={c.brandId} className="flex items-center gap-2">
+                🔔 <b>{c.brand?.name ?? "Diğer marka"}</b>: {c.count} yeni sipariş
+                <button onClick={() => select(c.brandId)} className="rounded-md bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-700">
+                  Geç
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="mb-4 flex gap-2">
           {(["active", "history"] as const).map((t) => (

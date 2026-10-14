@@ -1,13 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
-import { SESSION_COOKIE, getCookie, verifySessionToken } from "../lib/session";
+import { SESSION_COOKIE, createSessionToken, getCookie, sessionCookieHeader, shouldRenewSession, verifySessionToken } from "../lib/session";
 
 export type Role = "ADMIN" | "USER";
 
 // /uploads/: Meta ürün görsellerini girişsiz çekebilmeli
 // / ve /m/<marka>: herkese açık açılış sayfası (QR kodunun gittiği yer); /api/public/: onun verisi ve sayacı
-const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/", "/m/", "/api/public/"];
+// /icons/, /manifest.webmanifest, /sw.js, /offline.html: tabletin paneli uygulama olarak kurabilmesi için (giriş öncesi de istenir)
+const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/", "/m/", "/api/public/", "/icons/"];
 // /api/webhooks/waha: WAHA oturumsuz çağırır; kimlik doğrulaması HMAC imzasıyla yapılır
-const PUBLIC_PATHS = new Set(["/", "/gizlilik", "/veri-silme", "/login", "/api/auth/login", "/api/health", "/api/webhooks/waha", "/api/webhooks/meta"]);
+const PUBLIC_PATHS = new Set(["/", "/gizlilik", "/veri-silme", "/login", "/api/auth/login", "/api/health", "/api/webhooks/waha", "/api/webhooks/meta", "/manifest.webmanifest", "/sw.js", "/offline.html"]);
 
 export function isPublicPath(path: string): boolean {
   return PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((p) => path.startsWith(p));
@@ -34,6 +35,8 @@ export interface AuthOptions {
   adminUsername: string;
   /** Diğer kullanıcılar için kayıt araması (pasif ya da silinmiş kullanıcı için null) */
   lookup: (username: string) => Promise<{ role: Role } | null>;
+  /** Yenilenen oturum çerezine Secure eklensin mi (üretimde true) */
+  secureCookie?: boolean;
 }
 
 export function requireAuth(sessionSecret: string, options?: AuthOptions) {
@@ -50,6 +53,7 @@ export function requireAuth(sessionSecret: string, options?: AuthOptions) {
     if (session && role) {
       res.locals.username = session.username;
       res.locals.role = role;
+      if (shouldRenewSession(session.exp)) res.append("Set-Cookie", sessionCookieHeader(createSessionToken(sessionSecret, session.username), options?.secureCookie ?? false));
       if (role === "USER") {
         const api = req.path.startsWith("/api/");
         const allowed = api ? userCanAccess(req.method, req.path) : USER_PAGES.some((p) => req.path === p || req.path.startsWith(`${p}/`));

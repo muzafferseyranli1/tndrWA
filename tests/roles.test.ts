@@ -69,3 +69,18 @@ test("silinmiş ya da pasif kullanıcının eski oturumu geçersiz", async () =>
 test("oturumsuz istek reddedilir", async () => {
   assert.equal((await run(options, "GET", "/api/orders")).status, 401);
 });
+
+test("eskimiş oturum her istekte yenilenir, taze oturuma çerez yazılmaz", async () => {
+  const cookies: string[] = [];
+  const call = (token: string) => {
+    const req = { path: "/api/orders", method: "GET", headers: { cookie: `tndrwa_session=${token}` } } as unknown as Request;
+    const res = { locals: {}, append: (_k: string, v: string) => void cookies.push(v) } as unknown as Response;
+    let passed = false;
+    return requireAuth(SECRET, { ...options, secureCookie: true })(req, res, () => void (passed = true)).then(() => passed);
+  };
+  assert.equal(await call(createSessionToken(SECRET, "kasa")), true);
+  assert.equal(cookies.length, 0);
+  assert.equal(await call(createSessionToken(SECRET, "kasa", Date.now() - 5 * 24 * 60 * 60 * 1000)), true);
+  assert.equal(cookies.length, 1);
+  assert.match(cookies[0], /^tndrwa_session=.+; Secure$/);
+});

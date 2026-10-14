@@ -66,6 +66,12 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     res.json(rows.map(toOrderDto));
   });
 
+  // Tüm markalarda işleme alınmayı bekleyen (müşteri adımları bitmiş) yeni sipariş sayısı: tablet diğer markanın siparişinde de uyarsın
+  router.get("/new-counts", async (_req, res) => {
+    const rows = await db.order.groupBy({ by: ["brandId"], where: { status: "NEW", stage: "READY" }, _count: { _all: true } });
+    res.json(rows.map((r) => ({ brandId: r.brandId, count: r._count._all })));
+  });
+
   router.post("/:id/status", async (req, res) => {
     const id = Number(req.params.id);
     const parsed = z.object({ status: z.enum(ORDER_STATUSES), notify: z.boolean().default(true) }).safeParse(req.body);

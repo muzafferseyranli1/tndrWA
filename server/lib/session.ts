@@ -18,7 +18,18 @@ export function createSessionToken(secret: string, username: string, now = Date.
   return `${body}.${sign(secret, body).toString("base64url")}`;
 }
 
-export function verifySessionToken(secret: string, token: string | undefined, now = Date.now()): { username: string } | null {
+/** Oturum çerezi başlığı; `token` boşsa çerezi siler. */
+export function sessionCookieHeader(token: string | null, secure: boolean): string {
+  const attrs = `Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+  return token ? `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; ${attrs}` : `${SESSION_COOKIE}=; Max-Age=0; ${attrs}`;
+}
+
+/** Süresinin yarısından azı kalan oturum yenilenir: sürekli açık duran tablet haftada bir oturumdan düşmesin. */
+export function shouldRenewSession(exp: number, now = Date.now(), ttlMs = SESSION_TTL_MS): boolean {
+  return exp - now < ttlMs / 2;
+}
+
+export function verifySessionToken(secret: string, token: string | undefined, now = Date.now()): { username: string; exp: number } | null {
   if (!token) return null;
   const [body, sig, ...rest] = token.split(".");
   if (!body || !sig || rest.length) return null;
@@ -31,7 +42,7 @@ export function verifySessionToken(secret: string, token: string | undefined, no
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Partial<Payload>;
     if (typeof payload.u !== "string" || typeof payload.exp !== "number") return null;
     if (payload.exp <= now) return null;
-    return { username: payload.u };
+    return { username: payload.u, exp: payload.exp };
   } catch {
     return null;
   }
