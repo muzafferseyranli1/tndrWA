@@ -58,6 +58,7 @@ test("USER rolü yasaklı API'de 403, yasaklı sayfada siparişlere yönlenir, i
   assert.equal((await run(options, "GET", "/panel", "kasa")).redirect, "/orders");
   assert.equal((await run(options, "GET", "/orders", "kasa")).next, true);
   assert.equal((await run(options, "GET", "/chat", "kasa")).next, true);
+  assert.equal((await run(options, "GET", "/help", "kasa")).next, true);
   assert.equal((await run(options, "GET", "/api/orders", "kasa")).locals.role, "USER");
 });
 

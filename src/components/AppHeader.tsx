@@ -104,6 +104,14 @@ export default function AppHeader() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <PwaSetup />
+          <Link
+            href="/help"
+            aria-current={matches(pathname, "/help") ? "page" : undefined}
+            title="Kullanım kılavuzu"
+            className={`rounded-lg border px-2.5 py-1.5 text-sm ${matches(pathname, "/help") ? "border-brand-500 bg-brand-50 text-brand-700" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
+          >
+            Yardım
+          </Link>
           {brands && brand && (
             <select
               value={brand.id}

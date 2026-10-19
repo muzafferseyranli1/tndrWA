@@ -15,7 +15,7 @@ export function isPublicPath(path: string): boolean {
 }
 
 /** USER rolünün (kasa/mutfak personeli) açabildiği sayfalar. */
-const USER_PAGES = ["/orders", "/chat"];
+const USER_PAGES = ["/orders", "/chat", "/help"];
 
 /**
  * USER rolünün erişebildiği API'ler: sipariş ve yazışma işlemleri tam; marka, ürün listesi (sipariş düzenlemede ürün eklemek için),
