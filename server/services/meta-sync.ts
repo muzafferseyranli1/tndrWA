@@ -12,12 +12,14 @@ export interface SyncOptions {
   ids?: number[];
 }
 
-/** Süresi dolan "bugün tükendi" işaretlerini temizler. Etkilenen markaların kimliklerini döndürür. */
-export async function refreshExpiredSoldOut(db: PrismaClient, now: Date): Promise<number[]> {
-  const expired = await db.product.findMany({ where: { soldOutUntil: { lte: now } }, select: { brandId: true }, distinct: ["brandId"] });
+/** Süresi dolan "bugün tükendi" işaretlerini temizler. Marka başına geri açılan ürünleri döndürür. */
+export async function refreshExpiredSoldOut(db: PrismaClient, now: Date): Promise<{ brandId: number; ids: number[] }[]> {
+  const expired = await db.product.findMany({ where: { soldOutUntil: { lte: now } }, select: { id: true, brandId: true } });
   if (!expired.length) return [];
-  await db.product.updateMany({ where: { soldOutUntil: { lte: now } }, data: { soldOutUntil: null, metaSyncState: "PENDING" } });
-  return expired.map((e) => e.brandId);
+  await db.product.updateMany({ where: { id: { in: expired.map((e) => e.id) } }, data: { soldOutUntil: null, metaSyncState: "PENDING" } });
+  const byBrand = new Map<number, number[]>();
+  for (const e of expired) byBrand.set(e.brandId, [...(byBrand.get(e.brandId) ?? []), e.id]);
+  return [...byBrand].map(([brandId, ids]) => ({ brandId, ids }));
 }
 
 /** Bir markanın ürünlerini o markanın kataloğuna eşitler. Başka markaya ait ürüne dokunmaz. */
@@ -118,6 +120,7 @@ export async function syncProducts(
 export class SyncCoordinator {
   private running = new Set<number>();
   private timers = new Map<number, NodeJS.Timeout>();
+  private availability = new Map<number, { ids: Set<number>; timer: NodeJS.Timeout }>();
 
   constructor(
     private readonly db: PrismaClient,
@@ -184,9 +187,43 @@ export class SyncCoordinator {
     );
   }
 
+  /**
+   * "Bugün tükendi" ve geri açılma: yalnız bu ürünlerin stok durumunu hemen kataloğa gönderir.
+   * Genel otomatik eşitleme kapalıyken de çalışır; mutfak tükendi dediğinde müşteri WhatsApp'ta sepete ekleyemesin.
+   * Katalog bağlı değilse sessizce atlar (ürün "bekliyor" kalır, yönetici sonra "Meta'ya gönder"le yollar).
+   */
+  pushAvailability(brandId: number, ids: number[]): void {
+    const entry = this.availability.get(brandId);
+    if (entry) clearTimeout(entry.timer);
+    const all = new Set([...(entry?.ids ?? []), ...ids]);
+    this.availability.set(brandId, { ids: all, timer: setTimeout(() => void this.flushAvailability(brandId), this.debounceMs) });
+  }
+
+  private async flushAvailability(brandId: number): Promise<void> {
+    const entry = this.availability.get(brandId);
+    if (!entry) return;
+    this.availability.delete(brandId);
+    const ids = [...entry.ids];
+    const brand = await this.db.brand.findUnique({ where: { id: brandId } });
+    if (!brand || this.blockers(brand).length) return;
+    // Aynı markada başka eşitleme sürüyorsa biraz sonra yeniden dene
+    if (this.running.has(brandId)) return this.pushAvailability(brandId, ids);
+    this.running.add(brandId);
+    try {
+      const summary = await syncProducts(this.db, this.clientFor(brand), brand, this.publicBaseUrl!, { ids });
+      if (summary.failed) logger.warn({ brand: brand.code, errors: summary.errors }, "stok durumu kataloğa gönderilemedi");
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, brand: brand.code }, "stok durumu kataloğa gönderilemedi");
+    } finally {
+      this.running.delete(brandId);
+    }
+  }
+
   stop(): void {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
+    for (const a of this.availability.values()) clearTimeout(a.timer);
+    this.availability.clear();
   }
 }
 

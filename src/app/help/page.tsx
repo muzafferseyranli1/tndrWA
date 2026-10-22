@@ -44,6 +44,7 @@ export default function HelpPage() {
     ["yazisma", "Müşteriyle yazışma"],
     ["indirim", "İndirim ve kampanya"],
     ["saatler", "Çalışma saatleri"],
+    ["tukendi", "Biten ürün (tükendi)"],
     ["tablet", "Tablet, ses ve ekran"],
     ...(admin ? ([["yonetici", "Yönetici işleri"]] as [string, string][]) : []),
   ];
@@ -148,7 +149,14 @@ export default function HelpPage() {
           </p>
         </Section>
 
-        <Section id="tablet" title="7. Tablet, ses ve ekran">
+        <Section id="tukendi" title="7. Biten ürün (tükendi)">
+          <p>
+            Siparişler sayfasındaki <B>🍽 Tükendi listesi</B> düğmesiyle biten ürüne <B>Tükendi</B> deyin. Ürün WhatsApp kataloğunda birkaç saniye içinde <B>stokta yok</B> görünür ve müşteri sepete ekleyemez. Ertesi sabah 05:00&apos;te kendiliğinden geri açılır; ürün gün içinde yeniden çıkarsa <B>Geri aç</B>a basın.
+          </p>
+          <p>Listede arama kutusu var; tükenenler en üstte toplanır. Düğmedeki sayı o markada tükenmiş ürün sayısıdır. Fiyat ve diğer ürün ayarları yalnız yöneticidedir.</p>
+        </Section>
+
+        <Section id="tablet" title="8. Tablet, ses ve ekran">
           <ul className="list-disc space-y-1 pl-5">
             <li>
               <B>Sesi aç</B>: tarayıcı kuralı gereği bir kez basmak gerekir. Tercih cihazda hatırlanır; uygulama yeniden açılınca ekrana bir dokunuş sesi başlatır.
@@ -167,10 +175,10 @@ export default function HelpPage() {
         </Section>
 
         {admin && (
-          <Section id="yonetici" title="8. Yönetici işleri">
+          <Section id="yonetici" title="9. Yönetici işleri">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
-                <B>Ürünler</B>: fiyat, açıklama, görsel. Durum: <B>Aktif</B>, <B>Bugün tükendi</B> (ertesi sabah 05:00&apos;te kendiliğinden geri açılır), <B>Pasif</B> (katalogdan kalkar). Değişiklikler WhatsApp kataloğuna <B>&quot;Meta&apos;ya gönder&quot;</B> ile yansır; ürün satırındaki rozet gönderim durumunu gösterir.
+                <B>Ürünler</B>: fiyat, açıklama, görsel. Durum: <B>Aktif</B>, <B>Bugün tükendi</B> (ertesi sabah 05:00&apos;te kendiliğinden geri açılır), <B>Pasif</B> (katalogdan kalkar). Tükendi/geri açma kataloğa hemen gider; fiyat, ad, görsel gibi diğer değişiklikler WhatsApp kataloğuna <B>&quot;Meta&apos;ya gönder&quot;</B> ile yansır. Ürün satırındaki rozet gönderim durumunu gösterir.
               </li>
               <li>
                 <B>Seçenek grupları</B>: porsiyon, acı/acısız gibi müşteriye sepetten sonra sorulan seçimler ve ek ücretleri.

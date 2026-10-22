@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import ChatThread from "@/components/ChatThread";
 import OrderEditor from "@/components/OrderEditor";
+import SoldOutPanel from "@/components/SoldOutPanel";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
 import { isStandalone, readPref, useWakeLock, writePref } from "@/lib/pwa";
-import type { OrderDto, OrderStatusDto, OrderStatusResultDto } from "@shared/types";
+import type { OrderDto, OrderStatusDto, OrderStatusResultDto, ProductDto } from "@shared/types";
 
 const label: Record<OrderStatusDto, { text: string; cls: string }> = {
   NEW: { text: "Yeni", cls: "bg-red-100 text-red-700" },
@@ -71,6 +72,16 @@ export default function OrdersPage() {
   const [alarmOtherBrands, setAlarmOtherBrands] = useState(true);
   const [newCounts, setNewCounts] = useState<{ brandId: number; count: number }[]>([]);
   const wake = useWakeLock(keepAwake);
+  const [soldOutOpen, setSoldOutOpen] = useState(false);
+  const [soldOutCount, setSoldOutCount] = useState(0);
+
+  // Düğmedeki "tükenen ürün" sayısı: marka değişince ve tükendi penceresi kapanınca yenilenir
+  useEffect(() => {
+    if (brandId === undefined || soldOutOpen) return;
+    api<ProductDto[]>(`/api/products?brandId=${brandId}`)
+      .then((list) => setSoldOutCount(list.filter((p) => p.status === "ACTIVE" && p.availability === "OUT_OF_STOCK").length))
+      .catch(() => undefined);
+  }, [brandId, soldOutOpen]);
 
   useEffect(() => {
     api<{ url: string | null }>("/api/sound")
@@ -284,6 +295,9 @@ export default function OrdersPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold">Siparişler{brand ? ` · ${brand.name}` : ""}</h1>
           <div className="flex flex-wrap gap-2">
+            <button onClick={() => setSoldOutOpen(true)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" title="Biten ürünleri işaretle">
+              🍽 Tükendi listesi{soldOutCount > 0 ? ` (${soldOutCount})` : ""}
+            </button>
             {wake.supported && (
               <button
                 onClick={toggleKeepAwake}
@@ -480,6 +494,7 @@ export default function OrdersPage() {
           })}
         </ul>
 
+        {soldOutOpen && brand && <SoldOutPanel brandId={brand.id} brandName={brand.name} catalogLinked={!!brand.metaCatalogId} onClose={() => setSoldOutOpen(false)} />}
         {chatOrder && brandId !== undefined && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Sipariş #${chatOrder.id} yazışması`} onClick={() => setChatOrder(null)}>
             <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>

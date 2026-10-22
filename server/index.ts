@@ -138,7 +138,7 @@ async function main() {
     .catch((err) => logger.error({ err }, "adres değişimi denetlenemedi"));
   app.use("/api/brands", brandsRouter(db));
   app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
-  app.use("/api/products", productsRouter(db, onChange));
+  app.use("/api/products", productsRouter(db, onChange, (brandId, id) => coordinator.pushAvailability(brandId, [id])));
   app.use("/api/categories", categoriesRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
   const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
@@ -171,10 +171,10 @@ async function main() {
   // Süresi dolan "bugün tükendi" işaretlerini temizle (sabah ürünler otomatik geri açılır)
   const expiryTimer = setInterval(() => {
     refreshExpiredSoldOut(db, new Date())
-      .then((brandIds) => {
-        if (brandIds.length > 0) {
-          logger.info(`"Bugün tükendi" işaretleri kaldırıldı (marka: ${brandIds.join(", ")})`);
-          for (const id of brandIds) coordinator.trigger(id);
+      .then((reopened) => {
+        if (reopened.length > 0) {
+          logger.info(`"Bugün tükendi" işaretleri kaldırıldı (marka: ${reopened.map((r) => r.brandId).join(", ")})`);
+          for (const r of reopened) coordinator.pushAvailability(r.brandId, r.ids);
         }
       })
       .catch((err) => logger.error({ err }, "tükendi işareti temizlenemedi"));

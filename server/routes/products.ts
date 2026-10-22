@@ -77,7 +77,12 @@ async function resetHour(db: PrismaClient): Promise<number> {
   return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : DEFAULT_RESET_HOUR;
 }
 
-export function productsRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined): Router {
+export function productsRouter(
+  db: PrismaClient,
+  onChange: (brandId: number) => void = () => undefined,
+  /** Tükendi/geri açıldı: yalnız stok durumu, hemen kataloğa (otomatik eşitleme kapalıyken de) */
+  onAvailability: (brandId: number, productId: number) => void = (brandId) => onChange(brandId),
+): Router {
   const router = Router();
   router.use(express.json({ limit: "20kb" }));
 
@@ -217,7 +222,7 @@ export function productsRouter(db: PrismaClient, onChange: (brandId: number) => 
       },
       include: { category: true },
     });
-    onChange(product.brandId);
+    onAvailability(product.brandId, product.id);
     res.json(toProductDto(updated));
   });
 
