@@ -153,11 +153,18 @@ export class WhatsappCloudClient {
   /** Numaraya bağlı kataloğu açan düğmeli mesaj (müşteri katalogdan sepet kurup sipariş verir). */
   /** thumbnailRetailerId: katalog mesajında görseli gösterilecek ürün; boşsa WhatsApp katalogdaki ilk ürünü kullanır. */
   async sendCatalog(phoneNumberId: string, to: string, text: string, thumbnailRetailerId?: string | null): Promise<string | null> {
-    const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
-      method: "POST",
-      json: { messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive", interactive: { type: "catalog_message", body: { text }, action: { name: "catalog_message", ...(thumbnailRetailerId ? { parameters: { thumbnail_product_retailer_id: thumbnailRetailerId } } : {}) } } },
-    });
-    return out.messages?.[0]?.id ?? null;
+    const send = (thumb: string | null | undefined) =>
+      this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
+        method: "POST",
+        json: { messaging_product: "whatsapp", recipient_type: "individual", to, type: "interactive", interactive: { type: "catalog_message", body: { text }, action: { name: "catalog_message", ...(thumb ? { parameters: { thumbnail_product_retailer_id: thumb } } : {}) } } },
+      });
+    try {
+      return (await send(thumbnailRetailerId)).messages?.[0]?.id ?? null;
+    } catch (err) {
+      // Seçilen kapak ürünü Meta'da henüz kullanılamıyorsa (yeni katalog, inceleme) 131009 döner: kapaksız gönder, mesaj düşmesin
+      if (!thumbnailRetailerId || !(err instanceof CloudApiError) || err.code !== 131009) throw err;
+      return (await send(null)).messages?.[0]?.id ?? null;
+    }
   }
 
   /** Seçim listesi (en fazla 10 satır). Müşterinin seçimi webhook'ta `interactive.list_reply.id` olarak gelir. */

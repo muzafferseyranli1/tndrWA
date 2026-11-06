@@ -152,3 +152,17 @@ test("katalog mesajı: görsel için seçilen ürün parametresi gönderilir", a
   await new WhatsappCloudClient(cfg, fn).sendCatalog("1408635558995998", "905551112233", "Menümüz", "ayran-30-cl");
   assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive.action, { name: "catalog_message", parameters: { thumbnail_product_retailer_id: "ayran-30-cl" } });
 });
+
+test("katalog mesajı: kapak ürünü reddedilirse (131009) kapaksız yeniden gönderilir, başka hatada denemez", async () => {
+  const { fn, calls } = fake((_url, init) =>
+    JSON.parse(String(init.body)).interactive.action.parameters ? { status: 400, body: { error: { message: "(#131009) Parameter value is not valid", code: 131009 } } } : { body: { messages: [{ id: "wamid.CAT3" }] } },
+  );
+  const id = await new WhatsappCloudClient(cfg, fn).sendCatalog("1408635558995998", "905551112233", "Menümüz", "yeni-urun");
+  assert.equal(id, "wamid.CAT3");
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(String(calls[1].init.body)).interactive.action, { name: "catalog_message" });
+
+  const other = fake(() => ({ status: 400, body: { error: { message: "(#131047) Re-engagement message", code: 131047 } } }));
+  await assert.rejects(new WhatsappCloudClient(cfg, other.fn).sendCatalog("1408635558995998", "905551112233", "Menümüz", "yeni-urun"), CloudApiError);
+  assert.equal(other.calls.length, 1);
+});
