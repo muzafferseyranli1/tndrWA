@@ -184,7 +184,7 @@ export default function HelpPage() {
                 <B>Seçenek grupları</B>: porsiyon, acı/acısız gibi müşteriye sepetten sonra sorulan seçimler ve ek ücretleri.
               </li>
               <li>
-                <B>Müşteriler</B>: müşteri listesi ve içe aktarma; <B>Değerlendirmeler</B>: teslim sonrası puanlar, düşük puanlı müşteriler aranacaklar listesinde.
+                <B>Müşteriler</B>: müşteri listesi ve içe aktarma; <B>Değerlendirmeler</B>: teslim sonrası puanlar, düşük puanlı müşteriler aranacaklar listesinde. Kanallar ve QR&apos;daki &quot;Bizi değerlendirin&quot; satırına Google yorum bağlantısını girerseniz değerlendirmeyi gönderen herkese (puanı ne olursa olsun) &quot;Google&apos;da değerlendirin&quot; düğmesi çıkar.
               </li>
               <li>
                 <B>Raporlar</B>: tarih aralığına göre günlük ciro, ödeme şekli dağılımı, en çok satan ürünler ve saate göre sipariş yoğunluğu.

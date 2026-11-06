@@ -188,9 +188,16 @@ export interface RatingContextDto {
   orderNo: number | null;
 }
 
+export interface RatingLinkDto {
+  label: string;
+  href: string;
+}
+
 export interface RatingResultDto {
   ok: true;
   low: boolean;
+  /** Teşekkür ekranında herkese gösterilen dış yorum bağlantıları (Google) */
+  links: RatingLinkDto[];
 }
 
 export interface RatingDto {
