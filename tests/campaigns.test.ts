@@ -14,11 +14,12 @@ test("Perşembe 18:00 öncesi, 1.000 TL ve üstü, nakit/kart: Et Tandırlar %50
   assert.match(r.note, /Et Tandırlar %50, diğer ürünler %15/);
 });
 
-test("deneme için Salı da geçerli, Çarşamba geçerli değil", () => {
-  assert.equal(run({ createdAt: at("13", "12:00") }).discountKurus, 44500);
-  const wed = run({ createdAt: at("14", "12:00") });
-  assert.equal(wed.discountKurus, 16500); // 1100 * %15
-  assert.equal(wed.note, "");
+test("yalnız Perşembe: Salı (deneme kaldırıldı) ve Çarşamba yalnızca %15", () => {
+  for (const day of ["13", "14"]) {
+    const r = run({ createdAt: at(day, "12:00") });
+    assert.equal(r.discountKurus, 16500); // 1100 * %15
+    assert.equal(r.note, "");
+  }
 });
 
 test("Perşembe 18:00 ve sonrası yalnızca %15", () => {

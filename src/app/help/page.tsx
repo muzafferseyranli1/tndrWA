@@ -133,7 +133,7 @@ export default function HelpPage() {
             <B>Nakit</B> ve <B>kapıda kredi kartı</B> ödemelerinde liste fiyatından <B>%15</B> indirim otomatik uygulanır; yemek kartlarında (Edenred vb.) indirim yoktur. Kartta indirimli tutar büyük, liste tutarı küçük yazar.
           </p>
           <p>
-            <B>Perşembe kampanyası</B> (yalnız Yerinde Tandır, 18:00&apos;e kadar gelen, 1.000 TL ve üstü siparişler, nakit/kapıda kart): <B>Et Tandırlar %50</B>, diğer ürünler %15. Kampanyalı siparişte kartta 🎉 notu görünür. Deneme süresince kampanya Salı günleri de geçerlidir.
+            <B>Perşembe kampanyası</B> (yalnız Yerinde Tandır, 18:00&apos;e kadar gelen, 1.000 TL ve üstü siparişler, nakit/kapıda kart): <B>Et Tandırlar %50</B>, diğer ürünler %15. Kampanyalı siparişte kartta 🎉 notu görünür.
           </p>
         </Section>
 

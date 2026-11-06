@@ -8,8 +8,8 @@ import { istanbulClock } from "./hours";
  */
 export const ET_TANDIR_CAMPAIGN = {
   brandCode: "tandir",
-  /** 0=Pazar … 4=Perşembe. 2 (Salı) yalnızca deneme için, kaldırılacak. */
-  days: [2, 4],
+  /** 0=Pazar … 4=Perşembe */
+  days: [4],
   /** Bu saatten (İstanbul) önce gelen siparişlerde geçerli */
   untilMinutes: 18 * 60,
   /** Sepet (indirimsiz liste) toplamı en az bu kadar olmalı */
