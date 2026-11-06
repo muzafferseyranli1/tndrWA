@@ -49,9 +49,11 @@ export function brandsRouter(db: PrismaClient): Router {
         ...(waPhoneNumberId !== undefined ? { waPhoneNumberId: waPhoneNumberId || null } : {}),
       },
     });
-    // Katalog değiştiyse bu markanın ürünlerinin hiçbiri yeni katalogda değil: yeniden gönderilmeli
+    // Katalog değiştiyse bu markanın ürünlerinin ve koleksiyonlarının hiçbiri yeni katalogda değil: yeniden gönderilmeli
+    // (eski koleksiyon kimlikleri eski kataloğa ait; kalırsa yeni katalogda bölümler hiç oluşmaz)
     if (metaCatalogId !== undefined && (metaCatalogId || null) !== brand.metaCatalogId) {
       await db.product.updateMany({ where: { brandId: id }, data: { onMeta: false, metaSyncState: "PENDING", metaError: null } });
+      await db.category.updateMany({ where: { brandId: id }, data: { metaSetId: null, metaSetSig: null } });
     }
     res.json({ id: updated.id, code: updated.code, name: updated.name, metaCatalogId: updated.metaCatalogId, waSession: updated.waSession, waPhoneNumberId: updated.waPhoneNumberId });
   });
