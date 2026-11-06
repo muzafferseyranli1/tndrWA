@@ -318,6 +318,8 @@ export interface OptionGroupDto {
   id: number;
   name: string;
   required: boolean;
+  /** En fazla seçim (1: tek seçim) */
+  maxSelect: number;
   enabled: boolean;
   choices: OptionChoiceDto[];
   /** Bu grubun sorulduğu ürünler */

@@ -66,6 +66,8 @@ model Product {
   // Bu ana kadar "bugün tükendi" (sonraki sabah otomatik açılır)
   soldOutUntil DateTime?
   sortOrder   Int      @default(0)
+  // Kasa sistemindeki (Suitable RMS) karşılığı, menü eşitlemesinde eşleştirme anahtarı: "rms:<kasadaki ad>"
+  sourceKey   String?
   // Meta eşitleme durumu (Aşama 2b'de kullanılacak)
   metaId        String?
   // Ürün şu an Meta kataloğunda mı (silme/oluşturma kararı için)
@@ -184,6 +186,8 @@ model OrderItem {
   // Seçilen seçeneklerin birim başına toplam ekstra ücreti (satır tutarı = (unitKurus + extraKurus) x quantity)
   extraKurus Int      @default(0)
   quantity   Int
+  // İsteğe bağlı seçenekler için müşterinin cevabı: null = henüz sorulmadı, false = "olduğu gibi", true = seçenekleri gösteriliyor
+  optionsWanted Boolean?
   options    OrderItemOption[]
 }
 
@@ -330,6 +334,8 @@ model OptionGroup {
   name      String
   // false: listede "Hiçbiri" seçeneği de çıkar
   required  Boolean        @default(true)
+  // En fazla kaç seçenek seçilebilir (1: tek seçim; >1: "Bitti" diyene kadar tek tek seçilir, ekstralar toplanır)
+  maxSelect Int            @default(1)
   enabled   Boolean        @default(true)
   sortOrder Int            @default(0)
   choices   OptionChoice[]
@@ -368,6 +374,8 @@ model OrderItemOption {
   // "Hiçbiri" seçildiyse boş: soru yanıtlandı ama bir şey seçilmedi
   choiceName  String
   extraKurus  Int       @default(0)
+  // Çoklu seçimli grupta müşteri "Bitti" dedi ya da sınıra ulaştı (tek seçimli grupta her zaman true)
+  complete    Boolean   @default(true)
 
   @@unique([orderItemId, groupId])
 }

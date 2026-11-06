@@ -7,6 +7,7 @@ import { requireAuth } from "./middleware/require-auth";
 import { authRouter } from "./routes/auth";
 import { catalogThumbRouter } from "./routes/catalog-thumb";
 import { reportsRouter } from "./routes/reports";
+import { menuSyncRouter } from "./routes/menu-sync";
 import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
@@ -140,6 +141,7 @@ async function main() {
   app.use("/api/products", imagesRouter(db, env.uploadDir, onChange));
   app.use("/api/products", productsRouter(db, onChange, (brandId, id) => coordinator.pushAvailability(brandId, [id])));
   app.use("/api/categories", categoriesRouter(db, onChange));
+  app.use("/api/menu-sync", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), menuSyncRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
   const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
   app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, cloudClient));

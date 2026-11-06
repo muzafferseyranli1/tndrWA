@@ -3,7 +3,7 @@ import { logger } from "../lib/logger";
 import { formatTRY } from "../../shared/money";
 import { markNoticeSent, noticeLine, policyUrl } from "./notice";
 import { rememberAddress } from "./addresses";
-import { applyAnswer, needsOptions, nextQuestion } from "./options";
+import { applyAnswer, applyGate, needsOptions, nextQuestion, type Question } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { orderCampaignAvailable, orderDiscount } from "./discount";
@@ -20,6 +20,8 @@ type FullOrder = Order & { brand: Brand; customer: Customer };
 export const payId = (orderId: number, paymentTypeId: number) => `pay:${orderId}:${paymentTypeId}`;
 export const addrId = (orderId: number, choice: number | "new") => `addr:${orderId}:${choice}`;
 export const optId = (orderId: number, itemId: number, groupId: number, choiceId: number) => `opt:${orderId}:${itemId}:${groupId}:${choiceId}`;
+/** "Olduğu gibi" / "Seçenekleri göster" düğmeleri */
+export const gateId = (orderId: number, itemId: number, wanted: boolean) => `optg:${orderId}:${itemId}:${wanted ? "yes" : "no"}`;
 export const kvkkId = (orderId: number, choice: "ok" | "text") => `kvkk:${orderId}:${choice}`;
 
 /** Müşteriden yanıt beklenen aşamalar (KVKK bilgilendirme onayı, seçenek, ödeme, adres). */
@@ -153,18 +155,49 @@ async function acknowledgeNotice(db: PrismaClient, cloud: WhatsappCloudClient | 
   await startOrderConversation(db, cloud, order.id);
 }
 
-/** Bir seçenek sorusunu liste olarak gönderir. İlk soruda "siparişinizi aldık" karşılaması ve (ilk temasta) aydınlatma bağlantısı eklenir. */
-async function askOption(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, question: Awaited<ReturnType<typeof nextQuestion>> & object): Promise<void> {
+/**
+ * Bir seçenek sorusunu gönderir. İlk soruda "siparişinizi aldık" karşılaması ve (ilk temasta) aydınlatma bağlantısı eklenir.
+ * - gate: "Olduğu gibi" / "Seçenekleri göster" düğmeleri (isteğe bağlı seçenekler yalnız istenirse sorulur)
+ * - tek seçim: liste (+ isteğe bağlıysa "Hiçbiri")
+ * - çoklu seçim: seçilmemişlerin listesi + "Bitti" (ilk seçimden önce isteğe bağlıysa "Hiçbiri"); her seçimde yeniden gelir
+ */
+async function askOption(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, question: Question): Promise<void> {
   if (!canSend(cloud, order)) return;
   const first = (await db.message.count({ where: { orderId: order.id, direction: "OUT" } })) === 0;
   const kvkk = first ? await noticeLine(db, order.customer) : "";
-  const { item, group } = question;
+  const { item } = question;
   const what = `${item.name}${item.quantity > 1 ? ` (${item.quantity} adet)` : ""}`;
-  const body = [first ? `Siparişinizi aldık (No: ${order.id}).` : "", `${what} için "${group.name}" seçin:`, kvkk].filter(Boolean).join("\n\n");
-  const rows = group.choices.map((c) => ({ id: optId(order.id, item.id, group.id, c.id), title: c.name, description: c.extraKurus > 0 ? `+${formatTRY(c.extraKurus)}` : undefined }));
-  if (!group.required) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Hiçbiri", description: undefined });
+  const opening = first ? `Siparişinizi aldık (No: ${order.id}).` : "";
+  const phoneId = order.brand.waPhoneNumberId!;
+  const to = order.customer.waId!;
+
+  if (question.kind === "gate") {
+    const body = [opening, `${what} için değişiklik ister misiniz?\n(${question.groups.map((g) => g.name).join(", ")})`, kvkk].filter(Boolean).join("\n\n");
+    try {
+      const id = await cloud.sendButtons(phoneId, to, body, [
+        { id: gateId(order.id, item.id, false), title: "Olduğu gibi ✅" },
+        { id: gateId(order.id, item.id, true), title: "Seçenekleri göster" },
+      ]);
+      await log(db, order, "text", body, id);
+      if (kvkk) await markNoticeSent(db, order.customerId);
+    } catch (err) {
+      await reportFailure(db, order, "Seçenek sorusu", body, err);
+    }
+    return;
+  }
+
+  const { group, picked } = question;
+  const multi = group.maxSelect > 1;
+  const ask = multi ? `${what} için "${group.name}" seçin (en fazla ${group.maxSelect}, bitince "Bitti"):` : `${what} için "${group.name}" seçin:`;
+  const so = picked.length ? `Seçilenler: ${picked.join(", ")}` : "";
+  const body = [opening, ask, so, kvkk].filter(Boolean).join("\n\n");
+  const rows: { id: string; title: string; description?: string }[] = group.choices
+    .filter((c) => !picked.includes(c.name))
+    .map((c) => ({ id: optId(order.id, item.id, group.id, c.id), title: c.name, description: c.extraKurus > 0 ? `+${formatTRY(c.extraKurus)}` : undefined }));
+  if (multi && picked.length) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Bitti ✅" });
+  else if (!group.required) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Hiçbiri" });
   try {
-    const id = await cloud.sendList(order.brand.waPhoneNumberId!, order.customer.waId!, { body, buttonText: "Seçim yap", rows });
+    const id = await cloud.sendList(phoneId, to, { body, buttonText: "Seçim yap", rows });
     await log(db, order, "text", body, id);
     if (kvkk) await markNoticeSent(db, order.customerId);
   } catch (err) {
@@ -269,6 +302,11 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       const [kind, orderIdText, arg] = reply.split(":");
       const order = await orderById(db, brand.id, customer.id, Number(orderIdText), now);
       if (!order) return; // bitmiş ya da başkasına ait eski bir mesajdaki düğme
+      if (kind === "optg" && order.stage === "AWAITING_OPTIONS") {
+        const [, , itemId, answer] = reply.split(":");
+        await applyGate(db, order.id, Number(itemId), answer === "yes"); // eski düğme yok sayılır, sıradaki soru yeniden sorulur
+        return await startOrderConversation(db, cloud, order.id);
+      }
       if (kind === "opt" && order.stage === "AWAITING_OPTIONS") {
         const [, , itemId, groupId, choiceId] = reply.split(":");
         await applyAnswer(db, order.id, Number(itemId), Number(groupId), Number(choiceId)); // eski/geçersiz cevap yok sayılır, aşağıda mevcut soru yeniden sorulur

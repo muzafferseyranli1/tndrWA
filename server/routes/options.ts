@@ -13,6 +13,7 @@ const toDto = (g: GroupRow): OptionGroupDto => ({
   id: g.id,
   name: g.name,
   required: g.required,
+  maxSelect: g.maxSelect,
   enabled: g.enabled,
   productIds: g.products.map((p) => p.productId),
   choices: g.choices.map((c) => ({ id: c.id, name: c.name, extraKurus: c.extraKurus, priceText: c.extraKurus > 0 ? `+${formatTRY(c.extraKurus)}` : "Ücretsiz", enabled: c.enabled })),
@@ -37,6 +38,8 @@ const extraPrice = z
 const groupBody = z.object({
   name: z.string().trim().min(1, "Soru başlığı gerekli.").max(40, "Başlık en fazla 40 karakter."),
   required: z.boolean(),
+  /** En fazla seçim: 1 tek seçim; 2-9 arası çoklu seçim (müşteri "Bitti" diyene kadar) */
+  maxSelect: z.number().int().min(1).max(MAX_CHOICES).default(1),
 });
 const choiceBody = z.object({ name: z.string().trim().min(1, "Seçenek adı gerekli.").max(24, "Seçenek adı en fazla 24 karakter (WhatsApp liste sınırı)."), price: extraPrice });
 
@@ -63,7 +66,7 @@ export function optionsRouter(db: PrismaClient): Router {
     if (!brand) return fail(res, 404, "Marka bulunamadı.");
     if (await db.optionGroup.findUnique({ where: { brandId_name: { brandId: brand.id, name: parsed.data.name } } })) return fail(res, 409, "Bu başlıkta bir grup zaten var.");
     const last = await db.optionGroup.findFirst({ where: { brandId: brand.id }, orderBy: { sortOrder: "desc" } });
-    const created = await db.optionGroup.create({ data: { brandId: brand.id, name: parsed.data.name, required: parsed.data.required, sortOrder: (last?.sortOrder ?? -1) + 1 } });
+    const created = await db.optionGroup.create({ data: { brandId: brand.id, name: parsed.data.name, required: parsed.data.required, maxSelect: parsed.data.maxSelect, sortOrder: (last?.sortOrder ?? -1) + 1 } });
     res.status(201).json(toDto(await group(created.id)));
   });
 

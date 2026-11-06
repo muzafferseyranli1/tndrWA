@@ -119,11 +119,12 @@ function ProductPicker({ g, products, onChange, onError }: { g: OptionGroupDto; 
 function GroupCard({ g, first, last, products, onChange, onDeleted, onMove, onError }: { g: OptionGroupDto; first: boolean; last: boolean; products: ProductDto[]; onChange: (g: OptionGroupDto) => void; onDeleted: () => void; onMove: (d: "up" | "down") => void; onError: (m: string) => void }) {
   const [name, setName] = useState(g.name);
   const [required, setRequired] = useState(g.required);
+  const [maxSelect, setMaxSelect] = useState(g.maxSelect);
   const [enabled, setEnabled] = useState(g.enabled);
   const [showProducts, setShowProducts] = useState(false);
   const [newChoice, setNewChoice] = useState("");
   const [newPrice, setNewPrice] = useState("");
-  const dirty = name !== g.name || required !== g.required || enabled !== g.enabled;
+  const dirty = name !== g.name || required !== g.required || enabled !== g.enabled || maxSelect !== g.maxSelect;
 
   const run = async (fn: () => Promise<OptionGroupDto>) => {
     try {
@@ -149,7 +150,17 @@ function GroupCard({ g, first, last, products, onChange, onDeleted, onMove, onEr
           <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} className="h-4 w-4" />
           Zorunlu
         </label>
-        <button disabled={!dirty} onClick={() => run(() => api(`/api/options/groups/${g.id}`, { method: "PUT", json: { name, required, enabled } }))} className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">Kaydet</button>
+        <label className="flex items-center gap-1 text-sm" title="1: tek seçim. Daha fazlası: müşteri listeden tek tek seçer, bitince 'Bitti' der; ekstra ücretler toplanır.">
+          En fazla
+          <select value={maxSelect} onChange={(e) => setMaxSelect(Number(e.target.value))} className="rounded-lg border border-slate-300 px-1.5 py-1 text-sm">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? "1 (tek seçim)" : `${n} seçim`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button disabled={!dirty} onClick={() => run(() => api(`/api/options/groups/${g.id}`, { method: "PUT", json: { name, required, enabled, maxSelect } }))} className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">Kaydet</button>
         <button onClick={async () => { if (window.confirm(`"${g.name}" grubu ve seçenekleri silinsin mi? (Eski siparişler etkilenmez.)`)) { try { await api(`/api/options/groups/${g.id}`, { method: "DELETE" }); onDeleted(); } catch (e) { onError((e as Error).message); } } }} className="rounded-lg border border-red-200 px-2 py-1.5 text-sm text-red-600 hover:bg-red-50">Sil</button>
       </div>
 
@@ -234,6 +245,8 @@ export default function OptionsPage() {
         <p className="mb-6 text-sm text-slate-500">
           Müşteri sepeti gönderdikten sonra, sepetteki ürüne bağlı gruplar WhatsApp&apos;ta tek tek sorulur (örn. <b>Acı seviyesi:</b> Acılı / Acısız, <b>Boy:</b> Büyük +20 TL). Ekstra ücretler sipariş tutarına eklenir ve %15 indirim ekstralar dahil toplam üzerinden hesaplanır.
           Seçim satır başınadır (3 dürümün hepsi aynı seçeneği alır). Bir grup birden fazla ürüne bağlanabilir.
+          <b> Zorunlu</b> gruplar her zaman sorulur; zorunlu olmayanlardan önce müşteriye ürün başına bir kez &quot;Olduğu gibi / Seçenekleri göster&quot; sorulur, &quot;olduğu gibi&quot; derse atlanır.
+          <b> En fazla</b> 1&apos;den büyükse müşteri listeden tek tek seçer ve &quot;Bitti&quot; der.
         </p>
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {!groups && !error && <p className="text-slate-500">Yükleniyor…</p>}
