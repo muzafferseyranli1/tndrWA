@@ -294,13 +294,13 @@ async function askOption(db: PrismaClient, cloud: WhatsappCloudClient | null, or
   const { group, picked } = question;
   const multi = group.maxSelect > 1;
   const ask = multi ? `${what} için "${group.name}" seçin (en fazla ${group.maxSelect}, bitince "Bitti"):` : `${what} için "${group.name}" seçin:`;
-  const so = picked.length ? `Seçilenler: ${picked.join(", ")}` : "";
+  const so = picked.length ? `Seçilenler: ${picked.join(", ")}` : !group.required ? "İstemiyorsanız listeden \"Eklemeden devam\" seçin." : "";
   const body = [opening, ask, so, kvkk].filter(Boolean).join("\n\n");
   const rows: { id: string; title: string; description?: string }[] = group.choices
     .filter((c) => !picked.includes(c.name))
     .map((c) => ({ id: optId(order.id, item.id, group.id, c.id), title: c.name, description: c.extraKurus > 0 ? `+${formatTRY(c.extraKurus)}` : undefined }));
   if (multi && picked.length) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Bitti ✅" });
-  else if (!group.required) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Hiçbiri" });
+  else if (!group.required) rows.push({ id: optId(order.id, item.id, group.id, 0), title: "Eklemeden devam ➡", description: "Bu gruptan bir şey seçmeden geç" });
   try {
     const id = await cloud.sendList(phoneId, to, { body, buttonText: "Seçim yap", rows });
     await log(db, order, "text", body, id);
