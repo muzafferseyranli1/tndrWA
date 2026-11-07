@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { planMenuList } from "../server/services/menu-message";
+import { categoryPage, chunkItems, planMenuList, type MenuSection } from "../server/services/menu-message";
+
+const brief = (sections: MenuSection[]) => sections.map((s) => ({ title: s.title, retailerIds: s.retailerIds }));
 
 const now = new Date("2026-11-07T12:00:00Z");
 const p = (retailerId: string, categoryId: number | null, extra: Partial<{ status: "ACTIVE" | "PASSIVE"; soldOutUntil: Date | null; onMeta: boolean }> = {}) => ({
@@ -22,7 +24,7 @@ test("menü listesi: kategoriler ve ürünler verilen sırada, boş kategori atl
     [p("ayran", 1), p("sandvic-b", 3), p("sandvic-a", 3), p("su", 1)],
     now,
   );
-  assert.deepEqual(plan.sections, [
+  assert.deepEqual(brief(plan.sections), [
     { title: "Tandır Sandviçler", retailerIds: ["sandvic-b", "sandvic-a"] },
     { title: "İçecekler", retailerIds: ["ayran", "su"] },
   ]);
@@ -43,7 +45,7 @@ test("menü listesi: katalogda olmayan, pasif ve bugün tükenen ürünler girme
     ],
     now,
   );
-  assert.deepEqual(plan.sections, [{ title: "İçecekler", retailerIds: ["ayran", "geri-acildi"] }]);
+  assert.deepEqual(brief(plan.sections), [{ title: "İçecekler", retailerIds: ["ayran", "geri-acildi"] }]);
 });
 
 test("menü listesi: kategorisiz ürünler sona 'Diğer' bölümüne, uzun kategori adı 24 karaktere kısalır", () => {
@@ -51,7 +53,7 @@ test("menü listesi: kategorisiz ürünler sona 'Diğer' bölümüne, uzun kateg
   assert.equal(plan.sections.length, 2);
   assert.ok(plan.sections[0].title.length <= 24, plan.sections[0].title);
   assert.ok(plan.sections[0].title.endsWith("…"));
-  assert.deepEqual(plan.sections[1], { title: "Diğer", retailerIds: ["y", "z"] });
+  assert.deepEqual(brief(plan.sections)[1], { title: "Diğer", retailerIds: ["y", "z"] });
 });
 
 test("menü listesi: WhatsApp sınırları aşılırsa gönderilemez (10 bölüm, 30 ürün, boş liste)", () => {
@@ -70,4 +72,32 @@ test("menü listesi: WhatsApp sınırları aşılırsa gönderilemez (10 bölüm
   const empty = planMenuList([{ id: 1, name: "Pideler" }], [p("x", 1, { onMeta: false })], now);
   assert.equal(empty.fits, false);
   assert.match(empty.reason ?? "", /ürün yok/);
+});
+
+test("kategori listesi: 10 kategoriye kadar tek sayfa; fazlasında 9 kategori + 'Diğer kategoriler', son sayfada kalanlar", () => {
+  const secs = (n: number): MenuSection[] => Array.from({ length: n }, (_, i) => ({ categoryId: i + 1, name: `Kategori ${i + 1}`, title: `Kategori ${i + 1}`, retailerIds: ["a", "b"] }));
+  const ten = categoryPage(secs(10), 1);
+  assert.equal(ten.pages, 1);
+  assert.equal(ten.rows.length, 10);
+  assert.ok(ten.rows.every((r) => r.id.startsWith("menu:cat:")));
+  const p1 = categoryPage(secs(13), 1);
+  assert.equal(p1.pages, 2);
+  assert.equal(p1.rows.length, 10);
+  assert.deepEqual(p1.rows.at(-1), { id: "menu:page:2", title: "Diğer kategoriler ▶", description: "4 kategori daha" });
+  assert.equal(p1.rows[0].description, "2 ürün");
+  const p2 = categoryPage(secs(13), 2);
+  assert.deepEqual(p2.rows.map((r) => r.id), ["menu:cat:10", "menu:cat:11", "menu:cat:12", "menu:cat:13"]);
+  const big = categoryPage(secs(25), 2);
+  assert.equal(big.pages, 3);
+  assert.equal(big.rows.at(-1)?.id, "menu:page:3");
+  assert.equal(categoryPage(secs(25), 3).rows.length, 7);
+  // Kategorisiz ürünler ("Diğer") listede seçilemez, sayılmaz
+  assert.equal(categoryPage([...secs(2), { categoryId: null, name: "Diğer", title: "Diğer", retailerIds: ["x"] }], 1).rows.length, 2);
+});
+
+test("ürün listesi 30'luk parçalara bölünür", () => {
+  const ids = Array.from({ length: 36 }, (_, i) => `u${i}`);
+  assert.deepEqual(chunkItems(ids).map((c) => c.length), [30, 6]);
+  assert.deepEqual(chunkItems(ids.slice(0, 30)).map((c) => c.length), [30]);
+  assert.deepEqual(chunkItems([]), []);
 });

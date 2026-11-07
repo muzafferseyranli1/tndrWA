@@ -9,7 +9,7 @@ export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "KVKK_NOTICE", "CLOSED", "
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
-  WELCOME: "Merhaba {ad}, hoş geldiniz! Menümüzü görmek için aşağıdaki katalog düğmesine dokunabilirsiniz.\n\n{kvkk}",
+  WELCOME: "Merhaba {ad}, hoş geldiniz! Menümüzü görmek için aşağıdaki düğmeye dokunabilirsiniz.\n\n{kvkk}",
   KVKK_NOTICE: "Merhaba {ad}, siparişinizi aldık (No: {no}). Kişisel verilerinizi korumayı önemsiyoruz: siparişinizi hazırlayıp teslim edebilmek için adınızı, telefonunuzu ve adresinizi KVKK kapsamında işliyoruz. Ayrıntılar aydınlatma metnimizde: {link}\n\nDevam etmek için \"Okudum, devam\" düğmesine basın.",
   CLOSED: "Merhaba {ad}, şu an kapalıyız. Çalışma saatlerimiz: {saatler}.\nBir sonraki açılış: {acilis}.\n\nSiparişleri açılıştan 1 saat önce almaya başlıyoruz, o saatten sonra tekrar yazabilirsiniz.",
   PREORDER: "Henüz açılmadık, {acilis} açılıyoruz. Siparişiniz kayıtlı; açılışla birlikte hazırlanmaya başlanır, teslimat açılıştan sonra yapılır.",

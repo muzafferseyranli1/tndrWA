@@ -40,6 +40,7 @@ import { startOrderTimeouts } from "./services/order-timeouts";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
+import { handleMenuReply } from "./services/menu-message";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
@@ -99,6 +100,7 @@ async function main() {
       onInbound: (i) =>
         void (async () => {
           if (await repeatOrderIfAsked(db, cloudForAck, i.brand, i.customer, i.message)) return; // "1" = son siparişi tekrarla
+          if (await handleMenuReply(db, cloudForAck, i.brand, i.customer, i.raw)) return; // kategori listesinden seçim
           await handleOrderReply(db, cloudForAck, i.brand, i.customer, i.message, i.raw);
           await sendWelcomeIfNeeded(db, cloudForAck, i.brand, i.customer, i.message);
         })(),

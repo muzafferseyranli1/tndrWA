@@ -12,7 +12,7 @@ interface ThumbData {
   retailerId: string | null;
   products: { retailerId: string; name: string; imageUrl: string }[];
   mode: MenuMode;
-  list: { sections: { title: string; count: number }[]; items: number; fits: boolean; reason: string | null; maxSections: number; maxItems: number };
+  list: { sections: { title: string; count: number }[]; items: number; fits: boolean; categories: boolean; reason: string | null; maxSections: number; maxItems: number };
 }
 
 export default function MessagesPage() {
@@ -106,14 +106,16 @@ export default function MessagesPage() {
                 <span>
                   <span className="font-medium">Kategorili ürün listesi</span>
                   <span className="block text-slate-500">
-                    Ürünler kategori başlıkları altında, Ürünler sayfasındaki sırayla görünür; müşteri yine sepete ekleyip sipariş verir. En fazla {thumb.list.maxSections} kategori ve {thumb.list.maxItems} ürün sığar; sığmazsa ya da WhatsApp kabul etmezse katalog düğmesi gider.
+                    Ürünler kategori başlıkları altında, Ürünler sayfasındaki sırayla görünür; müşteri yine sepete ekleyip sipariş verir. Tek mesaja en fazla {thumb.list.maxSections} kategori ve {thumb.list.maxItems} ürün sığar; sığmazsa önce kategori listesi gider, müşteri seçtiği kategorinin ürünlerini alır. WhatsApp kabul etmezse katalog düğmesi gider.
                   </span>
                 </span>
               </label>
-              <p className={`rounded-lg px-3 py-2 text-xs ${thumb.list.fits ? "bg-slate-50 text-slate-600" : "bg-amber-50 text-amber-800"}`}>
+              <p className={`rounded-lg px-3 py-2 text-xs ${thumb.list.fits || thumb.list.categories ? "bg-slate-50 text-slate-600" : "bg-amber-50 text-amber-800"}`}>
                 {thumb.list.fits
                   ? `Listede şu an ${thumb.list.sections.length} kategori, ${thumb.list.items} ürün: ${thumb.list.sections.map((s) => `${s.title} (${s.count})`).join(", ")}. Görseli olmayan, pasif ve bugün tükenen ürünler listede yer almaz.`
-                  : `Liste şu an gönderilemez: ${thumb.list.reason ?? ""} Bu durumda katalog düğmesi gider.`}
+                  : thumb.list.categories
+                    ? `Tek mesaja sığmıyor (${thumb.list.reason ?? ""}); önce ${thumb.list.sections.length} kategorilik liste gider: ${thumb.list.sections.map((s) => `${s.title} (${s.count})`).join(", ")}. 30'dan fazla ürünlü kategori birden çok mesajla gelir. Görseli olmayan, pasif ve bugün tükenen ürünler yer almaz.`
+                    : `Liste şu an gönderilemez: ${thumb.list.reason ?? ""} Bu durumda katalog düğmesi gider.`}
               </p>
             </div>
             <h3 className="text-sm font-medium">Katalog düğmesinin görseli</h3>

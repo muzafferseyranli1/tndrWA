@@ -21,6 +21,8 @@ export function catalogThumbRouter(db: PrismaClient): Router {
         sections: plan.sections.map((s) => ({ title: s.title, count: s.retailerIds.length })),
         items: plan.items,
         fits: plan.fits && !!brand.metaCatalogId,
+        // Tek mesaja sığmıyorsa önce kategori listesi gider
+        categories: !plan.fits && plan.items > 0 && !!brand.metaCatalogId,
         reason: brand.metaCatalogId ? plan.reason : "Markanın Meta kataloğu girilmemiş.",
         maxSections: LIST_MAX_SECTIONS,
         maxItems: LIST_MAX_ITEMS,
