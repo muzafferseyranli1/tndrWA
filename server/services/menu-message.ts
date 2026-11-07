@@ -2,7 +2,7 @@ import type { Brand, Customer, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { logger } from "../lib/logger";
 import { getCatalogThumbnail } from "./catalog-thumb";
-import { recordOutbound } from "./outbound";
+import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { CloudApiError, type WhatsappCloudClient } from "./whatsapp-cloud";
 
 /**
@@ -178,18 +178,29 @@ export async function handleMenuReply(db: PrismaClient, cloud: WhatsappCloudClie
     const parts = chunkItems(section.retailerIds);
     for (const [i, ids] of parts.entries()) {
       const part = parts.length > 1 ? ` (${i + 1}/${parts.length})` : "";
-      const body = i === 0 ? `${section.name}: ürünleri sepete ekleyip gönderin. Başka kategori için yukarıdaki "Kategoriler" listesini kullanabilirsiniz.` : `${section.name}${part}`;
+      const body = i === 0 ? `${section.name}: ürünleri sepete ekleyin. Sepetiniz korunur; bitince sepeti gönderin.` : `${section.name}${part}`;
       const wa = await cloud.sendProductList(brand.waPhoneNumberId, customer.waId, { catalogId: brand.metaCatalogId, header: header(brand, ` · ${section.name}${part}`), body, sections: [{ title: section.title, retailerIds: ids }] });
       await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: `${section.name}${part}`, waMessageId: wa });
     }
-  } catch (err) {
-    logger.warn({ err: (err as Error).message, brand: brand.code, id }, "Kategori menüsü gönderilemedi");
+    // Ürünlerin hemen altına kategori listesi yeniden: müşteri yukarı kaydırmadan başka kategoriden ekleyebilsin
+    const more = "Başka kategoriden eklemek için seçin (sepetiniz korunur). Bitince sepeti gönderin.";
     try {
-      const text = "Menü şu an gösterilemiyor. Kataloğu açmak için aşağıdaki düğmeye dokunabilirsiniz.";
+      const wa = await sendCategoryList(cloud, brand, customer.waId, more, plan, 1);
+      await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: more, waMessageId: wa });
+    } catch (err) {
+      logger.warn({ err: (err as Error).message, brand: brand.code }, "Kategori listesi yeniden gönderilemedi");
+    }
+  } catch (err) {
+    const reason = (err as Error).message;
+    logger.warn({ err: reason, brand: brand.code, id }, "Kategori menüsü gönderilemedi");
+    // Yazışmada kırmızı "gitmedi" + sebep: personel görür
+    await recordFailedOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: `Kategori menüsü (${id})`, waMessageId: null }, `Ürün listesi: ${reason}`).catch(() => undefined);
+    const text = "Menü şu an gösterilemiyor. Kataloğu açmak için aşağıdaki düğmeye dokunabilirsiniz.";
+    try {
       const wa = await cloud.sendCatalog(brand.waPhoneNumberId, customer.waId, text, await getCatalogThumbnail(db, brand.code));
       await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: text, waMessageId: wa });
-    } catch {
-      /* yazışmada görünür, personel yanıtlar */
+    } catch (err2) {
+      await recordFailedOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: text, waMessageId: null }, `Katalog düğmesi: ${(err2 as Error).message}`).catch(() => undefined);
     }
   }
   return true;
