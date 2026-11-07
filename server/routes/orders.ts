@@ -25,7 +25,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     note: o.note,
     totalKurus: o.totalKurus,
     totalText: formatTRY(o.totalKurus),
-    stage: (["AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"].includes(o.stage) ? o.stage : "READY") as OrderDto["stage"],
+    stage: (["AWAITING_MERGE", "AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"].includes(o.stage) ? o.stage : "READY") as OrderDto["stage"],
     paymentLabel: o.paymentLabel,
     discountPercent: o.discountPercent,
     discountText: o.discountKurus > 0 ? `-${formatTRY(o.discountKurus)}` : "",
@@ -40,9 +40,10 @@ export function toOrderDto(o: OrderRow): OrderDto {
     promptedAt: o.promptedAt?.toISOString() ?? null,
     reminderSentAt: o.reminderSentAt?.toISOString() ?? null,
     noticePending: o.noticePending,
+    addedPending: o.addedPending,
     changes: (o.changes ?? []).map((c) => ({ text: c.text, createdAt: c.createdAt.toISOString() })),
     customer: { name: o.customer.name, phone: o.customer.waId },
-    items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus + i.extraKurus), lineText: formatTRY((i.unitKurus + i.extraKurus) * i.quantity), options: describeOptions(i.options ?? []) })),
+    items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus + i.extraKurus), lineText: formatTRY((i.unitKurus + i.extraKurus) * i.quantity), options: describeOptions(i.options ?? []), added: i.addedAt !== null })),
   };
 }
 
@@ -66,10 +67,23 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     res.json(rows.map(toOrderDto));
   });
 
-  // Tüm markalarda işleme alınmayı bekleyen (müşteri adımları bitmiş) yeni sipariş sayısı: tablet diğer markanın siparişinde de uyarsın
+  // Tüm markalarda işleme alınmayı bekleyen (müşteri adımları bitmiş) yeni sipariş + müşterinin ürün eklediği (görülmemiş) sipariş sayısı: tablet diğer markanın siparişinde de uyarsın
   router.get("/new-counts", async (_req, res) => {
-    const rows = await db.order.groupBy({ by: ["brandId"], where: { status: "NEW", stage: "READY" }, _count: { _all: true } });
+    const rows = await db.order.groupBy({
+      by: ["brandId"],
+      where: { OR: [{ status: "NEW", stage: "READY" }, { addedPending: true, status: { in: EDITABLE_STATUSES } }] },
+      _count: { _all: true },
+    });
     res.json(rows.map((r) => ({ brandId: r.brandId, count: r._count._all })));
+  });
+
+  // Personel müşterinin eklediği ürünleri gördü: uyarı ve ses durur
+  router.post("/:id/ack-added", async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = Number.isInteger(id) ? await db.order.findUnique({ where: { id } }) : null;
+    if (!existing) return res.status(404).json({ error: "Sipariş bulunamadı." });
+    const updated = await db.order.update({ where: { id }, data: { addedPending: false }, include: INCLUDE });
+    res.json(toOrderDto(updated));
   });
 
   router.post("/:id/status", async (req, res) => {
@@ -87,7 +101,7 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
     const updated = await db.order.update({
       where: { id },
       // Teslim edilince müşteriye gidecek değerlendirme bağlantısının anahtarı (bir kez üretilir)
-      data: { status, ...(status === "DELIVERED" && !existing.ratingToken ? { ratingToken: newRatingToken() } : {}) },
+      data: { status, ...(EDITABLE_STATUSES.includes(status) ? {} : { addedPending: false }), ...(status === "DELIVERED" && !existing.ratingToken ? { ratingToken: newRatingToken() } : {}) },
       include: { ...INCLUDE, brand: true },
     });
     const notice = notify ? await notifyOrderStatus(db, cloud, updated as OrderRow & { brand: Brand }, status, publicBaseUrl) : { sent: false };

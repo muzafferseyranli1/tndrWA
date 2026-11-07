@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 import { contactFrom, upsertCustomer } from "./customers";
 import { brandOrderingState, getMinBasket } from "./hours";
 import { needsOptions } from "./options";
+import { findMergeTarget } from "./order-merge";
 import { parseCloudOrder } from "./whatsapp-cloud";
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -41,7 +42,12 @@ export async function ingestCloudOrder(db: PrismaClient, eventBody: string, now 
 
   // Çalışma saati dışında (açılışa 1 saatten fazla varken) ya da minimum sepetin altında gelen sepetten sipariş açılmaz; yazışmada iz kalır, müşteriye mesaj gider (webhook tarafı)
   const minKurus = await getMinBasket(db, brand.code);
-  const reason = (await brandOrderingState(db, brand, now)) === "closed" ? "closed" : minKurus > 0 && parsed.totalKurus < minKurus ? "minBasket" : null;
+  let reason: "closed" | "minBasket" | null = (await brandOrderingState(db, brand, now)) === "closed" ? "closed" : minKurus > 0 && parsed.totalKurus < minKurus ? "minBasket" : null;
+  // Yola çıkmamış açık siparişi olan müşterinin küçük sepeti (ör. sonradan bir içecek) o siparişe eklenebilir: minimum tutar aranmaz
+  if (reason === "minBasket") {
+    const known = await upsertCustomer(db, contact);
+    if (await findMergeTarget(db, brand.id, known.id, null, now)) reason = null;
+  }
   if (reason) {
     const customer = await upsertCustomer(db, contact);
     const note = reason === "closed" ? "kapalıyken geldi" : `minimum sepet (${formatTRY(minKurus)}) altında`;

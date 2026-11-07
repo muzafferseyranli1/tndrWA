@@ -111,6 +111,9 @@ export default function HelpPage() {
             Değişiklikten sonra kartta <B>&quot;Müşteriye güncel özeti gönder&quot;</B> çıkar; basınca müşteriye yeni tutar ve ürünler gider. Unutmayın, müşteri haberdar olmadan tutar değişmesin.
           </p>
           <p>
+            Müşteri siparişi yola çıkmadan yeni bir sepet gönderirse WhatsApp ona <B>&quot;Siparişime ekle&quot;</B> ya da <B>&quot;Ayrı sipariş&quot;</B> diye sorar. Eklemeyi seçerse ürünler mevcut siparişe girer, tutar ve indirim yeniden hesaplanır, müşteriye güncel özet kendiliğinden gider. Kartta kırmızı <B>&quot;Müşteri ürün ekledi&quot;</B> uyarısı çıkar, eklenen satırlarda <B>&quot;sonradan eklendi&quot;</B> yazar ve ses çalar; mutfağa ilettikten sonra <B>Gördüm</B>&apos;e basın.
+          </p>
+          <p>
             Kartta <B>&quot;teslimat adresi yok&quot;</B> uyarısı varsa Düzenle&apos;den kayıtlı adreslerden seçin ya da yeni adres yazın. Müşteri henüz adres adımındaysa beklemek daha doğru; adresi müşteri kendisi seçsin.
           </p>
           <p>

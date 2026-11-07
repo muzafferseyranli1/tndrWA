@@ -38,7 +38,7 @@ const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("tr-TR", { hour: "2
 
 /** Müşteri WhatsApp adımlarını bitirmedi: ne bekleniyor, hatırlatma ve otomatik iptal ne zaman. */
 function WaitingNote({ order }: { order: OrderDto }) {
-  const what = order.stage === "AWAITING_NOTICE" ? "KVKK bilgilendirmesi (\"Okudum, devam\")" : order.stage === "AWAITING_OPTIONS" ? "seçenek" : order.stage === "AWAITING_PAYMENT" ? "ödeme şekli" : "adres";
+  const what = order.stage === "AWAITING_MERGE" ? "\"Siparişime ekle / Ayrı sipariş\"" : order.stage === "AWAITING_NOTICE" ? "KVKK bilgilendirmesi (\"Okudum, devam\")" : order.stage === "AWAITING_OPTIONS" ? "seçenek" : order.stage === "AWAITING_PAYMENT" ? "ödeme şekli" : "adres";
   let plan = "";
   if (order.reminderSentAt) plan = `Hatırlatma ${hhmm(Date.parse(order.reminderSentAt))}'de gitti; yanıt gelmezse ${hhmm(Date.parse(order.reminderSentAt) + REPLY_TIMEOUT_MS)}'de otomatik iptal edilir.`;
   else if (order.promptedAt) plan = `Yanıt gelmezse ${hhmm(Date.parse(order.promptedAt) + REPLY_TIMEOUT_MS)}'de soru tekrarlanır, 5 dk sonra sipariş otomatik iptal edilir.`;
@@ -118,7 +118,7 @@ export default function OrdersPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [chatOrder]);
 
-  const listNew = tab === "active" ? (orders ?? []).filter((o) => o.status === "NEW" && o.stage === "READY").length : 0;
+  const listNew = tab === "active" ? (orders ?? []).filter((o) => (o.status === "NEW" && o.stage === "READY") || o.addedPending).length : 0;
   const newCount = Math.max(listNew, newCounts.find((c) => c.brandId === brandId)?.count ?? 0);
   const otherNew = newCounts.filter((c) => c.brandId !== brandId && c.count > 0).map((c) => ({ ...c, brand: brands?.find((b) => b.id === c.brandId) }));
   const alarmCount = newCount + (alarmOtherBrands ? otherNew.reduce((n, c) => n + c.count, 0) : 0);
@@ -273,6 +273,19 @@ export default function OrdersPage() {
     }
   }
 
+  async function ackAdded(order: OrderDto) {
+    setBusyId(order.id);
+    setError("");
+    try {
+      await api<OrderDto>(`/api/orders/${order.id}/ack-added`, { method: "POST", json: {} });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function setStatus(order: OrderDto, status: OrderStatusDto) {
     if (status === "CANCELLED" && !window.confirm(`#${order.id} numaralı sipariş iptal edilsin ve müşteriye bildirilsin mi?`)) return;
     setBusyId(order.id);
@@ -392,13 +405,13 @@ export default function OrdersPage() {
           {(orders ? [...orders].sort((a, b) => (newestFirst[tab] ? b.id - a.id : a.id - b.id)) : []).map((o) => {
             const step = next[o.status];
             return (
-              <li key={o.id} className={`rounded-xl border bg-white p-4 ${o.stage !== "READY" ? "border-slate-300 bg-slate-50" : o.status === "NEW" ? "border-red-400 ring-2 ring-red-100" : "border-slate-200"}`}>
+              <li key={o.id} className={`rounded-xl border bg-white p-4 ${o.stage !== "READY" ? "border-slate-300 bg-slate-50" : o.status === "NEW" || o.addedPending ? "border-red-400 ring-2 ring-red-100" : "border-slate-200"}`}>
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-lg font-semibold">#{o.id}</span>
                   {o.stage === "READY" ? (
                     <span className={`rounded-full px-2 py-0.5 text-xs ${label[o.status].cls}`}>{label[o.status].text}</span>
                   ) : (
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_NOTICE" ? "KVKK onayı bekleniyor" : o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_MERGE" ? "Ekleme sorusu bekleniyor" : o.stage === "AWAITING_NOTICE" ? "KVKK onayı bekleniyor" : o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
                   )}
                   <span className="text-sm text-slate-500">{time(o.createdAt)}</span>
                   <span className="ml-auto text-right">
@@ -411,6 +424,14 @@ export default function OrdersPage() {
                     {o.discountNote && <span className="mt-0.5 block rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">🎉 {o.discountNote}</span>}
                   </span>
                 </div>
+                {o.addedPending && tab === "active" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                    <span>➕ Müşteri WhatsApp&apos;tan bu siparişe ürün ekledi (aşağıda &quot;sonradan eklendi&quot;).</span>
+                    <button disabled={busyId === o.id} onClick={() => ackAdded(o)} className="ml-auto rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50">
+                      Gördüm
+                    </button>
+                  </div>
+                )}
                 <p className="mt-1 text-sm text-slate-700">
                   <b>{o.customer.name ?? "İsimsiz müşteri"}</b>
                   {o.customer.phone ? ` · +${o.customer.phone}` : " · telefon yok"}
@@ -423,6 +444,7 @@ export default function OrdersPage() {
                       <span className="w-10 font-semibold tabular-nums">{i.quantity}×</span>
                       <span className="flex-1">
                         {i.name}
+                        {i.added && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">➕ sonradan eklendi</span>}
                         {i.options.length > 0 && <span className="block text-xs text-slate-500">{i.options.join(" · ")}</span>}
                       </span>
                       <span className="tabular-nums text-slate-500">{i.unitText}</span>

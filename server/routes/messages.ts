@@ -8,7 +8,7 @@ const ALL = "{ad}, {no}, {toplam}, {indirim}, {tutar}, {odeme}, {adres} kullanı
 const KVKK = " {kvkk} ilk temasta müşteriye aydınlatma metni bağlantısını koyar (daha önce gönderildiyse boş kalır).";
 const DELIVERED_HINT = "Durum Teslim edildi olunca gider. {degerlendirme} sipariş için tek kullanımlık değerlendirme bağlantısını koyar. " + ALL;
 const LABELS: Record<MessageKey, { label: string; hint: string }> = {
-  WELCOME: { label: "Hoş geldin", hint: "Müşteri ilk yazdığında katalog düğmesiyle gider. {ad} kullanılabilir." + KVKK },
+  WELCOME: { label: "Hoş geldin", hint: "Müşteri 12 saattir yazışmadıysa, ya da açık siparişi yokken yazdığında (son menüden 1 saat geçtiyse) menüyle birlikte gider. {ad} kullanılabilir." + KVKK },
   KVKK_NOTICE: { label: "KVKK bilgilendirmesi (ilk sipariş)", hint: "Müşterinin ilk siparişinde, ödeme sorusundan önce gider; altında \"Okudum, devam\" ve \"KVKK Metni\" düğmeleri çıkar. Bir kez sorulur, okuma zamanı kaydedilir. {ad}, {no}, {link} (aydınlatma metni) kullanılabilir. İşletme/KVKK sayfasından kapatılabilir." },
   CLOSED: { label: "Kapalı (çalışma saati dışı)", hint: "Açılışa 1 saatten fazla varken sepet gönderen ya da \"1\" yazan müşteriye gider; sipariş alınmaz. {saatler} çalışma saatleri, {acilis} bir sonraki açılış. Saatleri Saatler sayfasından değiştirin." },
   PREORDER: { label: "Açılıştan önce verilen sipariş", hint: "Açılışa 1 saat kala ile açılış arasında sipariş veren müşteriye, sipariş mesajından önce gider. {acilis} açılış saati, {no} sipariş no." },
@@ -20,6 +20,8 @@ const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   CONFIRMED: { label: "Sipariş onayı", hint: "Ödeme ve adres tamamlanınca gider, sipariş panelde yeni olur. " + ALL },
   ORDER_REMINDER: { label: "Yanıt hatırlatması", hint: "Müşteri seçenek, ödeme ya da adres sorusuna 5 dakika yanıt vermezse soru yeniden gönderilir, ardından bu mesaj gider. {no} kullanılabilir." },
   ORDER_TIMEOUT: { label: "Yanıt gelmedi, sipariş sonlandı", hint: "Hatırlatmadan sonra 5 dakika daha yanıt gelmezse gider ve sipariş otomatik iptal edilir. {no} kullanılabilir." },
+  MERGE_ASK: { label: "Açık siparişe ekleme sorusu", hint: "Yola çıkmamış siparişi olan müşteri yeni sepet gönderince gider; altında \"Siparişime ekle\" / \"Ayrı sipariş\" düğmeleri çıkar. {no} açık siparişin numarası, {urunler} yeni sepetteki ürünler." },
+  MERGE_DONE: { label: "Ürünler siparişe eklendi", hint: "Müşteri \"Siparişime ekle\" deyince (varsa seçenekler sorulduktan sonra) gider. {urunler} siparişin güncel ürün listesidir. " + ALL },
   ORDER_UPDATED: { label: "Sipariş güncellendi", hint: "Personel siparişi düzenleyip \"Müşteriye güncel özeti gönder\"e basınca gider. {urunler} güncel ürün listesidir. " + ALL },
   PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
   ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },

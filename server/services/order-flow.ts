@@ -8,6 +8,9 @@ import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateV
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { orderCampaignAvailable, orderDiscount } from "./discount";
 import { ET_TANDIR_CAMPAIGN } from "../../shared/campaigns";
+import { getMinBasket, sendMinBasketNotice } from "./hours";
+import { itemLines } from "./order-edit";
+import { findMergeTarget, mergeOrderInto } from "./order-merge";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 /** Müşteri bu süreden sonra yazarsa eski yarım sipariş artık beklemede sayılmaz (personel elle tamamlar). */
@@ -23,9 +26,13 @@ export const optId = (orderId: number, itemId: number, groupId: number, choiceId
 /** "Olduğu gibi" / "Seçenekleri göster" düğmeleri */
 export const gateId = (orderId: number, itemId: number, wanted: boolean) => `optg:${orderId}:${itemId}:${wanted ? "yes" : "no"}`;
 export const kvkkId = (orderId: number, choice: "ok" | "text") => `kvkk:${orderId}:${choice}`;
+/** "Siparişime ekle" / "Ayrı sipariş" düğmeleri (yeni sepet, yola çıkmamış açık sipariş varken) */
+export const mergeId = (orderId: number, choice: "yes" | "no") => `merge:${orderId}:${choice}`;
 
-/** Müşteriden yanıt beklenen aşamalar (KVKK bilgilendirme onayı, seçenek, ödeme, adres). */
-export const WAITING_STAGES = ["AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"];
+/** Müşteriden yanıt beklenen aşamalar (açık siparişe ekleme, KVKK bilgilendirme onayı, seçenek, ödeme, adres). */
+export const WAITING_STAGES = ["AWAITING_MERGE", "AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"];
+/** Müşteri "ekle" dedi ama sipariş bu arada yola çıktı */
+const MERGE_LATE_TEXT = "Önceki siparişiniz yola çıktığı için bu ürünleri ona ekleyemedik; ayrı sipariş olarak devam ediyoruz.";
 /** "Okudum, devam" butonu yerine yazıyla onay */
 const ACK_TEXT = /^(okudum|tamam|onay(l[ıi]yorum)?|devam|evet|ok)\b/i;
 const NOTICE_STEP_KEY = "kvkk.noticeStep";
@@ -63,7 +70,7 @@ async function log(db: PrismaClient, o: FullOrder, type: "text" | "catalog", bod
 export async function resendPendingQuestion(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number): Promise<void> {
   const order = await load(db, orderId);
   if (!order || order.status !== "NEW") return;
-  if (order.stage === "AWAITING_NOTICE" || order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
+  if (order.stage === "AWAITING_MERGE" || order.stage === "AWAITING_NOTICE" || order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
   if (order.stage === "AWAITING_ADDRESS") return askAddress(db, cloud, order);
 }
 
@@ -75,6 +82,7 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
   try {
     let order = await load(db, orderId);
     if (!order || order.stage === "READY") return;
+    if (order.stage === "AWAITING_MERGE") return await askMerge(db, cloud, order);
 
     // İlk siparişte KVKK bilgilendirmesi: müşteri "Okudum, devam" deyince sipariş adımları başlar (bir kez sorulur)
     if (order.stage !== "AWAITING_ADDRESS" && !order.customer.noticeAckAt && policyUrl() && (await noticeStepEnabled(db))) {
@@ -82,15 +90,14 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
       return await askNotice(db, cloud, (await load(db, orderId))!);
     }
     if (order.stage === "AWAITING_NOTICE") {
-      const items = await db.orderItem.findMany({ where: { orderId: order.id }, select: { productId: true } });
-      const stage = (await needsOptions(db, items.map((i) => i.productId).filter((id): id is number => id !== null))) ? "AWAITING_OPTIONS" : "AWAITING_PAYMENT";
-      await db.order.update({ where: { id: order.id }, data: { stage } });
+      await db.order.update({ where: { id: order.id }, data: { stage: await firstStage(db, order.id) } });
       order = (await load(db, orderId))!;
     }
 
     if (order.stage === "AWAITING_OPTIONS") {
       const question = await nextQuestion(db, order.id);
       if (question) return await askOption(db, cloud, order, question);
+      if (order.mergeIntoId) return await completeMerge(db, cloud, order); // "Siparişime ekle": seçenekler bitti, ürünler açık siparişe taşınır
       await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_PAYMENT" } }); // soru kalmadı
       order = (await load(db, orderId))!;
     }
@@ -119,6 +126,104 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
     const o = await load(db, orderId).catch(() => null);
     if (o) await reportFailure(db, o, "Ödeme şekli sorusu", "", err);
     else logger.warn({ err: (err as Error).message, orderId }, "Ödeme sorusu gönderilemedi");
+  }
+}
+
+/** Sepetin ilk adımı: ürünlerden birine seçenek grubu bağlıysa seçenek soruları, yoksa ödeme şekli. */
+async function firstStage(db: PrismaClient, orderId: number): Promise<"AWAITING_OPTIONS" | "AWAITING_PAYMENT"> {
+  const items = await db.orderItem.findMany({ where: { orderId }, select: { productId: true } });
+  return (await needsOptions(db, items.map((i) => i.productId).filter((id): id is number => id !== null))) ? "AWAITING_OPTIONS" : "AWAITING_PAYMENT";
+}
+
+/**
+ * Yeni sepet geldi: müşterinin yola çıkmamış açık siparişi varsa önce "Bu ürünleri siparişinize ekleyelim mi?" sorulur,
+ * yoksa normal akış (seçenek, ödeme, adres) başlar.
+ */
+export async function offerMergeOrStart(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number): Promise<void> {
+  try {
+    const order = await load(db, orderId);
+    if (!order || order.status !== "NEW" || order.stage === "READY") return;
+    if (canSend(cloud, order) && (await findMergeTarget(db, order.brandId, order.customerId, order.id))) {
+      await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_MERGE" } });
+      return await askMerge(db, cloud, (await load(db, orderId))!);
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, orderId }, "Siparişe ekleme denetlenemedi");
+  }
+  await startOrderConversation(db, cloud, orderId);
+}
+
+/** "Siparişime ekle" / "Ayrı sipariş" sorusu. Açık sipariş kalmadıysa (yola çıktı) ya da düğme gönderilemezse ayrı sipariş olarak devam edilir. */
+async function askMerge(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
+  const target = await findMergeTarget(db, order.brandId, order.customerId, order.id);
+  if (!target) return continueSeparately(db, cloud, order);
+  if (!canSend(cloud, order)) return;
+  const items = await db.orderItem.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } });
+  const body = renderTemplate(await templateFor(db, order.brand.code, "MERGE_ASK"), { ...orderVars(order, order.customer), no: target.id, urunler: itemLines(items) });
+  try {
+    const id = await cloud.sendButtons(order.brand.waPhoneNumberId!, order.customer.waId!, body, [
+      { id: mergeId(order.id, "yes"), title: "Siparişime ekle ➕" },
+      { id: mergeId(order.id, "no"), title: "Ayrı sipariş" },
+    ]);
+    await log(db, order, "text", body, id);
+  } catch (err) {
+    await reportFailure(db, order, "Siparişe ekleme sorusu", body, err);
+    await continueSeparately(db, cloud, order);
+  }
+}
+
+async function tell(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, text: string): Promise<void> {
+  if (!canSend(cloud, order)) return;
+  try {
+    const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, text);
+    await log(db, order, "text", text, id);
+  } catch (err) {
+    await reportFailure(db, order, "Bilgi mesajı", text, err);
+  }
+}
+
+/** Ayrı sipariş: normal akış. Sepet tek başına minimum tutarın altındaysa (ekleme için kabul edilmişti) sipariş açılmaz. */
+async function continueSeparately(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
+  const minKurus = await getMinBasket(db, order.brand.code);
+  if (minKurus > 0 && order.totalKurus < minKurus) {
+    await db.order.update({ where: { id: order.id }, data: { status: "CANCELLED", mergeIntoId: null } });
+    await db.orderChange.create({ data: { orderId: order.id, text: "Ayrı sipariş minimum sepet tutarının altında kaldı, otomatik iptal edildi" } });
+    return sendMinBasketNotice(db, cloud, order.brand, order.customer, order.totalKurus, minKurus);
+  }
+  await db.order.update({ where: { id: order.id }, data: { stage: await firstStage(db, order.id), mergeIntoId: null } });
+  await startOrderConversation(db, cloud, order.id);
+}
+
+async function answerMerge(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, add: boolean): Promise<void> {
+  if (!add) return continueSeparately(db, cloud, order);
+  const target = await findMergeTarget(db, order.brandId, order.customerId, order.id);
+  if (!target) {
+    await tell(db, cloud, order, MERGE_LATE_TEXT);
+    return continueSeparately(db, cloud, order);
+  }
+  // Seçenekli ürün varsa önce sorular (sepette zaten mesaj olduğu için ilk soru "siparişinizi aldık" demez), bitince taşınır
+  const options = (await firstStage(db, order.id)) === "AWAITING_OPTIONS";
+  await db.order.update({ where: { id: order.id }, data: { mergeIntoId: target.id, ...(options ? { stage: "AWAITING_OPTIONS" } : {}) } });
+  if (options) return startOrderConversation(db, cloud, order.id);
+  return completeMerge(db, cloud, (await load(db, order.id))!);
+}
+
+/** Ürünleri açık siparişe taşır, müşteriye güncel özeti gönderir. Sipariş bu arada yola çıktıysa ayrı sipariş olarak devam eder. */
+async function completeMerge(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder): Promise<void> {
+  const targetId = order.mergeIntoId;
+  const merged = targetId ? await mergeOrderInto(db, order.id, targetId) : null;
+  if (!targetId || !merged) {
+    await tell(db, cloud, order, MERGE_LATE_TEXT);
+    return continueSeparately(db, cloud, (await load(db, order.id))!);
+  }
+  const target = await db.order.findUnique({ where: { id: targetId }, include: { brand: true, customer: true, items: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } } });
+  if (!target || !canSend(cloud, target)) return;
+  const body = renderTemplate(await templateFor(db, target.brand.code, "MERGE_DONE"), { ...orderVars(target, target.customer), urunler: itemLines(target.items) });
+  try {
+    const id = await cloud.sendText(target.brand.waPhoneNumberId!, target.customer.waId!, body);
+    await recordOutbound(db, { brandId: target.brandId, customerId: target.customerId, type: "text", body, waMessageId: id, orderId: target.id });
+  } catch (err) {
+    await reportFailure(db, target, "Ekleme onayı", body, err);
   }
 }
 
@@ -272,10 +377,11 @@ async function orderById(db: PrismaClient, brandId: number, customerId: number, 
   return db.order.findFirst({ where: { id: orderId, brandId, customerId, ...OPEN, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } }, include: { brand: true, customer: true } });
 }
 
-/** Yazı ve konum: önce adres bekleyen en yeni sipariş, sonra seçenek, ödeme, KVKK bilgilendirmesi bekleyen. */
+/** Yazı ve konum: önce ekleme sorusu, adres bekleyen en yeni sipariş, sonra seçenek, ödeme, KVKK bilgilendirmesi bekleyen. */
 async function orderForFreeText(db: PrismaClient, brandId: number, customerId: number, now: Date): Promise<FullOrder | null> {
   const where = { brandId, customerId, status: "NEW", createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } };
   return (
+    (await db.order.findFirst({ where: { ...where, stage: "AWAITING_MERGE" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_ADDRESS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_OPTIONS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_PAYMENT" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
@@ -302,6 +408,7 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       const [kind, orderIdText, arg] = reply.split(":");
       const order = await orderById(db, brand.id, customer.id, Number(orderIdText), now);
       if (!order) return; // bitmiş ya da başkasına ait eski bir mesajdaki düğme
+      if (kind === "merge" && order.stage === "AWAITING_MERGE") return await answerMerge(db, cloud, order, arg === "yes");
       if (kind === "optg" && order.stage === "AWAITING_OPTIONS") {
         const [, , itemId, answer] = reply.split(":");
         await applyGate(db, order.id, Number(itemId), answer === "yes"); // eski düğme yok sayılır, sıradaki soru yeniden sorulur
@@ -345,8 +452,8 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       return;
     }
 
-    if (order.stage === "AWAITING_PAYMENT" || order.stage === "AWAITING_OPTIONS") {
-      // Liste yerine yazı yazdı: aynı soruyu (seçenek ya da ödeme) yeniden gönder
+    if (order.stage === "AWAITING_MERGE" || order.stage === "AWAITING_PAYMENT" || order.stage === "AWAITING_OPTIONS") {
+      // Liste/düğme yerine yazı yazdı: aynı soruyu (ekleme, seçenek ya da ödeme) yeniden gönder
       if (message.type === "text") await startOrderConversation(db, cloud, order.id);
       return;
     }

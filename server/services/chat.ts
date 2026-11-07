@@ -12,6 +12,10 @@ import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 /** Müşteri bu süre içinde hiç yazışmadıysa ilk mesajına hoş geldin + katalog gönderilir. */
 export const WELCOME_GAP_MS = 12 * 60 * 60 * 1000;
+/** Yazışma sürse de: açık siparişi olmayan müşteri yazı yazarsa, son menüden bu süre geçtiyse menü yeniden gider. */
+export const MENU_REPEAT_MS = 60 * 60 * 1000;
+/** Bu durumlardaki (yakın zamanda verilmiş) sipariş sürerken yazılan mesaja menü gönderilmez; personel yanıtlar. */
+const ACTIVE_ORDER_STATUSES = ["NEW", "PREPARING", "ON_THE_WAY"];
 /** Meta'nın serbest metin penceresi: müşterinin son mesajından itibaren 24 saat. */
 export const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -122,7 +126,8 @@ export async function recordStatus(db: PrismaClient, eventBody: string): Promise
 }
 
 /**
- * Müşteri uzun süredir yazışmadıysa (ya da ilk kez yazıyorsa) hoş geldin metniyle birlikte kataloğu gönderir.
+ * Müşteri uzun süredir yazışmadıysa (ya da ilk kez yazıyorsa) hoş geldin metniyle birlikte menüyü gönderir.
+ * Yazışma sürse de, sürmekte olan siparişi yokken yazı yazan müşteriye son menüden 1 saat sonra menü yeniden gider.
  * Hata fırlatmaz; sipariş/yazışma kaydını etkilemez.
  */
 export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, inbound: Message): Promise<boolean> {
@@ -130,7 +135,14 @@ export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloud
     if (!cloud || !brand.waPhoneNumberId || !customer.waId || inbound.type === "order") return false;
     const since = new Date(inbound.createdAt.getTime() - WELCOME_GAP_MS);
     const recent = await db.message.count({ where: { brandId: brand.id, customerId: customer.id, createdAt: { gte: since, lt: inbound.createdAt } } });
-    if (recent > 0) return false;
+    if (recent > 0) {
+      // Yazışma sürüyor: yalnız yazı yazan, sürmekte olan siparişi olmayan müşteriye ve son menüden 1 saat geçtiyse
+      if (inbound.type !== "text") return false;
+      const active = await db.order.count({ where: { brandId: brand.id, customerId: customer.id, status: { in: ACTIVE_ORDER_STATUSES }, createdAt: { gte: since } } });
+      if (active > 0) return false;
+      const lastMenu = await db.message.findFirst({ where: { brandId: brand.id, customerId: customer.id, direction: "OUT", type: "catalog", createdAt: { lt: inbound.createdAt } }, orderBy: { createdAt: "desc" } });
+      if (lastMenu && inbound.createdAt.getTime() - lastMenu.createdAt.getTime() < MENU_REPEAT_MS) return false;
+    }
     const kvkk = await noticeLine(db, customer);
     const repeatable = await findRepeatable(db, brand.id, customer.id);
     const base = renderTemplate(await templateFor(db, brand.code, "WELCOME"), { ad: customer.name, kvkk });

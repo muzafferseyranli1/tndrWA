@@ -144,6 +144,16 @@ export async function editDetails(db: Db, orderId: number, patch: DetailsPatch):
   if (noticeNeeded) await needsNotice(db, orderId);
 }
 
+/** Müşteriye gidecek ürün satırları: "1× Ayran (30 cl) — 120,00 TL", seçenekler parantez içinde. */
+export function itemLines(items: (Pick<OrderItem, "name" | "quantity" | "unitKurus" | "extraKurus"> & { options: Pick<OrderItemOption, "choiceName" | "extraKurus">[] })[]): string {
+  return items
+    .map((i) => {
+      const opts = describeOptions(i.options);
+      return `${i.quantity}× ${i.name}${opts.length ? ` (${opts.join(", ")})` : ""} — ${formatTRY((i.unitKurus + i.extraKurus) * i.quantity)}`;
+    })
+    .join("\n");
+}
+
 export interface UpdateNotice {
   sent: boolean;
   error?: string;
@@ -159,12 +169,7 @@ export async function sendUpdateNotice(db: Db, cloud: WhatsappCloudClient | null
   if (!order.brand.waPhoneNumberId) return { sent: false, error: "Markanın Cloud API numara kimliği girilmemiş." };
   if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok." };
   try {
-    const urunler = order.items
-      .map((i) => {
-        const opts = describeOptions(i.options);
-        return `${i.quantity}× ${i.name}${opts.length ? ` (${opts.join(", ")})` : ""} — ${formatTRY((i.unitKurus + i.extraKurus) * i.quantity)}`;
-      })
-      .join("\n");
+    const urunler = itemLines(order.items);
     const text = renderTemplate(await templateFor(db, order.brand.code, "ORDER_UPDATED"), { ...orderVars(order, order.customer), urunler });
     const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
     await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId });

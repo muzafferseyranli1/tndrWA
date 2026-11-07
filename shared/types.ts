@@ -68,7 +68,7 @@ export interface OrderDto {
   totalKurus: number;
   totalText: string;
   /** AWAITING_PAYMENT | AWAITING_ADDRESS: müşteriden bilgi bekleniyor; READY: personel işleyebilir */
-  stage: "AWAITING_NOTICE" | "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
+  stage: "AWAITING_MERGE" | "AWAITING_NOTICE" | "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
   paymentLabel: string;
   discountPercent: number;
   discountText: string;
@@ -84,6 +84,8 @@ export interface OrderDto {
   canEdit: boolean;
   /** Personel düzenledi ama müşteriye güncel özet henüz gönderilmedi */
   noticePending: boolean;
+  /** Müşteri WhatsApp'tan bu siparişe ürün ekledi, personel henüz "Gördüm" demedi (uyarı + ses) */
+  addedPending: boolean;
   /** Müşteriye son soru ne zaman gitti (yanıt bekleniyorsa) */
   promptedAt: string | null;
   /** Yanıt gelmediği için hatırlatma ne zaman gitti (5 dk sonra hâlâ yanıt yoksa otomatik iptal) */
@@ -91,7 +93,7 @@ export interface OrderDto {
   /** Personelin yaptığı değişiklikler, en yeni başta */
   changes: { text: string; createdAt: string }[];
   customer: { name: string | null; phone: string | null };
-  items: { id: number; name: string; quantity: number; unitText: string; lineText: string; /** Müşterinin seçtiği seçenekler (ekstra ücretli olanlar fiyatıyla) */ options: string[] }[];
+  items: { id: number; name: string; quantity: number; unitText: string; lineText: string; /** Müşterinin seçtiği seçenekler (ekstra ücretli olanlar fiyatıyla) */ options: string[]; /** Müşteri sonradan (yeni sepetle) ekledi */ added: boolean }[];
 }
 
 export interface OrderStatusResultDto {

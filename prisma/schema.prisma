@@ -162,6 +162,10 @@ model Order {
   ratingRef      Rating?
   // Personel siparişi düzenledi ama müşteriye güncel özet henüz gönderilmedi
   noticePending  Boolean     @default(false)
+  // Müşteri WhatsApp'tan bu siparişe ürün ekledi, personel henüz "Gördüm" demedi (panelde uyarı + ses)
+  addedPending   Boolean     @default(false)
+  // Yeni sepet: müşteri "Siparişime ekle" dedi; seçenek soruları bitince ürünler bu siparişe taşınır
+  mergeIntoId    Int?
   // Müşteriye son soru (seçenek/ödeme/adres) ne zaman gitti; 5 dk yanıt yoksa soru tekrarlanır, 5 dk daha yoksa sipariş iptal edilir
   promptedAt     DateTime?
   reminderSentAt DateTime?
@@ -189,6 +193,8 @@ model OrderItem {
   // İsteğe bağlı seçenekler için müşterinin cevabı: null = henüz sorulmadı, false = "olduğu gibi", true = seçenekleri gösteriliyor
   optionsWanted Boolean?
   options    OrderItemOption[]
+  // Müşteri sonradan (yeni sepetle) eklediyse ekleme zamanı; panelde "sonradan eklendi" görünür
+  addedAt    DateTime?
 }
 
 // WhatsApp yazışması: müşteriden gelen ve panelden/otomatik giden mesajlar. Kişisel veri içerir, KVKK gereği düzenli silinir.

@@ -32,7 +32,7 @@ import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
-import { handleOrderReply, startOrderConversation } from "./services/order-flow";
+import { handleOrderReply, offerMergeOrStart } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
@@ -92,7 +92,7 @@ async function main() {
     webhooksRouter(db, env, {
       // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
       onOrderCreated: (orderId) =>
-        void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => startOrderConversation(db, cloudForAck, orderId)),
+        void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => offerMergeOrStart(db, cloudForAck, orderId)),
       onRejected: (r) => void (r.reason === "closed" ? sendClosedNotice(db, cloudForAck, r.brand, r.customer) : sendMinBasketNotice(db, cloudForAck, r.brand, r.customer, r.totalKurus, r.minKurus)),
       // Müşteri yazdı: bekleyen siparişin ödeme/adres adımını işle, yoksa uzun süre sonra ilk mesajsa hoş geldin gönder
       onInbound: (i) =>
