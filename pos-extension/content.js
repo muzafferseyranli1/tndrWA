@@ -62,6 +62,8 @@
     <div class="panel" id="panel">
       <h3>tndrWA · WhatsApp siparişleri</h3>
       <div id="link" class="muted">Bağlanıyor…</div>
+      <label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="optSubmit"> Sorun yoksa "Sipariş Oluştur"a da bas</label>
+      <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="optAuto"> Yeni siparişleri kendiliğinden gir (bu pencere POS'a ayrılmış olmalı)</label>
       <div id="msg"></div>
       <div id="orders"></div>
       <hr style="border:0;border-top:1px solid #e2e8f0;margin:10px 0">
@@ -70,7 +72,7 @@
         <button class="b" id="cust">Müşterileri panele gönder</button>
         <button class="b" id="refresh">Yenile</button>
       </div>
-      <p class="muted">Menü ve müşteriler POS'tan yalnız okunur. Sipariş POS'a doldurulur; kontrol edip "Sipariş Oluştur"a siz basarsınız.</p>
+      <p class="muted">Menü ve müşteriler POS'tan yalnız okunur. Sipariş POS'a doldurulur; sorun varsa (eşleşmeyen ürün, tutar farkı, uygulanamayan indirim) oluşturulmaz, personele bırakılır.</p>
     </div>
     <button class="fab" id="fab">tndrWA<span class="badge" id="count" style="display:none">0</span></button>`;
   document.documentElement.appendChild(host);
@@ -84,6 +86,18 @@
   let cafeAt = "";
   let orders = [];
   let busy = false;
+  // Ayarlar: "Sipariş Oluştur"a da bas (varsayılan açık), yeni siparişleri kendiliğinden gir (varsayılan kapalı)
+  const opts = { submit: true, auto: false };
+  // Otomatik modda sorun çıkan siparişler tekrar denenmez (personel elle tamamlar ya da "POS'a doldur" ile yeniden dener)
+  let skipped = {};
+  (async () => {
+    const saved = (await store.get("tndrwaOpts")) || {};
+    Object.assign(opts, saved);
+    skipped = (await store.get("tndrwaSkip")) || {};
+    $("optSubmit").checked = opts.submit;
+    $("optAuto").checked = opts.auto;
+  })();
+  const saveOpts = () => store.set("tndrwaOpts", { ...opts });
 
   // Açık ekranın işletmesi (POS'ta işletmeler arası geçişte değişir; adres değişince yeniden okunur)
   async function ensureCafe() {
@@ -135,10 +149,32 @@
     shadow.querySelectorAll("[data-fill]").forEach((b) => (b.onclick = () => fill(Number(b.dataset.fill))));
   }
 
-  async function fill(id) {
+  function alarm(text) {
+    document.title = `⚠ ${text}`;
+    try {
+      const ctx = new AudioContext();
+      [880, 660, 880].forEach((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.frequency.value = f;
+        g.gain.value = 0.15;
+        o.connect(g).connect(ctx.destination);
+        o.start(ctx.currentTime + i * 0.25);
+        o.stop(ctx.currentTime + i * 0.25 + 0.2);
+      });
+    } catch {
+      /* ses izni yoksa yalnız görsel uyarı */
+    }
+  }
+
+  async function fill(id, auto = false) {
     if (busy) return;
     const order = orders.find((o) => o.id === id);
     if (!order) return;
+    if (!auto && skipped[id]) {
+      delete skipped[id];
+      await store.set("tndrwaSkip", skipped);
+    }
     busy = true;
     shadow.querySelectorAll("button").forEach((b) => (b.disabled = true));
     show("muted", `WA #${id} için ${esc(order.brand.posCafeName || order.brand.name)} sipariş ekranı hazırlanıyor…`);
@@ -148,13 +184,33 @@
       const here = await page("cafeInfo");
       if (here.cafeId !== order.brand.posCafeId) throw new Error(`Açık ekran ${here.cafeName || "başka bir işletme"} için. Bu sipariş ${order.brand.posCafeName || order.brand.name} işletmesine yazılmalı: sipariş listesine dönüp tekrar "POS'a doldur" deyin.`);
       show("muted", `WA #${id} dolduruluyor…`);
-      const r = await page("fillOrder", [order]);
-      await store.set("tndrwaPending", { id, cafeId: order.brand.posCafeId, at: Date.now() });
-      show(
-        r.warnings.length ? "warn" : "ok",
-        `WA #${id} dolduruldu (${r.customer === "created" ? "yeni müşteri eklendi" : "kayıtlı müşteri seçildi"}${r.posTotal !== null ? `, POS toplamı ${r.posTotal.toFixed(2)} TL` : ""}).<br><b>Kontrol edip "Sipariş Oluştur"a basın.</b>${r.warnings.length ? `<ul>${r.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}`,
-      );
+      const r = await page("fillOrder", [order, { submit: opts.submit }]);
+      const list = r.warnings.length ? `<ul>${r.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : "";
+      const who = r.customer === "created" ? "yeni müşteri eklendi" : "kayıtlı müşteri seçildi";
+      if (r.posRef) {
+        await api("POST", `/api/pos-ext/orders/${id}/done`, { cafeId: order.brand.posCafeId, posRef: r.posRef });
+        show(r.warnings.length ? "warn" : "ok", `WA #${id} POS'ta <b>${esc(r.posRef)}</b> olarak oluşturuldu (${who}), panele işlendi.${list}`);
+        refresh();
+      } else if (r.submitted) {
+        await store.set("tndrwaPending", { id, cafeId: order.brand.posCafeId, at: Date.now() });
+        show("warn", `WA #${id} oluşturuldu; POS numarası sipariş listesinden okunacak.${list}`);
+      } else {
+        await store.set("tndrwaPending", { id, cafeId: order.brand.posCafeId, at: Date.now() });
+        if (r.blockers.length) {
+          skipped[id] = Date.now();
+          await store.set("tndrwaSkip", skipped);
+          alarm(`WA #${id} POS'a eksik yazıldı`);
+          show("err", `WA #${id} dolduruldu ama <b>oluşturulmadı</b>, kontrol gerekiyor (${who}):${list}<b>Düzeltip "Sipariş Oluştur"a basın.</b>`);
+        } else {
+          show("ok", `WA #${id} dolduruldu (${who}${r.posTotal !== null ? `, POS toplamı ${r.posTotal.toFixed(2)} TL` : ""}).<br><b>Kontrol edip "Sipariş Oluştur"a basın.</b>${list}`);
+        }
+      }
     } catch (err) {
+      if (auto) {
+        skipped[id] = Date.now();
+        await store.set("tndrwaSkip", skipped);
+        alarm(`WA #${id} POS'a yazılamadı`);
+      }
       show("err", `WA #${id}: ${esc(err.message)}`);
     } finally {
       busy = false;
@@ -178,6 +234,25 @@
     }
   }
 
+  // Otomatik mod: sipariş listesindeyken (ya da boş Paket ekranında) sıradaki siparişi kendiliğinden gir
+  async function autoTick() {
+    if (!opts.auto || busy) return;
+    if (!/\/app\/(orderlist|order\/Paket)/.test(location.pathname)) return;
+    await refresh();
+    const next = orders.find((o) => !skipped[o.id]);
+    if (next) await fill(next.id, true);
+  }
+
+  $("optSubmit").onchange = (e) => ((opts.submit = e.target.checked), saveOpts());
+  $("optAuto").onchange = (e) => {
+    opts.auto = e.target.checked;
+    if (opts.auto && !opts.submit) {
+      opts.submit = true;
+      $("optSubmit").checked = true;
+    }
+    saveOpts();
+    show(opts.auto ? "warn" : "muted", opts.auto ? "Otomatik mod açık: yeni WhatsApp siparişleri bu pencerede kendiliğinden girilecek. Bu pencereyi başka iş için kullanmayın." : "Otomatik mod kapalı.");
+  };
   $("refresh").onclick = refresh;
   $("menu").onclick = async () => {
     try {
@@ -221,6 +296,6 @@
   };
 
   refresh();
-  setInterval(refresh, 30000);
+  setInterval(() => (opts.auto ? autoTick() : refresh()), 15000);
   setInterval(watchCreated, 2000);
 })();

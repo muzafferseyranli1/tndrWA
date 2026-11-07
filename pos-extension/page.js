@@ -329,7 +329,14 @@
     }
   }
 
-  async function fillOrder(order) {
+  // Siparişi oluşturmaya engel OLMAYAN uyarılar (yalnız bilgi); diğer her uyarı otomatik "Sipariş Oluştur"u durdurur
+  const INFO_ONLY = [/^Mahalle POS listesinde bulunamadı/, /^Adreste mahalle bulunamadı/, /^Mahalle listesi yüklenemedi/];
+
+  /**
+   * Siparişi Paket ekranına doldurur. opts.submit: sorun yoksa "Sipariş Oluştur"a basar ve POS numarasını okur.
+   * Sorun (engel) varsa oluşturmaz; sipariş doldurulmuş halde personele kalır.
+   */
+  async function fillOrder(order, opts = {}) {
     const warnings = [];
     const warn = (w) => warnings.push(w);
     if (!/\/app\/order\/Paket/.test(location.pathname)) throw new Error("Önce POS'ta Paket sipariş ekranını açın.");
@@ -352,7 +359,28 @@
     const waTotal = order.totalKurus / 100;
     if (posTotal !== null && Math.abs(posTotal - waTotal) > 0.009) warn(`Tutar farkı: POS ${posTotal.toFixed(2)} TL, WhatsApp ${waTotal.toFixed(2)} TL. Kontrol edin.`);
     if (order.discountKurus > 0) warn(`WhatsApp'ta indirim var (${order.discountNote}): müşteri ${order.payableText} ödeyecek. POS'ta indirimi uygulayın.`);
-    return { customer: who, posTotal, warnings };
+    const blockers = warnings.filter((w) => !INFO_ONLY.some((re) => re.test(w)));
+    let submitted = false;
+    let posRef = null;
+    if (opts.submit && !blockers.length) {
+      const btn = buttonByText("Sipariş Oluştur");
+      if (!btn || btn.disabled) {
+        blockers.push('"Sipariş Oluştur" düğmesi etkin değil.');
+        warnings.push(blockers[blockers.length - 1]);
+      } else {
+        btn.click();
+        submitted = await waitFor(() => !/\/app\/order\/Paket/.test(location.pathname), 8000);
+        if (!submitted) {
+          const why = lastToastError();
+          blockers.push(`Sipariş oluşturulamadı${why ? `: ${why}` : ""}. Ekranı kontrol edin.`);
+          warnings.push(blockers[blockers.length - 1]);
+        } else {
+          posRef = await waitFor(() => findCreated(order.id), 8000);
+          if (!posRef) warnings.push("Sipariş oluşturuldu ama POS numarası okunamadı; sipariş listesinde görünce panele işlenecek.");
+        }
+      }
+    }
+    return { customer: who, posTotal, warnings, blockers, submitted: !!submitted, posRef };
   }
 
   /**
