@@ -16,6 +16,19 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  */
 export function posExtRouter(db: PrismaClient): Router {
   const router = Router();
+  // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
+  router.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.get("origin");
+    if (origin && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Pos-Token");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Max-Age", "600");
+    }
+    if (req.method === "OPTIONS") return void res.status(204).end();
+    next();
+  });
   router.use(express.json({ limit: "6mb" }));
   router.use(async (req: Request, res: Response, next: NextFunction) => {
     if (!(await verifyPosToken(db, req.get("x-pos-token") ?? undefined))) return void res.status(401).json({ error: "Eklenti anahtarı geçersiz. Panelde POS sayfasından yeni anahtar oluşturup eklentiye girin." });
