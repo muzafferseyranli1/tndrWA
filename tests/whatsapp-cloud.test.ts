@@ -153,6 +153,32 @@ test("katalog mesajı: görsel için seçilen ürün parametresi gönderilir", a
   assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive.action, { name: "catalog_message", parameters: { thumbnail_product_retailer_id: "ayran-30-cl" } });
 });
 
+test("ürün listesi: product_list gövdesi bölümler ve ürünler verilen sırayla", async () => {
+  const { fn, calls } = fake(() => ({ body: { messages: [{ id: "wamid.PL1" }] } }));
+  const id = await new WhatsappCloudClient(cfg, fn).sendProductList("1408635558995998", "905551112233", {
+    catalogId: "1751966875872377",
+    header: "Yerinde Tandır Menü",
+    body: "Hoş geldiniz",
+    sections: [
+      { title: "Et Tandırlar", retailerIds: ["tandir-tabagi-100-g", "tandir-tabagi-150-g"] },
+      { title: "İçecekler", retailerIds: ["ayran-30-cl"] },
+    ],
+  });
+  assert.equal(id, "wamid.PL1");
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)).interactive, {
+    type: "product_list",
+    header: { type: "text", text: "Yerinde Tandır Menü" },
+    body: { text: "Hoş geldiniz" },
+    action: {
+      catalog_id: "1751966875872377",
+      sections: [
+        { title: "Et Tandırlar", product_items: [{ product_retailer_id: "tandir-tabagi-100-g" }, { product_retailer_id: "tandir-tabagi-150-g" }] },
+        { title: "İçecekler", product_items: [{ product_retailer_id: "ayran-30-cl" }] },
+      ],
+    },
+  });
+});
+
 test("katalog mesajı: kapak ürünü reddedilirse (131009) kapaksız yeniden gönderilir, başka hatada denemez", async () => {
   const { fn, calls } = fake((_url, init) =>
     JSON.parse(String(init.body)).interactive.action.parameters ? { status: 400, body: { error: { message: "(#131009) Parameter value is not valid", code: 131009 } } } : { body: { messages: [{ id: "wamid.CAT3" }] } },

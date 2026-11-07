@@ -167,6 +167,29 @@ export class WhatsappCloudClient {
     }
   }
 
+  /**
+   * Kategorili ürün listesi (multi-product message): bölümler ve ürünler verilen sırayla görünür, müşteri sepete ekleyip sipariş verir.
+   * WhatsApp sınırları: başlık ≤60, bölüm ≤10, bölüm adı ≤24 karakter, toplam ≤30 ürün (çağıran denetler).
+   */
+  async sendProductList(phoneNumberId: string, to: string, input: { catalogId: string; header: string; body: string; sections: { title: string; retailerIds: string[] }[] }): Promise<string | null> {
+    const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {
+      method: "POST",
+      json: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "product_list",
+          header: { type: "text", text: input.header },
+          body: { text: input.body },
+          action: { catalog_id: input.catalogId, sections: input.sections.map((s) => ({ title: s.title, product_items: s.retailerIds.map((id) => ({ product_retailer_id: id })) })) },
+        },
+      },
+    });
+    return out.messages?.[0]?.id ?? null;
+  }
+
   /** Seçim listesi (en fazla 10 satır). Müşterinin seçimi webhook'ta `interactive.list_reply.id` olarak gelir. */
   async sendList(phoneNumberId: string, to: string, input: { body: string; buttonText: string; rows: { id: string; title: string; description?: string }[] }): Promise<string | null> {
     const out = await this.call<{ messages?: { id?: string }[] }>(`${phoneNumberId}/messages`, {

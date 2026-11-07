@@ -6,9 +6,13 @@ import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
 import type { MessageTemplateDto } from "@shared/types";
 
+type MenuMode = "catalog" | "list";
+
 interface ThumbData {
   retailerId: string | null;
   products: { retailerId: string; name: string; imageUrl: string }[];
+  mode: MenuMode;
+  list: { sections: { title: string; count: number }[]; items: number; fits: boolean; reason: string | null; maxSections: number; maxItems: number };
 }
 
 export default function MessagesPage() {
@@ -38,6 +42,16 @@ export default function MessagesPage() {
     setThumb(null);
     api<ThumbData>(`/api/catalog-thumbnail?brandId=${brandId}`).then(setThumb).catch(() => undefined);
   }, [brandId]);
+
+  async function saveMode(mode: MenuMode) {
+    setThumbMsg("");
+    try {
+      setThumb(await api<ThumbData>("/api/catalog-thumbnail", { method: "PUT", json: { brandId, mode } }));
+      setThumbMsg(mode === "list" ? "Kaydedildi. Menü artık kategorili ürün listesi olarak gider." : "Kaydedildi. Menü artık katalog düğmesiyle gider.");
+    } catch (e) {
+      setThumbMsg((e as Error).message);
+    }
+  }
 
   async function saveThumb(retailerId: string | null) {
     setThumbMsg("");
@@ -77,8 +91,33 @@ export default function MessagesPage() {
         </p>
         {thumb && (
           <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="font-medium">Katalog mesajı görseli</h2>
-            <p className="mb-3 text-sm text-slate-500">Müşteriye giden &quot;Kataloğu görüntüle&quot; mesajının üstünde görünen görsel. Seçmezseniz WhatsApp katalogdaki ilk ürünü gösterir. Yalnızca görseli olan, aktif ürünler seçilebilir.</p>
+            <h2 className="font-medium">Menü mesajı</h2>
+            <p className="mb-3 text-sm text-slate-500">Hoş geldin mesajıyla ve Yazışma&apos;daki &quot;Katalog gönder&quot; ile müşteriye giden menünün biçimi.</p>
+            <div className="mb-4 space-y-2">
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input type="radio" name="menu-mode" className="mt-1" checked={thumb.mode === "catalog"} onChange={() => saveMode("catalog")} />
+                <span>
+                  <span className="font-medium">Katalog düğmesi</span>
+                  <span className="block text-slate-500">&quot;Kataloğu görüntüle&quot; düğmesi. Ürünler tek listede görünür; sırayı WhatsApp belirler.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input type="radio" name="menu-mode" className="mt-1" checked={thumb.mode === "list"} onChange={() => saveMode("list")} />
+                <span>
+                  <span className="font-medium">Kategorili ürün listesi</span>
+                  <span className="block text-slate-500">
+                    Ürünler kategori başlıkları altında, Ürünler sayfasındaki sırayla görünür; müşteri yine sepete ekleyip sipariş verir. En fazla {thumb.list.maxSections} kategori ve {thumb.list.maxItems} ürün sığar; sığmazsa ya da WhatsApp kabul etmezse katalog düğmesi gider.
+                  </span>
+                </span>
+              </label>
+              <p className={`rounded-lg px-3 py-2 text-xs ${thumb.list.fits ? "bg-slate-50 text-slate-600" : "bg-amber-50 text-amber-800"}`}>
+                {thumb.list.fits
+                  ? `Listede şu an ${thumb.list.sections.length} kategori, ${thumb.list.items} ürün: ${thumb.list.sections.map((s) => `${s.title} (${s.count})`).join(", ")}. Görseli olmayan, pasif ve bugün tükenen ürünler listede yer almaz.`
+                  : `Liste şu an gönderilemez: ${thumb.list.reason ?? ""} Bu durumda katalog düğmesi gider.`}
+              </p>
+            </div>
+            <h3 className="text-sm font-medium">Katalog düğmesinin görseli</h3>
+            <p className="mb-2 text-sm text-slate-500">&quot;Kataloğu görüntüle&quot; mesajının üstünde görünen görsel. Seçmezseniz WhatsApp katalogdaki ilk ürünü gösterir. Yalnızca görseli olan, aktif ürünler seçilebilir.</p>
             <div className="flex flex-wrap items-center gap-3">
               <select value={thumb.retailerId ?? ""} onChange={(e) => saveThumb(e.target.value || null)} className="min-w-60 rounded-lg border border-slate-300 px-3 py-2 text-sm" aria-label="Katalog mesajı görseli">
                 <option value="">Varsayılan (ilk ürün)</option>
