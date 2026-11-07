@@ -8,6 +8,8 @@ export interface BrandDto {
   waSession: string | null;
   waPhoneNumberId: string | null;
   productCount: number;
+  /** Suitable POS şubesine bağlı mı (eklenti siparişleri POS'a yazar) */
+  posLinked: boolean;
 }
 
 export interface CategoryDto {
@@ -86,6 +88,8 @@ export interface OrderDto {
   noticePending: boolean;
   /** Müşteri WhatsApp'tan bu siparişe ürün ekledi, personel henüz "Gördüm" demedi (uyarı + ses) */
   addedPending: boolean;
+  /** POS'a yazıldıysa POS sipariş numarası ("#001") ya da personel elle girdiyse "elle" */
+  posRef: string | null;
   /** Müşteriye son soru ne zaman gitti (yanıt bekleniyorsa) */
   promptedAt: string | null;
   /** Yanıt gelmediği için hatırlatma ne zaman gitti (5 dk sonra hâlâ yanıt yoksa otomatik iptal) */

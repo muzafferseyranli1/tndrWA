@@ -17,6 +17,7 @@ export function brandsRouter(db: PrismaClient): Router {
       waSession: b.waSession,
       waPhoneNumberId: b.waPhoneNumberId,
       productCount: b._count.products,
+      posLinked: !!b.posCafeId,
     }));
     res.json(dto);
   });

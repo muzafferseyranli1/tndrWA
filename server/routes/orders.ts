@@ -41,6 +41,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
     reminderSentAt: o.reminderSentAt?.toISOString() ?? null,
     noticePending: o.noticePending,
     addedPending: o.addedPending,
+    posRef: o.posRef,
     changes: (o.changes ?? []).map((c) => ({ text: c.text, createdAt: c.createdAt.toISOString() })),
     customer: { name: o.customer.name, phone: o.customer.waId },
     items: o.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, unitText: formatTRY(i.unitKurus + i.extraKurus), lineText: formatTRY((i.unitKurus + i.extraKurus) * i.quantity), options: describeOptions(i.options ?? []), added: i.addedAt !== null })),
@@ -75,6 +76,16 @@ export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null
       _count: { _all: true },
     });
     res.json(rows.map((r) => ({ brandId: r.brandId, count: r._count._all })));
+  });
+
+  // Personel siparişi POS'a elle girdi (eklenti kullanılmadı): bir daha "POS'a yazılmadı" görünmez, eklentiye verilmez
+  router.post("/:id/pos-manual", async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = Number.isInteger(id) ? await db.order.findUnique({ where: { id } }) : null;
+    if (!existing) return res.status(404).json({ error: "Sipariş bulunamadı." });
+    const updated = await db.order.update({ where: { id }, data: { posRef: existing.posRef ?? "elle", posAt: existing.posAt ?? new Date() }, include: INCLUDE });
+    if (!existing.posRef) await db.orderChange.create({ data: { orderId: id, text: "POS'a elle girildi" } });
+    res.json(toOrderDto(updated));
   });
 
   // Personel müşterinin eklediği ürünleri gördü: uyarı ve ses durur

@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth";
 import { catalogThumbRouter } from "./routes/catalog-thumb";
 import { reportsRouter } from "./routes/reports";
 import { menuSyncRouter } from "./routes/menu-sync";
+import { posAdminRouter, posExtRouter } from "./routes/pos";
 import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
@@ -105,6 +106,8 @@ async function main() {
   );
 
   app.use("/api/public", publicRouter(db));
+  // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
+  app.use("/api/pos-ext", posExtRouter(db));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -120,6 +123,7 @@ async function main() {
   app.use("/api/staff", staffRouter(db, env));
   app.use("/api/catalog-thumbnail", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), catalogThumbRouter(db));
   app.use("/api/reports", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), reportsRouter(db));
+  app.use("/api/pos", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), posAdminRouter(db));
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);

@@ -273,6 +273,19 @@ export default function OrdersPage() {
     }
   }
 
+  async function posManual(order: OrderDto) {
+    setBusyId(order.id);
+    setError("");
+    try {
+      await api<OrderDto>(`/api/orders/${order.id}/pos-manual`, { method: "POST", json: {} });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function ackAdded(order: OrderDto) {
     setBusyId(order.id);
     setError("");
@@ -414,6 +427,21 @@ export default function OrdersPage() {
                     <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{o.stage === "AWAITING_MERGE" ? "Ekleme sorusu bekleniyor" : o.stage === "AWAITING_NOTICE" ? "KVKK onayı bekleniyor" : o.stage === "AWAITING_OPTIONS" ? "Seçenek bekleniyor" : o.stage === "AWAITING_PAYMENT" ? "Ödeme şekli bekleniyor" : "Adres bekleniyor"}</span>
                   )}
                   <span className="text-sm text-slate-500">{time(o.createdAt)}</span>
+                  {o.posRef ? (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">{o.posRef === "elle" ? "POS'a elle girildi" : `POS ${o.posRef}`}</span>
+                  ) : (
+                    brand?.posLinked &&
+                    o.stage === "READY" &&
+                    (o.status === "NEW" || o.status === "PREPARING") &&
+                    tab === "active" && (
+                      <span className="flex items-center gap-1">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">POS&apos;a yazılmadı</span>
+                        <button disabled={busyId === o.id} onClick={() => posManual(o)} className="rounded-full border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-50" title="Siparişi POS'a elle girdiyseniz işaretleyin">
+                          Elle girdim
+                        </button>
+                      </span>
+                    )
+                  )}
                   <span className="ml-auto text-right">
                     <span className="block text-lg font-semibold tabular-nums">{o.discountText ? o.payableText : o.totalText}</span>
                     {o.discountText && (

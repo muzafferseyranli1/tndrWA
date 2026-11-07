@@ -59,6 +59,7 @@ export default function SettingsPage() {
       title: "Bağlantılar",
       cards: [
         { href: "/brands", title: "Markalar", text: "Marka başına Meta katalog kimliği ve WhatsApp numara kimliği." },
+        { href: "/pos", title: "POS bağlantısı", text: "Suitable POS eklentisi: menü ve müşteri eşitleme, siparişleri POS'a yazma, eksik zorunlu seçenekler." },
         { href: "/whatsapp", title: "WhatsApp", text: "WhatsApp bağlantı durumu, deneme mesajı, son olaylar." },
       ],
     },

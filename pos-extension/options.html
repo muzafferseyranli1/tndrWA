@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>tndrWA POS köprüsü · Ayarlar</title>
+    <style>
+      body { font-family: system-ui, Segoe UI, Arial, sans-serif; max-width: 520px; margin: 24px auto; padding: 0 16px; color: #111; }
+      label { display: block; margin: 14px 0 4px; font-weight: 600; }
+      input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+      button { margin-top: 16px; padding: 8px 14px; border-radius: 8px; border: 0; background: #f97316; color: #fff; font-weight: 600; cursor: pointer; }
+      #out { margin-top: 12px; font-size: 14px; }
+      .muted { color: #64748b; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h2>tndrWA POS köprüsü</h2>
+    <p class="muted">Panel adresini ve panelde POS sayfasında oluşturduğunuz eklenti anahtarını girin.</p>
+    <label for="url">Panel adresi</label>
+    <input id="url" placeholder="https://yerinde.derinsoft.com.tr" />
+    <label for="token">Eklenti anahtarı</label>
+    <input id="token" type="password" placeholder="tpos_…" />
+    <button id="save">Kaydet ve dene</button>
+    <div id="out"></div>
+    <script src="options.js"></script>
+  </body>
+</html>
