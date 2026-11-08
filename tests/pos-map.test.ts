@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findPosProduct, portionNorm, posNorm, posPayment, posSnapshotSchema, type PosProduct } from "../server/services/pos-map";
+import { findPosProduct, groupMatches, matchChoice, portionNorm, posNorm, posPayment, posSnapshotSchema, type PosProduct } from "../server/services/pos-map";
 import { primaryPhone } from "../server/services/pos-bridge";
 
 const prod = (name: string, variants: { name: string; price: number }[], extra: Partial<PosProduct> = {}): PosProduct => ({ id: name, name, category: "", sku: null, active: true, price: variants[0]?.price ?? 0, variants, options: [], ...extra });
@@ -66,4 +66,20 @@ test("POS menü verisi doğrulanır (eksik alanlar varsayılanla dolar, aşırı
   assert.equal(ok.data.products[0].active, true);
   assert.equal(posSnapshotSchema.safeParse({ cafeId: "", products: [] }).success, false);
   assert.equal(posSnapshotSchema.safeParse({ cafeId: "x", products: [{ id: "p", name: "" }] }).success, false);
+});
+
+test("POS seçenek eşleştirme: -Ex/Extra ekleri, ücret+kelime yedeği, seçeneklerden grup tanıma", () => {
+  const yumurta = { name: "Yumurta -Ex", min: 0, max: 1, items: [{ name: "Yumurtasız", price: 0 }, { name: "1  Yumurta", price: 30 }, { name: "2 Yumurta", price: 60 }] };
+  const extra = { name: "Extra Malzeme", min: 0, max: 5, items: [{ name: "Kaşar -İlave", price: 0 }, { name: "Domates -Ex", price: 45 }, { name: "ç.Biber - Ex1", price: 45 }, { name: "Kaşar Peyniri -Ex", price: 95 }] };
+  const ak = { name: "A/K", min: 0, max: 1, items: [{ name: "Kapalı", price: 0 }, { name: "Açık", price: 0 }] };
+  const ch = (name: string, extraKurus: number) => ({ name, posName: null, enabled: true, extraKurus });
+  assert.ok(groupMatches({ name: "Yumurta", posName: null }, yumurta as never));
+  assert.ok(groupMatches({ name: "Ekstra Malzeme", posName: null }, extra as never));
+  assert.ok(groupMatches({ name: "Açık / Kapalı", posName: null, choices: [ch("Kapalı", 0), ch("Açık", 0)] }, ak as never));
+  assert.ok(!groupMatches({ name: "Yumurta", posName: null }, ak as never));
+  assert.equal(matchChoice(ch("1 Yumurta", 3000), yumurta.items)?.name, "1  Yumurta");
+  assert.equal(matchChoice(ch("Domates", 4500), extra.items)?.name, "Domates -Ex");
+  assert.equal(matchChoice(ch("Kaşar Peyniri", 9500), extra.items)?.name, "Kaşar Peyniri -Ex");
+  assert.equal(matchChoice(ch("Çarliston Biber", 4500), extra.items)?.name, "ç.Biber - Ex1");
+  assert.equal(matchChoice(ch("Sucuk", 14500), extra.items), undefined);
 });

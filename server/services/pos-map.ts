@@ -97,10 +97,36 @@ export interface MapReport {
   issues: MapIssue[];
 }
 
-type PanelGroup = { id: number; name: string; posName: string | null; required: boolean; enabled: boolean; choices: { name: string; posName: string | null; enabled: boolean }[] };
+type PanelChoice = { name: string; posName: string | null; enabled?: boolean; extraKurus?: number };
+type PanelGroup = { id: number; name: string; posName: string | null; required: boolean; enabled: boolean; choices: PanelChoice[] };
 
-const groupMatches = (g: { name: string; posName: string | null }, pos: PosOptionGroup) => posNorm(g.posName ?? g.name) === posNorm(pos.name) || posNorm(g.name) === posNorm(pos.name);
-const choiceMatches = (c: { name: string; posName: string | null }, item: { name: string }) => posNorm(c.posName ?? c.name) === posNorm(item.name) || posNorm(c.name) === posNorm(item.name);
+/** Seçenek adı karşılaştırması: POS'taki "-Ex", "Ex1", "İlave", "Extra/Ekstra" ekleri yok sayılır ("Yumurta -Ex" ↔ "Yumurta", "Extra Malzeme" ↔ "Ekstra Malzeme"). */
+const OPT_NOISE = new Set(["ex", "ex1", "ex2", "ekstra", "extra", "ilave"]);
+export const optNorm = (s: string | null | undefined) =>
+  posNorm(s)
+    .split(" ")
+    .filter((t) => t && !OPT_NOISE.has(t))
+    .join(" ");
+
+/** Panel seçeneği POS seçeneğine: ad (ekler yok sayılarak); bulunamazsa aynı ücretli ve ortak kelimeli tek POS seçeneği ("Çarliston Biber" ↔ "ç.Biber - Ex1"). */
+export function matchChoice(c: PanelChoice, items: { name: string; price: number }[]): { name: string; price: number } | undefined {
+  const keys = [c.posName, c.name].filter((x): x is string => !!x).map(optNorm);
+  const exact = items.find((i) => keys.includes(optNorm(i.name)));
+  if (exact || c.extraKurus === undefined) return exact;
+  const words = new Set(optNorm(c.name).split(" ").filter((w) => w.length >= 3));
+  const near = items.filter((i) => Math.round(i.price * 100) === c.extraKurus && optNorm(i.name).split(" ").some((w) => words.has(w)));
+  return near.length === 1 ? near[0] : undefined;
+}
+
+/** Panel grubu POS grubuna: ad (ekler yok sayılarak) ya da seçeneklerinin çoğu aynı ("Açık / Kapalı" ↔ "A/K"). */
+export function groupMatches(g: { name: string; posName: string | null; choices?: PanelChoice[] }, pos: PosOptionGroup): boolean {
+  const keys = [g.posName, g.name].filter((x): x is string => !!x).map(optNorm);
+  if (keys.includes(optNorm(pos.name))) return true;
+  const choices = (g.choices ?? []).filter((c) => c.enabled !== false);
+  if (choices.length < 2) return false;
+  const hits = choices.filter((c) => matchChoice(c, pos.items)).length;
+  return hits >= 2 && hits * 2 > choices.length;
+}
 
 export async function latestSnapshot(db: PrismaClient, brandId: number): Promise<{ data: PosSnapshotData; createdAt: Date } | null> {
   const row = await db.posSnapshot.findFirst({ where: { brandId }, orderBy: { id: "desc" } });
@@ -140,7 +166,7 @@ export async function mapReport(db: PrismaClient, brandId: number): Promise<MapR
           continue;
         }
         for (const c of g.choices.filter((c) => c.enabled)) {
-          if (!pg.items.some((i) => choiceMatches(c, i))) issues.push({ productId: p.id, product: label, kind: "choiceNotInPos", detail: `"${g.name}" içindeki "${c.name}" POS'ta yok (ürün notu olarak yazılır)` });
+          if (!matchChoice(c, pg.items)) issues.push({ productId: p.id, product: label, kind: "choiceNotInPos", detail: `"${g.name}" içindeki "${c.name}" POS'ta yok (ürün notu olarak yazılır)` });
         }
       }
     }
@@ -227,12 +253,12 @@ export async function orderPayload(db: PrismaClient, order: OrderWithItems, snap
       const options: { group: string; choices: string[] }[] = [];
       for (const a of answers) {
         const panelGroup = p!.optionGroups.map((l) => l.group).find((g) => (a.groupId !== null ? g.id === a.groupId : g.name === a.groupName));
-        const pg = found.product.options.find((o) => (panelGroup ? groupMatches(panelGroup, o) : posNorm(o.name) === posNorm(a.groupName)));
+        const pg = found.product.options.find((o) => (panelGroup ? groupMatches(panelGroup, o) : optNorm(o.name) === optNorm(a.groupName)));
         // Çoklu seçim tek kayıtta " + " ile birleşik saklanır
         const picked = a.choiceName.split(" + ").map((x) => x.trim()).filter(Boolean);
         for (const choice of picked) {
           const panelChoice = panelGroup?.choices.find((c) => c.name === choice);
-          const item2 = pg?.items.find((i) => choiceMatches(panelChoice ?? { name: choice, posName: null }, i));
+          const item2 = pg ? matchChoice(panelChoice ?? { name: choice, posName: null }, pg.items) : undefined;
           if (pg && item2) {
             const slot = options.find((o) => o.group === pg.name) ?? (options.push({ group: pg.name, choices: [] }), options[options.length - 1]);
             slot.choices.push(item2.name);
