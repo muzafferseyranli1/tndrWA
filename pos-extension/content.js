@@ -124,7 +124,9 @@
         const free = brands.filter((b) => !b.posCafeId);
         // İşletme adında geçen marka önceden seçilir (ör. "Suadiye | Yerinde Pide" → Yerinde Pide); yoksa seçim zorunlu
         const norm = (s) => String(s || "").toLocaleLowerCase("tr").replace(/\s+/g, " ").trim();
-        const guess = free.find((b) => norm(here.cafeName).includes(norm(b.name)));
+        // Periyodik yenileme listeyi yeniden çizer: kullanıcının seçimi korunur
+        const prevSel = shadow.getElementById("brand")?.value;
+        const guess = free.find((b) => String(b.id) === prevSel) || (prevSel === undefined ? free.find((b) => norm(here.cafeName).includes(norm(b.name))) : null);
         $("link").innerHTML = `Bu işletme (<b>${esc(here.cafeName || here.cafeId)}</b>) bir markaya bağlı değil.${free.length ? ` Bağlamak için markayı seçip "Menüyü panele gönder"e basın:<select id="brand"><option value="">— Marka seçin —</option>${free.map((b) => `<option value="${b.id}"${guess && guess.id === b.id ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select>` : " Bütün markalar başka işletmelere bağlı."}`;
       } else {
         $("link").innerHTML = here ? `Açık işletme: <b>${esc(here.cafeName || "POS")}</b> → <b>${esc(linked.name)}</b>` : `Bağlı markalar: ${r.brands.map((b) => esc(b.name)).join(", ") || "yok"}`;
