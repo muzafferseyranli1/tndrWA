@@ -101,7 +101,9 @@
 
   // Açık ekranın işletmesi (POS'ta işletmeler arası geçişte değişir; adres değişince yeniden okunur)
   async function ensureCafe() {
-    if (!cafe || cafeAt !== location.pathname) {
+    // İşletme, adres değişmeden de (Menü → İşletme ⇄) değişebilir: her yenilemede yeniden okunur
+    if (!cafe || cafeAt !== location.pathname || Date.now() - (ensureCafe.at || 0) > 10000) {
+      ensureCafe.at = Date.now();
       cafe = await page("cafeInfo");
       cafeAt = location.pathname;
     }
