@@ -10,6 +10,9 @@ test("POS eşleştirme: adlar ve porsiyon adları sadeleştirilir", () => {
   assert.equal(portionNorm("1 Porsiyon"), portionNorm("1P"));
   assert.equal(portionNorm("1,5 Porsiyon"), portionNorm("15P"));
   assert.equal(portionNorm("100 g"), portionNorm("100 gr"));
+  assert.equal(portionNorm("1 Porsiyon"), portionNorm("1 Pors."));
+  assert.equal(portionNorm("1,5 Porsiyon"), portionNorm("1,5 Pors."));
+  assert.equal(portionNorm("1 Porsiyon"), portionNorm("1 pors"));
   assert.notEqual(portionNorm("1 Porsiyon"), portionNorm("1,5 Porsiyon"));
 });
 
@@ -25,6 +28,12 @@ test("POS eşleştirme: ürün önce kasa adıyla (sourceKey), porsiyon adıyla 
   assert.deepEqual(findPosProduct(products, { name: "Yok Böyle", sourceKey: null, variantLabel: null }), { error: "noProduct" });
   const c = findPosProduct(products, { name: "Kavurmalı Kapalı", sourceKey: "rms:Kavurmalı - Kapalı", variantLabel: "Yarım" });
   assert.ok("error" in c && c.error === "noVariant");
+  // Suitable adları: "1 Pors." / "1,5 Pors."; panelde porsiyonsuz ürün "1 Pors."a gider
+  const pide = [prod("Dört Mevsim", [{ name: "1 Pors.", price: 300 }, { name: "Yarım", price: 200 }, { name: "1,5 Pors.", price: 450 }]), prod("Düğün Çorba", [{ name: "1 Pors.", price: 150 }, { name: "Az", price: 100 }])];
+  const d = findPosProduct(pide, { name: "Dört Mevsim", sourceKey: null, variantLabel: "1,5 Porsiyon" });
+  assert.ok(!("error" in d) && d.variant === "1,5 Pors.");
+  const e = findPosProduct(pide, { name: "Düğün Çorba", sourceKey: null, variantLabel: null });
+  assert.ok(!("error" in e) && e.variant === "1 Pors.");
 });
 
 test("POS eşleştirme: çok porsiyonlu üründe etiketsiz panel ürünü 'Standart' porsiyona gider; pasif kopya yerine aktif seçilir", () => {

@@ -51,11 +51,11 @@ export const posNorm = (s: string | null | undefined) =>
     .replace(/[^a-z0-9çğıöşü]+/g, " ")
     .trim();
 
-/** Porsiyon adı: "1 Porsiyon" ↔ "1P", "1,5 Porsiyon" ↔ "15P", "100 g" ↔ "100 gr". */
+/** Porsiyon adı: "1 Porsiyon" ↔ "1P" ↔ "1 Pors.", "1,5 Porsiyon" ↔ "15P" ↔ "1,5 Pors.", "100 g" ↔ "100 gr". */
 export const portionNorm = (s: string | null | undefined) =>
   (s ?? "")
     .toLocaleLowerCase("tr")
-    .replace(/porsiyon/g, "p")
+    .replace(/pors(iyon)?/g, "p")
     .replace(/gr\b/g, "g")
     .replace(/[^a-z0-9çğıöşü]+/g, "");
 
@@ -74,7 +74,8 @@ export function findPosProduct(products: PosProduct[], p: { name: string; source
     return { error: "noVariant", product };
   }
   const label = portionNorm(p.variantLabel);
-  const variant = label ? variants.find((v) => portionNorm(v.name) === label) : variants.find((v) => STANDARD_VARIANTS.has(portionNorm(v.name)));
+  // Panelde porsiyon belirtilmemişse POS'un standart porsiyonu, yoksa "1 Porsiyon"u seçilir
+  const variant = label ? variants.find((v) => portionNorm(v.name) === label) : (variants.find((v) => STANDARD_VARIANTS.has(portionNorm(v.name))) ?? variants.find((v) => portionNorm(v.name) === "1p"));
   return variant ? { product, variant: variant.name } : { error: "noVariant", product };
 }
 
