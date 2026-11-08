@@ -122,7 +122,10 @@
       if (here && !linked) {
         const brands = await api("GET", "/api/pos-ext/brands");
         const free = brands.filter((b) => !b.posCafeId);
-        $("link").innerHTML = `Bu işletme (<b>${esc(here.cafeName || here.cafeId)}</b>) bir markaya bağlı değil.${free.length ? ` Bağlamak için markayı seçip "Menüyü panele gönder"e basın:<select id="brand">${free.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join("")}</select>` : " Bütün markalar başka işletmelere bağlı."}`;
+        // İşletme adında geçen marka önceden seçilir (ör. "Suadiye | Yerinde Pide" → Yerinde Pide); yoksa seçim zorunlu
+        const norm = (s) => String(s || "").toLocaleLowerCase("tr").replace(/\s+/g, " ").trim();
+        const guess = free.find((b) => norm(here.cafeName).includes(norm(b.name)));
+        $("link").innerHTML = `Bu işletme (<b>${esc(here.cafeName || here.cafeId)}</b>) bir markaya bağlı değil.${free.length ? ` Bağlamak için markayı seçip "Menüyü panele gönder"e basın:<select id="brand"><option value="">— Marka seçin —</option>${free.map((b) => `<option value="${b.id}"${guess && guess.id === b.id ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select>` : " Bütün markalar başka işletmelere bağlı."}`;
       } else {
         $("link").innerHTML = here ? `Açık işletme: <b>${esc(here.cafeName || "POS")}</b> → <b>${esc(linked.name)}</b>` : `Bağlı markalar: ${r.brands.map((b) => esc(b.name)).join(", ") || "yok"}`;
       }
@@ -257,9 +260,11 @@
   $("menu").onclick = async () => {
     try {
       $("menu").disabled = true;
+      const sel = shadow.getElementById("brand");
+      if (sel && !sel.value) throw new Error("Önce bu işletmenin hangi markaya ait olduğunu seçin.");
+      if (sel && !confirm(`"${sel.options[sel.selectedIndex].text}" markası bu POS işletmesine bağlanacak. Doğru mu?`)) return;
       show("muted", "POS menüsü okunuyor…");
       const menu = await page("readMenu");
-      const sel = shadow.getElementById("brand");
       const r = await api("POST", "/api/pos-ext/snapshot", { ...menu, ...(sel ? { brandId: Number(sel.value) } : {}) });
       show(r.requiredMissing ? "warn" : "ok", `Menü gönderildi: POS'ta ${r.products} ürün. WhatsApp'taki ${r.checked} ürünün ${r.ok} tanesi sorunsuz eşleşti${r.issues ? `, ${r.issues} uyarı (${r.requiredMissing} zorunlu seçenek eksik) — ayrıntılar panelde POS sayfasında` : ""}.`);
       refresh();
