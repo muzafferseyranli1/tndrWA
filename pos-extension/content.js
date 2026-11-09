@@ -199,6 +199,8 @@
       const here = await page("cafeInfo");
       if (here.cafeId !== order.brand.posCafeId) throw new Error(`Açık ekran ${here.cafeName || "başka bir işletme"} için. Bu sipariş ${order.brand.posCafeName || order.brand.name} işletmesine yazılmalı: sipariş listesine dönüp tekrar "POS'a doldur" deyin.`);
       show("muted", `WA #${id} dolduruluyor…`);
+      // "Sipariş Oluştur" sonrası POS başka sayfaya geçer (sayfa yenilenebilir): POS numarası sonradan okunabilsin diye önceden not düşülür
+      await store.set("tndrwaPending", { id, cafeId: order.brand.posCafeId, at: Date.now() });
       const r = await page("fillOrder", [order, { submit: opts.submit }]);
       const list = r.warnings.length ? `<ul>${r.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : "";
       const who = r.customer === "created" ? "yeni müşteri eklendi" : "kayıtlı müşteri seçildi";
@@ -252,9 +254,11 @@
   // Otomatik mod: sipariş listesindeyken (ya da boş Paket ekranında) sıradaki siparişi kendiliğinden gir
   async function autoTick() {
     if (!opts.auto || busy) return;
-    if (!/\/app\/(orderlist|order\/Paket)/.test(location.pathname)) return;
+    if (!/\/app\/(orderlist|all-orders|tables|order\/Paket)/.test(location.pathname)) return;
     await refresh();
-    const next = orders.find((o) => !skipped[o.id]);
+    // POS'a girilmiş ama numarası henüz okunmamış sipariş (30 dk) tekrar girilmez
+    const pending = await store.get("tndrwaPending");
+    const next = orders.find((o) => !skipped[o.id] && !(pending && pending.id === o.id && Date.now() - pending.at < 30 * 60 * 1000));
     if (next) await fill(next.id, true);
   }
 

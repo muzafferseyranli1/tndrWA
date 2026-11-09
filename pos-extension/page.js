@@ -54,7 +54,7 @@
         }
       }
       const p = f.memoizedProps;
-      if (!byProp && p && typeof p === "object" && isId(p.cafeId)) byProp = { cafeId: p.cafeId, cafeName: "" };
+      if (!byProp && p && typeof p === "object" && (isId(p.cafeId) || isId(p.selectedCafe))) byProp = { cafeId: isId(p.cafeId) ? p.cafeId : p.selectedCafe, cafeName: "" };
       if (f.sibling) stack.push(f.sibling);
       if (f.child) stack.push(f.child);
     }
@@ -466,7 +466,44 @@
   }
 
   // Sipariş listesinde (Sipariş Oluştur sonrası) WA#<id> notlu satırın POS numarası
+  // POS'un sipariş listesi verisi (React durumu): notu "WA#<id>" ile başlayan siparişin fiş numarası (receiptNo → "#002")
+  function findCreatedInData(orderId) {
+    const tagRe = new RegExp(`(^|\\s)WA#${orderId}(?!\\d)`);
+    const rootEl = document.getElementById("root");
+    const ck = rootEl && Object.keys(rootEl).find((k) => k.startsWith("__reactContainer"));
+    if (!ck) return null;
+    const stack = [rootEl[ck]];
+    const seen = new Set();
+    let found = null;
+    const look = (v, depth) => {
+      if (found || !v || typeof v !== "object" || depth > 3 || seen.has(v)) return;
+      seen.add(v);
+      if (typeof v.note === "string" && tagRe.test(v.note) && (v.receiptNo || v.orderNo)) {
+        found = `#${String(v.receiptNo || v.orderNo).replace(/^#/, "")}`;
+        return;
+      }
+      const vals = Array.isArray(v) ? v.slice(0, 300) : Object.keys(v).slice(0, 300).filter((k) => !k.startsWith("_") && !["return", "child", "sibling", "stateNode", "products"].includes(k)).map((k) => v[k]);
+      for (const x of vals) look(x, depth + 1);
+    };
+    for (let n = 0; stack.length && n < 50000 && !found; n++) {
+      const f = stack.pop();
+      if (!f) continue;
+      for (let st = f.memoizedState, i = 0; st && i < 40 && !found; st = st.next, i++) {
+        try {
+          look(st.memoizedState, 0);
+        } catch {
+          /* okunamayan durum atlanır */
+        }
+      }
+      if (f.sibling) stack.push(f.sibling);
+      if (f.child) stack.push(f.child);
+    }
+    return found;
+  }
+
   function findCreated(orderId) {
+    const fromData = findCreatedInData(orderId);
+    if (fromData) return fromData;
     const tag = `WA#${orderId}`;
     // POS numarası "#002"; not içindeki "WA#…" sayılmaz
     const refRe = /(?<![A-Za-z])#(\d{2,})(?!\d)/g;
