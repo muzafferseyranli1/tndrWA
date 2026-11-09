@@ -290,10 +290,23 @@
     const rows = [...modal.querySelectorAll("div")].filter((d) => pretty(d.innerText || "").includes(local) && [...d.querySelectorAll("button")].some(isPick));
     const innerRows = rows.filter((d) => !rows.some((o) => o !== d && d.contains(o)));
     // Aynı numarayla birden çok kayıt olabilir: adresi WhatsApp adresine benzeyen, yoksa adresi olan kayıt seçilir
-    const row = (innerRows.length ? innerRows : rows).map((d) => ({ d, s: score(d.innerText), a: /\b(Ev|İş|Adres|WhatsApp)\b|Mah|Cad|Sok/i.test(d.innerText) ? 1 : 0 })).sort((a, b) => b.s - a.s || b.a - a.a || a.d.innerText.length - b.d.innerText.length)[0]?.d;
+    // Arama artık diğer işletmelerin müşterilerini de gösteriyor (satırda "Suadiye | Yerinde Tandır" etiketi): önce bu işletmenin kayıtları
+    const here = norm((await cafeInfo().catch(() => null))?.cafeName || "");
+    const otherCafe = (t) => /\S+\s\|\s\S+/.test(t) && !(here && norm(t).includes(here));
+    const row = (innerRows.length ? innerRows : rows)
+      .map((d) => ({ d, o: otherCafe(d.innerText) ? 1 : 0, s: score(d.innerText), a: /\b(Ev|İş|Adres|WhatsApp)\b|Mah|Cad|Sok/i.test(d.innerText) ? 1 : 0 }))
+      .sort((a, b) => a.o - b.o || b.s - a.s || b.a - a.a || a.d.innerText.length - b.d.innerText.length)[0]?.d;
     if (row) {
       [...row.querySelectorAll("button")].find(isPick).click();
       await waitFor(() => !customerModal(), 3000);
+      // Müşteri yalnız başka işletmede kayıtlıysa POS sorar: "Bu işletmede devam et" (bilgileri bu işletmeye kopyalanır)
+      const elsewhere = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /Başka İşletmede Kayıtlı/i.test(m.innerText || "")), 1500);
+      if (elsewhere) {
+        const stay = [...elsewhere.querySelectorAll("button")].find((b) => visible(b) && /Bu işletmede devam/i.test(norm(b.innerText)));
+        if (!stay) throw new Error('"Müşteri Başka İşletmede Kayıtlı" penceresinde "Bu işletmede devam et" bulunamadı; müşteriyi elle seçin.');
+        stay.click();
+        await waitFor(() => !visible(elsewhere) || !document.body.contains(elsewhere), 3000);
+      }
       // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır (kayıtlı adresler + "… Adresle Devam" ya da "Kayıtlı adres yok" + "Yeni Adres Ekle")
       const addrDlgNow = () => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam|Yeni Adres Ekle/i.test(b.innerText)));
       let addrDlg = await waitFor(addrDlgNow, 2000);
