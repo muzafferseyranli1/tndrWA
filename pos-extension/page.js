@@ -430,26 +430,26 @@
   /** Paket ekranı açılmadan önce Menü'den işletme değiştirmek gerekiyor mu (masa ekranı kapalı, tek "Paket Servis" düğmeli hesap, başka işletme açık). */
   function needsSwitch(cafeId) {
     if (/\/app\/order\/Paket/.test(location.pathname)) return false;
-    if ([...document.querySelectorAll("button")].some((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)))) return false;
+    // "Paket Sipariş Oluştur" ya da üstteki "Paket Servis" düğmesi işletme seçme penceresini açıyorsa Menü'den değiştirmeye gerek yok
+    if (paketButton()) return false;
     return !!cafeId && findCafe()?.cafeId !== cafeId;
   }
 
+  // Paket siparişi açan düğme: sipariş listesindeki "Paket Sipariş Oluştur" ya da üst menüdeki "Suitable Yemek / Paket Servis"
+  const paketButton = () =>
+    [...document.querySelectorAll("button")].find((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText))) ||
+    [...document.querySelectorAll("button")].find((b) => visible(b) && (/Paket Servis/i.test(norm(b.innerText)) || /Paket Servis siparişi/i.test(b.getAttribute("title") || "")));
+
   async function openPaketFor(cafeName, cafeId) {
     if (/\/app\/order\/Paket/.test(location.pathname)) return "already";
-    let btn = [...document.querySelectorAll("button")].find((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)));
-    if (!btn) {
-      // Masa ekranı kapalı hesaplarda üstteki "Paket Servis" düğmesi açık işletmenin Paket ekranını doğrudan açar: önce doğru işletmeye geçilir
-      const head = () => [...document.querySelectorAll("button")].find((b) => visible(b) && (/Paket Servis/i.test(norm(b.innerText)) || /Paket Servis siparişi/i.test(b.getAttribute("title") || "")));
-      if (head() && cafeId && findCafe()?.cafeId !== cafeId) await switchCafe(cafeName, cafeId);
-      btn = head();
-    }
+    const btn = paketButton();
     if (!btn) throw new Error('"Paket Sipariş Oluştur" düğmesi bulunamadı. POS\'ta sipariş listesine dönüp tekrar deneyin.');
     btn.click();
     const modal = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /işletmeyi seçin/i.test(m.innerText || "")) || (/\/app\/order\/Paket/.test(location.pathname) ? "nav" : null), 3000);
     if (modal && modal !== "nav") {
       const want = key(cafeName);
-      const clean = (t) => key(norm(t).replace(/Ana İşletme/i, ""));
-      const opts = [...modal.querySelectorAll("*")].filter((el) => clickable(el) && norm(el.innerText) && norm(el.innerText).length < 90 && !buttonByText(norm(el.innerText), modal));
+      const clean = (t) => key(norm(t).replace(/Ana İşletme|Şu anki/gi, ""));
+      const opts = [...modal.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText) && norm(el.innerText).length < 90 && !buttonByText(norm(el.innerText), modal));
       const inner = opts.filter((el) => !opts.some((o) => o !== el && el.contains(o)));
       const pool = inner.length ? inner : opts;
       const opt = pool.find((el) => clean(el.innerText) === want) || pool.find((el) => clean(el.innerText).includes(want) || (want && want.includes(clean(el.innerText))));
