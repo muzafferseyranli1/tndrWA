@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
-import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, verifyPosToken } from "../services/pos-bridge";
+import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, syncPricesFromPos, verifyPosToken } from "../services/pos-bridge";
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
@@ -14,7 +14,7 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  * Eklenti uçları (/api/pos-ext): oturum çerezi yok, "X-Pos-Token" başlığındaki anahtarla doğrulanır.
  * POS şubesi (cafeId) bir markaya bağlanır; menü, müşteri ve siparişler o marka için işlenir.
  */
-export function posExtRouter(db: PrismaClient): Router {
+export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined): Router {
   const router = Router();
   // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
   router.use((req: Request, res: Response, next: NextFunction) => {
@@ -60,9 +60,12 @@ export function posExtRouter(db: PrismaClient): Router {
       brand = await db.brand.update({ where: { id: target.id }, data: { posCafeId: data.cafeId } });
     }
     await storeSnapshot(db, brand.id, data);
+    // Çelişkide POS esas: panel fiyatları ve seçenek ücretleri POS'un paket fiyatına eşitlenir, katalog eşitlemesi tetiklenir
+    const prices = await syncPricesFromPos(db, brand.id, data);
+    if (prices.products.length || prices.choices) onChange(brand.id);
     const report = await mapReport(db, brand.id);
-    logger.info({ brand: brand.code, products: data.products.length, issues: report.issues.length }, "POS menüsü alındı");
-    res.json({ brandId: brand.id, brandName: brand.name, products: data.products.length, ok: report.ok, checked: report.checked, issues: report.issues.length, requiredMissing: report.issues.filter((i) => i.kind === "requiredMissing").length });
+    logger.info({ brand: brand.code, products: data.products.length, issues: report.issues.length, pricesUpdated: prices.products.length, choicesUpdated: prices.choices }, "POS menüsü alındı");
+    res.json({ brandId: brand.id, brandName: brand.name, products: data.products.length, ok: report.ok, checked: report.checked, issues: report.issues.length, requiredMissing: report.issues.filter((i) => i.kind === "requiredMissing").length, pricesUpdated: prices.products, choicesUpdated: prices.choices });
   });
 
   const customersBody = z.object({

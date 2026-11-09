@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { normalizePhone } from "../../shared/channels";
 import { addressKey } from "./addresses";
 import { MAX_CHOICES } from "./options";
-import { findPosProduct, latestSnapshot, posNorm, type PosSnapshotData } from "./pos-map";
+import { findPosProduct, groupMatches, latestSnapshot, matchChoice, posNorm, type PosSnapshotData } from "./pos-map";
 
 const TOKEN_KEY = "pos.tokenHash";
 const sha = (s: string) => createHash("sha256").update(s).digest();
@@ -218,4 +218,46 @@ export async function resolvePosLookups(db: PrismaClient, phones: string[], cust
   }
   await writeLookups(db, s);
   return stats;
+}
+
+// ---------- fiyat eşitleme (POS esas) ----------
+export interface PriceChange {
+  productId: number;
+  product: string;
+  fromKurus: number;
+  toKurus: number;
+}
+
+/**
+ * POS menüsü geldiğinde panel fiyatları POS'un paket fiyatına eşitlenir (çelişkide POS esas):
+ * eşleşen her ürün/porsiyonun fiyatı ve eşleşen seçeneklerin ek ücreti. Değişen ürünler katalog eşitlemesi için işaretlenir.
+ */
+export async function syncPricesFromPos(db: PrismaClient, brandId: number, data: PosSnapshotData): Promise<{ products: PriceChange[]; choices: number }> {
+  const products = await db.product.findMany({ where: { brandId }, include: { optionGroups: { include: { group: { include: { choices: true } } } } } });
+  const changes: PriceChange[] = [];
+  const choiceUpdates = new Map<number, number>();
+  for (const p of products) {
+    const found = findPosProduct(data.products, p);
+    if ("error" in found) continue;
+    const variant = found.variant ? found.product.variants.find((v) => v.name === found.variant) : null;
+    const pos = variant ? variant.price : found.product.price;
+    const kurus = Math.round(pos * 100);
+    if (kurus > 0 && kurus !== p.priceKurus) {
+      changes.push({ productId: p.id, product: p.variantLabel ? `${p.name} (${p.variantLabel})` : p.name, fromKurus: p.priceKurus, toKurus: kurus });
+      await db.product.update({ where: { id: p.id }, data: { priceKurus: kurus, metaSyncState: "PENDING" } });
+    }
+    for (const { group } of p.optionGroups) {
+      const pg = found.product.options.find((o) => groupMatches(group, o));
+      if (!pg) continue;
+      for (const c of group.choices) {
+        const item = matchChoice(c, pg.items);
+        // Ücret yedeğiyle (ad tutmayıp ücret+kelimeyle) eşleşen seçeneğin ücreti zaten aynıdır; yalnız adla eşleşenler güncellenir
+        if (!item || matchChoice({ ...c, extraKurus: undefined }, pg.items) === undefined) continue;
+        const k = Math.round(item.price * 100);
+        if (k !== c.extraKurus && !choiceUpdates.has(c.id)) choiceUpdates.set(c.id, k);
+      }
+    }
+  }
+  for (const [id, extraKurus] of choiceUpdates) await db.optionChoice.update({ where: { id }, data: { extraKurus } });
+  return { products: changes, choices: choiceUpdates.size };
 }

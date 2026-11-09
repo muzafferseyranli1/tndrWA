@@ -1,3 +1,6 @@
+import { setDefaultResultOrder } from "node:dns";
+// Docker ağında IPv6 yolu yoksa Meta adreslerine bağlanırken aralıklı zaman aşımı olur: önce IPv4
+setDefaultResultOrder("ipv4first");
 import express from "express";
 import next from "next";
 import { EnvError, loadEnv } from "./lib/env";
@@ -109,7 +112,9 @@ async function main() {
 
   app.use("/api/public", publicRouter(db));
   // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
-  app.use("/api/pos-ext", posExtRouter(db));
+  // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
+  let posPriceChange: (brandId: number) => void = () => undefined;
+  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId)));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -134,6 +139,7 @@ async function main() {
   configureNotice(env.publicBaseUrl);
   const coordinator = new SyncCoordinator(db, env.meta, env.publicBaseUrl, env.metaAutoSync);
   const onChange = (brandId: number) => coordinator.trigger(brandId);
+  posPriceChange = onChange;
   // Alan adı değiştiyse katalogdaki görsel adresleri yenilenir (arka planda, açılışı geciktirmez)
   void handlePublicUrlChange(db, env.publicBaseUrl)
     .then((brandIds) => {

@@ -79,8 +79,20 @@
   }
 
   // ---------- okuma ----------
-  async function readMenu() {
-    const { cafeId, cafeName } = await cafeInfo();
+  // Paket (WhatsApp) fiyatı: kanal fiyatı "delivery"; yoksa ürünün/porsiyonun kendi fiyatı
+  const paketPrice = (x) => Number(x?.channelPrices?.delivery) || Number(x?.price) || 0;
+  async function cafeNameOf(cafeId) {
+    try {
+      const d = (await firebase.firestore().collection("cafe").doc(cafeId).get()).data() || {};
+      return norm(d.name || d.title || d.cafeName || "");
+    } catch {
+      return "";
+    }
+  }
+
+  /** POS menüsü: açık işletmenin ya da verilen işletmenin (otomatik eşitleme) */
+  async function readMenu(forCafeId) {
+    const { cafeId, cafeName } = forCafeId ? { cafeId: forCafeId, cafeName: await cafeNameOf(forCafeId) } : await cafeInfo();
     const db = firebase.firestore();
     const cats = await db.collection("cafe").doc(cafeId).collection("menu").get();
     const products = [];
@@ -95,15 +107,15 @@
           category: norm(cat.name).slice(0, 200),
           sku: d.sku ? String(d.sku).slice(0, 100) : null,
           active: d.isActive !== false && d.active !== false && cat.isActive !== false,
-          price: Number(d.price) || 0,
-          variants: (d.variants || []).map((v) => ({ name: norm(v.name).slice(0, 100), price: Number(v.price) || 0 })).slice(0, 50),
+          price: paketPrice(d),
+          variants: (d.variants || []).map((v) => ({ name: norm(v.name).slice(0, 100), price: paketPrice(v) })).slice(0, 50),
           options: (d.options || [])
             .filter((o) => o && o.name)
             .map((o) => ({
               name: norm(o.name).slice(0, 200),
               min: Math.max(0, Number(o.minSelection) || 0),
               max: Math.max(0, Number(o.maxSelection) || 0),
-              items: (o.items || []).filter((i) => i && i.name).map((i) => ({ name: norm(i.name).slice(0, 200), price: Number(i.price) || 0 })).slice(0, 200),
+              items: (o.items || []).filter((i) => i && i.name).map((i) => ({ name: norm(i.name).slice(0, 200), price: paketPrice(i) })).slice(0, 200),
             }))
             .slice(0, 50),
         });
@@ -117,8 +129,8 @@
     return [norm(a.neighborhood), street, norm(a.buildingName), norm(a.address), [norm(a.district), norm(a.city)].filter(Boolean).join("/")].filter(Boolean).join(", ");
   }
 
-  async function readCustomers(reqId) {
-    const { cafeId } = await cafeInfo();
+  async function readCustomers(reqId, forCafeId) {
+    const { cafeId } = forCafeId ? { cafeId: forCafeId } : await cafeInfo();
     const col = firebase.firestore().collection("cafe").doc(cafeId).collection("customers");
     let last = null;
     let total = 0;
@@ -585,7 +597,7 @@
     const fn = commands[cmd];
     if (!fn) return post({ id, error: `Bilinmeyen komut: ${cmd}` });
     try {
-      post({ id, result: await fn(...args, ...(cmd === "readCustomers" ? [id] : [])) });
+      post({ id, result: await fn(...(cmd === "readCustomers" ? [id] : []), ...args) });
     } catch (err) {
       post({ id, error: String(err && err.message ? err.message : err) });
     }

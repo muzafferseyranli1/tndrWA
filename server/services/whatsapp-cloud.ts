@@ -113,6 +113,9 @@ export interface PhoneInfo {
   platformType: string | null;
 }
 
+/** İsteğin karşıya ulaşmadığı (yeniden denemesi güvenli) bağlantı hataları */
+const CONNECT_ERRORS = new Set(["UND_ERR_CONNECT_TIMEOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND"]);
+
 export class WhatsappCloudClient {
   constructor(
     private readonly cfg: WhatsappCloudEnv,
@@ -121,17 +124,24 @@ export class WhatsappCloudClient {
 
   private async call<T>(path: string, init: { method?: string; json?: unknown } = {}): Promise<T> {
     if (!this.cfg.token) throw new CloudApiError("WHATSAPP_CLOUD_TOKEN tanımlı değil.");
-    let res: Response;
-    try {
-      res = await this.fetchFn(`${this.cfg.baseUrl}/${this.cfg.version}/${path}`, {
-        method: init.method ?? "GET",
-        headers: { Authorization: `Bearer ${this.cfg.token}`, ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}) },
-        body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
-        signal: AbortSignal.timeout(20_000),
-      });
-    } catch (err) {
-      const cause = (err as { cause?: { code?: string } })?.cause?.code ?? (err as Error)?.name ?? "bilinmiyor";
-      throw new CloudApiError(`WhatsApp Cloud API'ye ulaşılamadı (ağ hatası veya zaman aşımı: ${cause}).`);
+    let res: Response | null = null;
+    // Bağlantı kurulamadıysa (istek Meta'ya hiç gitmedi) kısa aralıkla yeniden denenir: mesaj iki kez gitmez
+    for (let attempt = 1; !res; attempt++) {
+      try {
+        res = await this.fetchFn(`${this.cfg.baseUrl}/${this.cfg.version}/${path}`, {
+          method: init.method ?? "GET",
+          headers: { Authorization: `Bearer ${this.cfg.token}`, ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}) },
+          body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (err) {
+        const cause = (err as { cause?: { code?: string } })?.cause?.code ?? (err as Error)?.name ?? "bilinmiyor";
+        if (attempt < 3 && CONNECT_ERRORS.has(cause)) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+          continue;
+        }
+        throw new CloudApiError(`WhatsApp Cloud API'ye ulaşılamadı (ağ hatası veya zaman aşımı: ${cause}${attempt > 1 ? `, ${attempt} deneme` : ""}).`);
+      }
     }
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; error_user_msg?: string; code?: number } } & T;
     if (!res.ok) {

@@ -112,6 +112,53 @@
 
   // Otomatik müşteri sorgusu: panel yeni siparişin telefonunu ister, POS'a bağlı işletmelerin kayıtlarında aranır, bulunan ad/adresler panele gider
   let lookingUp = false;
+  let linkedBrands = [];
+  const priceNote = (r) => (r.pricesUpdated?.length || r.choicesUpdated ? ` ${r.pricesUpdated.length} ürün fiyatı${r.choicesUpdated ? ` ve ${r.choicesUpdated} seçenek ücreti` : ""} POS'a göre düzeltildi.` : "");
+
+  // Otomatik eşitleme: POS açılınca ve açık kaldıkça, bağlı her işletmenin menüsü (30 dk'da bir) ve müşterileri (6 saatte bir) panele gider
+  const MENU_EVERY = 30 * 60 * 1000;
+  const CUSTOMERS_EVERY = 6 * 60 * 60 * 1000;
+  let syncing = false;
+  async function autoSync() {
+    if (syncing || busy || !linkedBrands.length) return;
+    syncing = true;
+    try {
+      const last = (await store.get("tndrwaSyncAt")) || {};
+      for (const b of linkedBrands) {
+        if (!b.posCafeId || busy) continue;
+        const at = last[b.posCafeId] || {};
+        if (Date.now() - (at.menu || 0) > MENU_EVERY) {
+          try {
+            const menu = await page("readMenu", [b.posCafeId]);
+            const r = await api("POST", "/api/pos-ext/snapshot", menu);
+            at.menu = Date.now();
+            const note = priceNote(r);
+            if (note) show("ok", `${esc(b.name)}: menü POS'tan güncellendi.${note}`);
+          } catch {
+            /* sonraki turda */
+          }
+        }
+        if (Date.now() - (at.customers || 0) > CUSTOMERS_EVERY) {
+          try {
+            let batch = 0;
+            let queue = Promise.resolve();
+            await page("readCustomers", [b.posCafeId], (p) => {
+              const n = batch++;
+              queue = queue.then(() => api("POST", "/api/pos-ext/customers", { cafeId: b.posCafeId, batch: n, of: p.done ? n + 1 : n + 2, customers: p.customers }));
+            });
+            await queue;
+            at.customers = Date.now();
+          } catch {
+            /* sonraki turda */
+          }
+        }
+        last[b.posCafeId] = at;
+        await store.set("tndrwaSyncAt", last);
+      }
+    } finally {
+      syncing = false;
+    }
+  }
   async function runLookups(phones, brands) {
     if (lookingUp || busy) return;
     lookingUp = true;
@@ -130,6 +177,7 @@
     try {
       const r = await api("GET", "/api/pos-ext/orders");
       orders = r.orders;
+      linkedBrands = r.brands;
       if (r.lookups?.length) runLookups(r.lookups, r.brands);
       let here = null;
       try {
@@ -299,7 +347,7 @@
       show("muted", "POS menüsü okunuyor…");
       const menu = await page("readMenu");
       const r = await api("POST", "/api/pos-ext/snapshot", { ...menu, ...(sel ? { brandId: Number(sel.value) } : {}) });
-      show(r.requiredMissing ? "warn" : "ok", `Menü gönderildi: POS'ta ${r.products} ürün. WhatsApp'taki ${r.checked} ürünün ${r.ok} tanesi sorunsuz eşleşti${r.issues ? `, ${r.issues} uyarı (${r.requiredMissing} zorunlu seçenek eksik) — ayrıntılar panelde POS sayfasında` : ""}.`);
+      show(r.requiredMissing ? "warn" : "ok", `Menü gönderildi: POS'ta ${r.products} ürün. WhatsApp'taki ${r.checked} ürünün ${r.ok} tanesi sorunsuz eşleşti${r.issues ? `, ${r.issues} uyarı (${r.requiredMissing} zorunlu seçenek eksik) — ayrıntılar panelde POS sayfasında` : ""}.${priceNote(r)}`);
       refresh();
     } catch (err) {
       show("err", esc(err.message));
@@ -333,6 +381,8 @@
     }
   };
 
+  setTimeout(autoSync, 20000); // açılışta (arayüz yüklendikten sonra)
+  setInterval(autoSync, 5 * 60 * 1000);
   (async () => {
     await refresh();
     // İşletme değişiminden sonra yeniden yüklendiyse yarıda kalan doldurmayı sürdür (1 dk içinde)
