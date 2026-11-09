@@ -36,7 +36,7 @@
 
   // ---------- şube ----------
   /** Seçili şube: React ağacında selectedCafe (ref), cafeId (prop) ya da şube verisi (operationalCafeId + cafeName). */
-  function findCafe() {
+  function findCafe(strict = false) {
     const isId = (v) => typeof v === "string" && /^[A-Za-z0-9]{15,40}$/.test(v);
     const rootEl = document.getElementById("root");
     const ck = rootEl && Object.keys(rootEl).find((k) => k.startsWith("__reactContainer"));
@@ -59,10 +59,11 @@
       if (f.child) stack.push(f.child);
     }
     const ls = localStorage.getItem("suitable_connection_cafe_id");
-    return byProp || byData || (isId(ls) ? { cafeId: ls, cafeName: "" } : null);
+    return byProp || byData || (!strict && isId(ls) ? { cafeId: ls, cafeName: "" } : null);
   }
   async function cafeInfo() {
-    const found = findCafe();
+    // Sayfa yeni açıldıysa POS arayüzü yüklenene kadar beklenir; tarayıcıda kalan eski işletme kimliği (localStorage) yalnız son çaredir
+    const found = (await waitFor(() => findCafe(true), 4000, 200)) || findCafe();
     if (!found) throw new Error("POS şubesi bulunamadı. Sayfayı yenileyip tekrar deneyin.");
     const cafeId = found.cafeId;
     let cafeName = found.cafeName || "";
