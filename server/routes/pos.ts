@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
-import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, posTokenSet, storeSnapshot, verifyPosToken } from "../services/pos-bridge";
+import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, verifyPosToken } from "../services/pos-bridge";
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
@@ -102,7 +102,21 @@ export function posExtRouter(db: PrismaClient): Router {
       for (const o of orders) out.push({ ...(await orderPayload(db, o, snap?.data ?? null)), brand: { id: brand.id, name: brand.name, posCafeId: brand.posCafeId!, posCafeName: snap?.data.cafeName ?? "" } });
     }
     out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    res.json({ brands: brands.map((b) => ({ id: b.id, name: b.name, posCafeId: b.posCafeId })), orders: out });
+    res.json({ brands: brands.map((b) => ({ id: b.id, name: b.name, posCafeId: b.posCafeId })), orders: out, lookups: await pendingPosLookups(db) });
+  });
+
+  // Otomatik müşteri sorgusu sonucu: eklenti bekleyen telefonları POS'a bağlı işletmelerde aradı, bulduklarını gönderir
+  router.post("/lookups", async (req, res) => {
+    const parsed = z
+      .object({
+        phones: z.array(z.string().max(40)).max(50),
+        customers: customersBody.shape.customers,
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Sorgu sonucu okunamadı." });
+    const stats = await resolvePosLookups(db, parsed.data.phones, parsed.data.customers);
+    if (parsed.data.customers.length) logger.info({ phones: parsed.data.phones.length, found: parsed.data.customers.length, addressesAdded: stats.addressesAdded }, "POS müşteri sorgusu işlendi");
+    res.json(stats);
   });
 
   // Eklenti siparişi POS'ta oluşturdu: POS numarası kaydedilir, bir daha listelenmez

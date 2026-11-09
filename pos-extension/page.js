@@ -139,6 +139,32 @@
     return { total, cafeId };
   }
 
+  /** Telefonla müşteri arama (otomatik sorgu): verilen işletmelerin POS müşteri kayıtlarında phone1/phone2 eşleşenler. */
+  async function lookupCustomers(phones, cafeIds) {
+    const db = firebase.firestore();
+    const out = [];
+    for (const p of phones) {
+      const d = String(p).replace(/\D/g, "");
+      const local = d.startsWith("90") ? d.slice(2) : d.replace(/^0/, "");
+      if (local.length < 10) continue;
+      const variants = [`+90${local}`, `90${local}`, `0${local}`, local];
+      for (const cafeId of cafeIds) {
+        for (const field of ["phone1", "phone2"]) {
+          try {
+            const s = await db.collection("cafe").doc(cafeId).collection("customers").where(field, "in", variants).limit(20).get();
+            for (const doc of s.docs) {
+              const x = doc.data();
+              out.push({ name: norm(x.fullName).slice(0, 200) || null, phones: [x.phone1, x.phone2].filter(Boolean).map(String).slice(0, 5), addresses: (x.addresses || []).map(addressText).filter((t) => t.length >= 5).slice(0, 30) });
+            }
+          } catch {
+            /* izin yoksa o işletme atlanır */
+          }
+        }
+      }
+    }
+    return out;
+  }
+
   // ---------- sipariş doldurma ----------
   const cartRoot = () => [...document.querySelectorAll("div")].filter((d) => visible(d) && /Toplam Tutar/.test(d.innerText || "") && /Sipariş Oluştur/.test(d.innerText || "")).sort((a, b) => a.innerText.length - b.innerText.length)[0];
   const cartTotal = () => {
@@ -552,7 +578,7 @@
   function post(msg) {
     window.postMessage({ source: "tndrwa-page", ...msg }, location.origin);
   }
-  const commands = { cafeInfo, readMenu, readCustomers, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
+  const commands = { cafeInfo, readMenu, readCustomers, lookupCustomers, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.source !== "tndrwa-ext") return;
     const { id, cmd, args = [] } = e.data;

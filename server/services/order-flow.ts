@@ -3,7 +3,7 @@ import { logger } from "../lib/logger";
 import { formatTRY } from "../../shared/money";
 import { markNoticeSent, noticeLine, policyUrl } from "./notice";
 import { rememberAddress } from "./addresses";
-import { applyAnswer, applyGate, needsOptions, nextQuestion, type Question } from "./options";
+import { applyAnswer, applyGate, needsOptions, nextQuestion, parseChoiceText, type Question } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
 import { orderCampaignAvailable, orderDiscount } from "./discount";
@@ -11,6 +11,7 @@ import { ET_TANDIR_CAMPAIGN } from "../../shared/campaigns";
 import { getMinBasket, sendMinBasketNotice } from "./hours";
 import { itemLines } from "./order-edit";
 import { findMergeTarget, mergeOrderInto } from "./order-merge";
+import { requestPosLookup } from "./pos-bridge";
 import type { WhatsappCloudClient } from "./whatsapp-cloud";
 
 /** Müşteri bu süreden sonra yazarsa eski yarım sipariş artık beklemede sayılmaz (personel elle tamamlar). */
@@ -82,6 +83,8 @@ export async function startOrderConversation(db: PrismaClient, cloud: WhatsappCl
   try {
     let order = await load(db, orderId);
     if (!order || order.stage === "READY") return;
+    // Müşterinin POS'taki kaydı (adresleri) arka planda istenir; adres sorusuna gelene kadar eklenti getirir
+    await requestPosLookup(db, order.customer.waId).catch(() => undefined);
     if (order.stage === "AWAITING_MERGE") return await askMerge(db, cloud, order);
 
     // İlk siparişte KVKK bilgilendirmesi: müşteri "Okudum, devam" deyince sipariş adımları başlar (bir kez sorulur)
@@ -293,9 +296,12 @@ async function askOption(db: PrismaClient, cloud: WhatsappCloudClient | null, or
 
   const { group, picked } = question;
   const multi = group.maxSelect > 1;
-  const ask = multi ? `${what} için "${group.name}" seçin (en fazla ${group.maxSelect}, bitince "Bitti"):` : `${what} için "${group.name}" seçin:`;
-  const so = picked.length ? `Seçilenler: ${picked.join(", ")}` : !group.required ? "İstemiyorsanız listeden \"Eklemeden devam\" seçin." : "";
-  const body = [opening, ask, so, kvkk].filter(Boolean).join("\n\n");
+  const ask = multi ? `${what} için "${group.name}" seçin (en fazla ${group.maxSelect}):` : `${what} için "${group.name}" seçin:`;
+  // Numaralı liste: müşteri listeden tek tek seçebilir ya da tek mesajla yazabilir ("1 3 5" / "mantar sucuk")
+  const numbered = group.choices.map((c, i) => `${i + 1}. ${c.name}${c.extraKurus > 0 ? ` (+${formatTRY(c.extraKurus)})` : ""}`).join("\n");
+  const how = multi ? `Birden fazlasını tek mesajla yazabilirsiniz: örn. "1 3" ya da "${group.choices.slice(0, 2).map((c) => c.name.toLocaleLowerCase("tr")).join(" ")}".` : "";
+  const so = picked.length ? `Seçilenler: ${picked.join(", ")}` : !group.required ? "İstemiyorsanız \"yok\" yazın ya da listeden \"Eklemeden devam\" seçin." : "";
+  const body = [opening, ask, numbered, how, so, kvkk].filter(Boolean).join("\n\n");
   const rows: { id: string; title: string; description?: string }[] = group.choices
     .filter((c) => !picked.includes(c.name))
     .map((c) => ({ id: optId(order.id, item.id, group.id, c.id), title: c.name, description: c.extraKurus > 0 ? `+${formatTRY(c.extraKurus)}` : undefined }));
@@ -308,6 +314,50 @@ async function askOption(db: PrismaClient, cloud: WhatsappCloudClient | null, or
   } catch (err) {
     await reportFailure(db, order, "Seçenek sorusu", body, err);
   }
+}
+
+/**
+ * Seçenek sorusuna liste yerine yazıyla cevap: "1 3 5", "kavurma mantar sucuk", "yok". Tanınanlar işlenir (çoklu seçimde grup tamamlanır),
+ * müşteriye ne anlaşıldığı yazılır; hiçbir şey tanınmazsa soru yeniden sorulur.
+ */
+async function answerOptionText(db: PrismaClient, cloud: WhatsappCloudClient | null, order: FullOrder, text: string): Promise<void> {
+  const q = await nextQuestion(db, order.id);
+  if (!q || q.kind !== "group" || !text) return await startOrderConversation(db, cloud, order.id);
+  const { item, group } = q;
+  const parsed = parseChoiceText(text, group.choices);
+  const multi = group.maxSelect > 1;
+  let note = "";
+  if (parsed.none) {
+    if (group.required) note = `"${group.name}" seçimi gerekli; lütfen en az birini seçin.`;
+    else {
+      await applyAnswer(db, order.id, item.id, group.id, 0);
+      note = `${group.name}: eklenmedi.`;
+    }
+  } else if (parsed.matched.length) {
+    const room = multi ? Math.max(0, group.maxSelect - q.picked.length) : 1;
+    const chosen = parsed.matched.filter((c) => !q.picked.includes(c.name)).slice(0, room);
+    for (const c of chosen) await applyAnswer(db, order.id, item.id, group.id, c.id);
+    if (multi) await applyAnswer(db, order.id, item.id, group.id, 0); // tek mesajla yazılan çoklu seçim grubu bitirir
+    const skipped = parsed.matched.length - chosen.length;
+    note = [
+      `✅ ${group.name}: ${[...(multi ? q.picked : []), ...chosen.map((c) => c.name)].join(", ")}`,
+      skipped > 0 ? (multi ? `En fazla ${group.maxSelect} seçilebildiği için ${skipped} tanesi eklenmedi.` : "Bu soruda tek seçim yapılabildiği için ilki alındı.") : "",
+      parsed.unknown.length ? `Anlaşılamayan: ${parsed.unknown.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  } else {
+    note = `Yazdığınızı seçeneklerle eşleştiremedim${parsed.unknown.length ? ` (${parsed.unknown.join(", ")})` : ""}. Listeden seçebilir ya da numarasını yazabilirsiniz.`;
+  }
+  if (note && canSend(cloud, order)) {
+    try {
+      const id = await cloud.sendText(order.brand.waPhoneNumberId!, order.customer.waId!, note);
+      await log(db, order, "text", note, id);
+    } catch (err) {
+      await reportFailure(db, order, "Seçenek onayı", note, err);
+    }
+  }
+  await startOrderConversation(db, cloud, order.id);
 }
 
 /** Gönderilemeyen mesajı günlüğe ve yazışmaya (kırmızı "gitmedi" + sebep) kaydeder. */
@@ -452,6 +502,7 @@ export async function handleOrderReply(db: PrismaClient, cloud: WhatsappCloudCli
       return;
     }
 
+    if (order.stage === "AWAITING_OPTIONS" && message.type === "text") return await answerOptionText(db, cloud, order, (m.text?.body ?? "").trim());
     if (order.stage === "AWAITING_MERGE" || order.stage === "AWAITING_PAYMENT" || order.stage === "AWAITING_OPTIONS") {
       // Liste/düğme yerine yazı yazdı: aynı soruyu (ekleme, seçenek ya da ödeme) yeniden gönder
       if (message.type === "text") await startOrderConversation(db, cloud, order.id);

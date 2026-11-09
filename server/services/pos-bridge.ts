@@ -166,3 +166,56 @@ export async function applyPosGroup(db: PrismaClient, brandId: number, productId
   }
   return { groupId: group.id, created, linked };
 }
+
+// ---------- POS müşteri sorgusu (otomatik) ----------
+// Sipariş başlayınca müşterinin telefonu POS'ta aranır: eklenti bekleyen sorguları sipariş listesiyle birlikte alır,
+// POS'a bağlı tüm işletmelerin müşteri kayıtlarında telefonla arar, bulduklarını (ad + adresler) panele aktarır.
+// Böylece müşteriye WhatsApp'ta POS'taki kayıtlı adresleri sunulur; elle "Müşterileri panele gönder" gerekmez.
+const LOOKUP_KEY = "pos.lookups";
+const LOOKUP_PENDING_MS = 10 * 60 * 1000; // eklenti bu sürede almazsa düşer
+const LOOKUP_FRESH_MS = 6 * 60 * 60 * 1000; // aynı numara 6 saatte bir sorulur
+
+type LookupState = { pending: Record<string, number>; done: Record<string, number> };
+
+async function readLookups(db: PrismaClient): Promise<LookupState> {
+  const raw = (await db.setting.findUnique({ where: { key: LOOKUP_KEY } }))?.value;
+  const s = raw ? (JSON.parse(raw) as Partial<LookupState>) : {};
+  const now = Date.now();
+  const pending = Object.fromEntries(Object.entries(s.pending ?? {}).filter(([, at]) => now - at < LOOKUP_PENDING_MS));
+  const done = Object.fromEntries(Object.entries(s.done ?? {}).filter(([, at]) => now - at < LOOKUP_FRESH_MS));
+  return { pending, done };
+}
+async function writeLookups(db: PrismaClient, s: LookupState): Promise<void> {
+  const value = JSON.stringify(s);
+  await db.setting.upsert({ where: { key: LOOKUP_KEY }, create: { key: LOOKUP_KEY, value }, update: { value } });
+}
+
+/** Müşterinin telefonu için POS sorgusu ister (POS'a bağlı işletme yoksa ya da yakın zamanda sorulduysa bir şey yapmaz). */
+export async function requestPosLookup(db: PrismaClient, waId: string | null | undefined): Promise<void> {
+  const phone = normalizePhone(waId ?? "");
+  if (!phone) return;
+  if (!(await db.brand.count({ where: { posCafeId: { not: null } } }))) return;
+  const s = await readLookups(db);
+  if (s.pending[phone] || s.done[phone]) return;
+  s.pending[phone] = Date.now();
+  await writeLookups(db, s);
+}
+
+/** Eklentiye verilecek bekleyen sorgular (telefonlar, 905… biçiminde). */
+export async function pendingPosLookups(db: PrismaClient): Promise<string[]> {
+  return Object.keys((await readLookups(db)).pending).slice(0, 20);
+}
+
+/** Eklentinin sorgu sonucu: bulunan POS kayıtları panele aktarılır, sorgular tamamlandı sayılır. */
+export async function resolvePosLookups(db: PrismaClient, phones: string[], customers: PosCustomerIn[]): Promise<PosCustomerStats> {
+  const stats = await importPosCustomers(db, customers);
+  const s = await readLookups(db);
+  for (const p of phones) {
+    const phone = normalizePhone(p);
+    if (!phone) continue;
+    delete s.pending[phone];
+    s.done[phone] = Date.now();
+  }
+  await writeLookups(db, s);
+  return stats;
+}

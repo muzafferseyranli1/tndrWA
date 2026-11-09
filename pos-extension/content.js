@@ -110,10 +110,27 @@
     return cafe;
   }
 
+  // Otomatik müşteri sorgusu: panel yeni siparişin telefonunu ister, POS'a bağlı işletmelerin kayıtlarında aranır, bulunan ad/adresler panele gider
+  let lookingUp = false;
+  async function runLookups(phones, brands) {
+    if (lookingUp || busy) return;
+    lookingUp = true;
+    try {
+      const cafeIds = [...new Set(brands.map((b) => b.posCafeId).filter(Boolean))];
+      const customers = await page("lookupCustomers", [phones, cafeIds]);
+      await api("POST", "/api/pos-ext/lookups", { phones, customers });
+    } catch {
+      /* sonraki yenilemede yeniden denenir */
+    } finally {
+      lookingUp = false;
+    }
+  }
+
   async function refresh() {
     try {
       const r = await api("GET", "/api/pos-ext/orders");
       orders = r.orders;
+      if (r.lookups?.length) runLookups(r.lookups, r.brands);
       let here = null;
       try {
         here = await ensureCafe();

@@ -109,3 +109,82 @@ export async function applyAnswer(db: PrismaClient, orderId: number, itemId: num
   await recalc(db, orderId);
   return { ok: true };
 }
+
+// ---------- yazıyla cevap ("1 3 5", "kavurma mantar sucuk", "mantarlı, sucklu") ----------
+const trKey = (s: string) =>
+  s
+    .toLocaleLowerCase("tr")
+    .replace(/[^a-z0-9çğıöşü]+/g, " ")
+    .trim();
+/** Seçenek adlarında ayırt edici olmayan kelimeler (ve cevapta dolgu sözcükleri) */
+const FILLER = new Set(["ve", "ile", "de", "da", "bir", "tane", "adet", "olsun", "istiyorum", "isterim", "lütfen", "ekstra", "extra", "ilave", "ex", "biraz", "bol", "az", "ekle", "eklensin", "ama", "yalnız", "sadece"]);
+const NONE_WORDS = /^(yok|hiçbiri|hicbiri|istemiyorum|gerek yok|eklemeden devam|devam|hayır|hayir|bitti|tamam)$/;
+
+/** İki kelimenin benzerliği: aynı, biri diğerinin başı (≥4 harf: "mantarlı" ~ "mantar"), ya da küçük yazım hatası. */
+function wordLike(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+  if (s.length >= 4 && l.startsWith(s)) return true;
+  if (s.length < 4) return false;
+  // Levenshtein ≤ 1 (5+ harfte ≤ 2: "sucku" ~ "sucuk")
+  const max = l.length >= 5 ? 2 : 1;
+  if (l.length - s.length > max) return false;
+  let prev = Array.from({ length: l.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= s.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= l.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (s[i - 1] === l[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[l.length] <= max;
+}
+
+export interface ParsedChoices<C> {
+  matched: C[];
+  /** Anlaşılamayan kelimeler */
+  unknown: string[];
+  /** Müşteri "yok/hiçbiri/bitti" dedi */
+  none: boolean;
+}
+
+/**
+ * Seçenek sorusuna yazıyla verilen cevabı seçeneklere çevirir. Numara (listedeki sırası, 1'den) ya da ad yazılabilir;
+ * adlar küçük yazım hatası, ek ("mantarlı") ve "-Ex" gibi eklerle de tanınır. Sıra korunur, tekrarlar atılır.
+ */
+export function parseChoiceText<C extends { name: string }>(text: string, choices: C[]): ParsedChoices<C> {
+  const all = trKey(text);
+  if (NONE_WORDS.test(all)) return { matched: [], unknown: [], none: true };
+  const tokens = all.split(" ").filter(Boolean);
+  const used = new Set<number>();
+  const hits: { at: number; choice: C }[] = [];
+  // Numaralar
+  tokens.forEach((t, i) => {
+    if (!/^\d{1,2}$/.test(t)) return;
+    const n = Number(t);
+    if (n >= 1 && n <= choices.length) {
+      hits.push({ at: i, choice: choices[n - 1] });
+      used.add(i);
+    }
+  });
+  // Adlar: seçeneğin ayırt edici kelimelerinin hepsi (art arda olmasa da) cevapta geçiyorsa; uzun adlar önce
+  const named = choices
+    .map((c) => ({ c, words: trKey(c.name).split(" ").filter((w) => w && !FILLER.has(w) && !/^\d+$/.test(w)) }))
+    .filter((x) => x.words.length)
+    .sort((a, b) => b.words.length - a.words.length);
+  for (const { c, words } of named) {
+    const spots: number[] = [];
+    for (const w of words) {
+      const i = tokens.findIndex((t, k) => !used.has(k) && !spots.includes(k) && !/^\d+$/.test(t) && wordLike(t, w));
+      if (i >= 0) spots.push(i);
+    }
+    if (!spots.length) continue;
+    // Çok kelimeli adın bir kelimesi yeter ("kaşar" → "Kaşar Peyniri", "biber" → "Çarliston Biber") yeter ki başka bir seçeneğe de uymasın
+    if (spots.length < words.length && spots.some((k) => named.some((o) => o.c !== c && o.words.some((w) => wordLike(tokens[k], w))))) continue;
+    spots.forEach((k) => used.add(k));
+    hits.push({ at: Math.min(...spots), choice: c });
+  }
+  hits.sort((a, b) => a.at - b.at);
+  const matched: C[] = [];
+  for (const h of hits) if (!matched.includes(h.choice)) matched.push(h.choice);
+  const unknown = tokens.filter((t, i) => !used.has(i) && !FILLER.has(t) && !/^\d+$/.test(t) && t.length >= 3);
+  return { matched, unknown, none: false };
+}
