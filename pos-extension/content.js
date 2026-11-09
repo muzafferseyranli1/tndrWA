@@ -186,6 +186,14 @@
     shadow.querySelectorAll("button").forEach((b) => (b.disabled = true));
     show("muted", `WA #${id} için ${esc(order.brand.posCafeName || order.brand.name)} sipariş ekranı hazırlanıyor…`);
     try {
+      // İşletme değişimi POS sayfasını baştan yükler: iş yarıda kalmasın diye not düşülür, yüklenince kaldığı yerden sürer
+      if (await page("needsSwitch", [order.brand.posCafeId])) {
+        await store.set("tndrwaResume", { id, auto, at: Date.now() });
+        show("muted", `İşletme ${esc(order.brand.posCafeName || order.brand.name)} olarak değiştiriliyor…`);
+        await page("switchCafe", [order.brand.posCafeName || order.brand.name, order.brand.posCafeId]);
+        cafe = null;
+      }
+      await store.set("tndrwaResume", null);
       // Doğru işletmenin Paket ekranı: sipariş listesindeysek açılır, başka işletmenin ekranındaysak durulur
       await page("openPaketFor", [order.brand.posCafeName || order.brand.name, order.brand.posCafeId]);
       const here = await page("cafeInfo");
@@ -304,7 +312,18 @@
     }
   };
 
-  refresh();
+  (async () => {
+    await refresh();
+    // İşletme değişiminden sonra yeniden yüklendiyse yarıda kalan doldurmayı sürdür (1 dk içinde)
+    const resume = await store.get("tndrwaResume");
+    if (resume && Date.now() - resume.at < 60000) {
+      await store.set("tndrwaResume", null);
+      $("panel").classList.add("open");
+      await new Promise((r) => setTimeout(r, 1500));
+      await refresh();
+      if (orders.some((o) => o.id === resume.id)) await fill(resume.id, resume.auto);
+    }
+  })();
   setInterval(() => (opts.auto ? autoTick() : refresh()), 15000);
   setInterval(watchCreated, 2000);
 })();

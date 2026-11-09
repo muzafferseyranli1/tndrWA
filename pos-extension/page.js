@@ -425,6 +425,13 @@
     await sleep(800);
   }
 
+  /** Paket ekranı açılmadan önce Menü'den işletme değiştirmek gerekiyor mu (masa ekranı kapalı, tek "Paket Servis" düğmeli hesap, başka işletme açık). */
+  function needsSwitch(cafeId) {
+    if (/\/app\/order\/Paket/.test(location.pathname)) return false;
+    if ([...document.querySelectorAll("button")].some((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)))) return false;
+    return !!cafeId && findCafe()?.cafeId !== cafeId;
+  }
+
   async function openPaketFor(cafeName, cafeId) {
     if (/\/app\/order\/Paket/.test(location.pathname)) return "already";
     let btn = [...document.querySelectorAll("button")].find((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)));
@@ -473,7 +480,7 @@
   function post(msg) {
     window.postMessage({ source: "tndrwa-page", ...msg }, location.origin);
   }
-  const commands = { cafeInfo, readMenu, readCustomers, fillOrder, findCreated, openPaketFor };
+  const commands = { cafeInfo, readMenu, readCustomers, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.source !== "tndrwa-ext") return;
     const { id, cmd, args = [] } = e.data;
