@@ -187,7 +187,7 @@
     show("muted", `WA #${id} için ${esc(order.brand.posCafeName || order.brand.name)} sipariş ekranı hazırlanıyor…`);
     try {
       // Doğru işletmenin Paket ekranı: sipariş listesindeysek açılır, başka işletmenin ekranındaysak durulur
-      await page("openPaketFor", [order.brand.posCafeName || order.brand.name]);
+      await page("openPaketFor", [order.brand.posCafeName || order.brand.name, order.brand.posCafeId]);
       const here = await page("cafeInfo");
       if (here.cafeId !== order.brand.posCafeId) throw new Error(`Açık ekran ${here.cafeName || "başka bir işletme"} için. Bu sipariş ${order.brand.posCafeName || order.brand.name} işletmesine yazılmalı: sipariş listesine dönüp tekrar "POS'a doldur" deyin.`);
       show("muted", `WA #${id} dolduruluyor…`);

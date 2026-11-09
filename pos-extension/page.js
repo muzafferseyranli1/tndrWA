@@ -387,9 +387,47 @@
    * Sipariş listesinden doğru işletmenin Paket ekranını açar: "Paket Sipariş Oluştur" → (birden çok işletme varsa)
    * "Siparişin alınacağı işletmeyi seçin" penceresinde işletmeyi seç → "Sipariş Ekranını Aç".
    */
-  async function openPaketFor(cafeName) {
+  // Menü → İşletme ⇄ → "İşletme Değiştir" penceresinden işletme seçer (masa ekranı kapalı, tek Paket düğmeli hesaplarda)
+  async function switchCafe(cafeName, cafeId) {
+    const menuBtn = [...document.querySelectorAll("button")].find((b) => visible(b) && /^Menü$/i.test(norm(b.innerText)));
+    if (!menuBtn) throw new Error('İşletme değiştirilemedi: "Menü" düğmesi bulunamadı. İşletmeyi Menü → İşletme ⇄ ile elle seçin.');
+    menuBtn.click();
+    const item = await waitFor(() => [...document.querySelectorAll("a,button,div")].find((el) => visible(el) && /İşletme Değiştir/i.test(el.getAttribute("title") || "")), 2000);
+    if (!item) throw new Error("İşletme değiştirilemedi: menüde işletme satırı bulunamadı. İşletmeyi elle seçin.");
+    item.click();
+    const modal = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /İşletme Değiştir/i.test(m.innerText || "")), 3000);
+    if (!modal) throw new Error('"İşletme Değiştir" penceresi açılmadı. İşletmeyi elle seçin.');
+    const want = key(cafeName);
+    const clean = (t) => key(norm(t).replace(/Şu anki/i, ""));
+    const opts = [...modal.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText) && norm(el.innerText).length < 90);
+    const opt = opts.find((el) => clean(el.innerText) === want) || opts.find((el) => clean(el.innerText).includes(want) || (want && want.includes(clean(el.innerText))));
+    const close = () => buttonByText("Vazgeç", modal)?.click();
+    if (!opt) {
+      close();
+      throw new Error(`"İşletme Değiştir" penceresinde "${cafeName}" bulunamadı. İşletmeyi elle seçin.`);
+    }
+    opt.click();
+    await sleep(300);
+    const go = [...modal.querySelectorAll("button")].find((b) => visible(b) && /İşletmeye Geç/i.test(norm(b.innerText)));
+    if (!go) {
+      close();
+      throw new Error('"Bu İşletmeye Geç" düğmesi bulunamadı.');
+    }
+    go.click();
+    const ok = await waitFor(() => findCafe()?.cafeId === cafeId, 8000, 200);
+    if (!ok) throw new Error(`İşletme "${cafeName}" olarak değiştirilemedi. Elle seçip tekrar deneyin.`);
+    await sleep(800);
+  }
+
+  async function openPaketFor(cafeName, cafeId) {
     if (/\/app\/order\/Paket/.test(location.pathname)) return "already";
-    const btn = [...document.querySelectorAll("button")].find((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)));
+    let btn = [...document.querySelectorAll("button")].find((b) => visible(b) && /Paket Sipariş Oluştur/i.test(norm(b.innerText)));
+    if (!btn) {
+      // Masa ekranı kapalı hesaplarda üstteki "Paket Servis" düğmesi açık işletmenin Paket ekranını doğrudan açar: önce doğru işletmeye geçilir
+      const head = () => [...document.querySelectorAll("button")].find((b) => visible(b) && (/Paket Servis/i.test(norm(b.innerText)) || /Paket Servis siparişi/i.test(b.getAttribute("title") || "")));
+      if (head() && cafeId && findCafe()?.cafeId !== cafeId) await switchCafe(cafeName, cafeId);
+      btn = head();
+    }
     if (!btn) throw new Error('"Paket Sipariş Oluştur" düğmesi bulunamadı. POS\'ta sipariş listesine dönüp tekrar deneyin.');
     btn.click();
     const modal = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /işletmeyi seçin/i.test(m.innerText || "")) || (/\/app\/order\/Paket/.test(location.pathname) ? "nav" : null), 3000);

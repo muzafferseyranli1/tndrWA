@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "tndrWA POS köprüsü",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "WhatsApp siparişlerini Suitable POS Paket ekranına doldurur; POS menüsünü ve müşterilerini panele okur.",
   "permissions": ["storage"],
   "host_permissions": ["https://suitablepos.com/*", "https://yerinde.derinsoft.com.tr/*", "https://tndrwa.derinsoft.com.tr/*", "http://localhost/*"],
