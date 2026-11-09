@@ -357,8 +357,14 @@
     await sleep(300);
     const posTotal = cartTotal();
     const waTotal = order.totalKurus / 100;
-    if (posTotal !== null && Math.abs(posTotal - waTotal) > 0.009) warn(`Tutar farkı: POS ${posTotal.toFixed(2)} TL, WhatsApp ${waTotal.toFixed(2)} TL. Kontrol edin.`);
-    if (order.discountKurus > 0) warn(`WhatsApp'ta indirim var (${order.discountNote}): müşteri ${order.payableText} ödeyecek. POS'ta indirimi uygulayın.`);
+    // İndirimli siparişte POS kendi kampanyasını (ör. ödeme tipine bağlı %15) uygulamış olabilir: POS toplamı ödenecek tutara eşitse sorun yok
+    const payable = (order.totalKurus - (order.discountKurus || 0)) / 100;
+    const same = (a, b) => Math.abs(a - b) <= 0.009;
+    if (posTotal === null) warn("POS toplamı okunamadı. Tutarı kontrol edin.");
+    else if (order.discountKurus > 0 && !same(posTotal, payable)) {
+      if (same(posTotal, waTotal)) warn(`WhatsApp'ta indirim var (${order.discountNote}): müşteri ${order.payableText} ödeyecek. POS'ta indirim uygulanmadı; uygulayın.`);
+      else warn(`Tutar farkı: POS ${posTotal.toFixed(2)} TL, WhatsApp ödenecek ${payable.toFixed(2)} TL (indirimsiz ${waTotal.toFixed(2)} TL). Kontrol edin.`);
+    } else if (!order.discountKurus && !same(posTotal, waTotal)) warn(`Tutar farkı: POS ${posTotal.toFixed(2)} TL, WhatsApp ${waTotal.toFixed(2)} TL. Kontrol edin.`);
     const blockers = warnings.filter((w) => !INFO_ONLY.some((re) => re.test(w)));
     let submitted = false;
     let posRef = null;
