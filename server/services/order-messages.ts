@@ -26,7 +26,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   MERGE_REMINDER: "⏳ Ürünleri siparişinize (No: {no}) ekleyebilmemiz için yukarıdaki soruyu yanıtlamanız gerekiyor. 5 dakika içinde yanıt alamazsak bu ürünler eklenmez; siparişiniz aynen devam eder.",
   MERGE_TIMEOUT: "Yanıt alamadığımız için gönderdiğiniz ürünler siparişinize eklenmedi. Siparişiniz (No: {no}) aynen devam ediyor. Yine de eklemek isterseniz aşağıdaki menüden sepetinizi yeniden gönderebilirsiniz.",
   ORDER_UPDATED: "Siparişiniz güncellendi (No: {no}).\n\n{urunler}\n\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}",
-  PREPARING: "Siparişiniz hazırlanıyor (No: {no}).",
+  PREPARING: "Siparişiniz alındı, hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",
   DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}\n\nAynı siparişi tekrar vermek için bize *1* yazmanız yeterli.",
   CANCELLED: "Siparişiniz (No: {no}) iptal edildi. Bilgi almak için bu hattan yazabilirsiniz.",

@@ -381,6 +381,26 @@
     }
   };
 
+  // Durum takibi: POS'a girilmiş siparişlerin POS'taki durumu dakikada bir okunur (kuryeye verildi / teslim / iptal), panele gider
+  let tracking = false;
+  async function trackTick() {
+    if (tracking) return;
+    tracking = true;
+    try {
+      const { orders: list } = await api("GET", "/api/pos-ext/tracking");
+      if (!list.length) return;
+      const events = await page("trackStatuses", [list]);
+      const rank = { NEW: 0, PREPARING: 1, ON_THE_WAY: 2, DELIVERED: 3, CANCELLED: 3 };
+      const updates = events.filter((e) => rank[e.event] > rank[list.find((o) => o.id === e.id)?.status ?? "NEW"]).map(({ id, event }) => ({ id, event }));
+      if (updates.length) await api("POST", "/api/pos-ext/tracking", { updates });
+    } catch {
+      /* sonraki turda */
+    } finally {
+      tracking = false;
+    }
+  }
+  setTimeout(trackTick, 10000);
+  setInterval(trackTick, 60000);
   setTimeout(autoSync, 20000); // açılışta (arayüz yüklendikten sonra)
   setInterval(autoSync, 5 * 60 * 1000);
   (async () => {

@@ -172,6 +172,8 @@ model Order {
   // POS'a yazıldıysa POS'taki sipariş numarası ("#001"; personel elle girdiyse "elle")
   posRef         String?
   posAt          DateTime?
+  /// POS takibinde "yola çıktı" görüldüğü an (1 saat içinde teslim görülmezse afiyet olsun + değerlendirme gider)
+  onTheWayAt     DateTime?
   // Müşteriye son soru (seçenek/ödeme/adres) ne zaman gitti; 5 dk yanıt yoksa soru tekrarlanır, 5 dk daha yoksa sipariş iptal edilir
   promptedAt     DateTime?
   reminderSentAt DateTime?

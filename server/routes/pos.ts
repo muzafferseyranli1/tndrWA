@@ -5,6 +5,8 @@ import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
 import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, syncPricesFromPos, verifyPosToken } from "../services/pos-bridge";
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
+import { applyPosEvents, markPosEntered, trackingList } from "../services/pos-tracking";
+import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -14,7 +16,7 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  * Eklenti uçları (/api/pos-ext): oturum çerezi yok, "X-Pos-Token" başlığındaki anahtarla doğrulanır.
  * POS şubesi (cafeId) bir markaya bağlanır; menü, müşteri ve siparişler o marka için işlenir.
  */
-export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined): Router {
+export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: WhatsappCloudClient | null = null, publicBaseUrl: string | null = null): Router {
   const router = Router();
   // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
   router.use((req: Request, res: Response, next: NextFunction) => {
@@ -133,7 +135,21 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
     if (!order) return res.status(404).json({ error: "Sipariş bulunamadı." });
     await db.order.update({ where: { id }, data: { posRef: parsed.data.posRef, posAt: new Date() } });
     await db.orderChange.create({ data: { orderId: id, text: `POS'a yazıldı: ${parsed.data.posRef}` } });
+    // Müşteriye anında "siparişiniz alındı" (sipariş Hazırlanıyor olur)
+    await markPosEntered(db, cloud, publicBaseUrl, id).catch((err: Error) => logger.warn({ orderId: id, err: err.message }, "POS girişi bildirilemedi"));
     res.json({ ok: true });
+  });
+
+  // Durum takibi: eklenti POS'a girilmiş, bitmemiş siparişleri alır; POS'ta gördüğü değişiklikleri gönderir
+  router.get("/tracking", async (_req, res) => {
+    res.json({ orders: await trackingList(db) });
+  });
+  router.post("/tracking", async (req, res) => {
+    const parsed = z.object({ updates: z.array(z.object({ id: z.number().int(), event: z.enum(["ON_THE_WAY", "DELIVERED", "CANCELLED"]) })).max(100) }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Geçersiz istek." });
+    const changed = await applyPosEvents(db, cloud, publicBaseUrl, parsed.data.updates);
+    if (changed) logger.info({ changed }, "POS durumları işlendi");
+    res.json({ changed });
   });
 
   return router;

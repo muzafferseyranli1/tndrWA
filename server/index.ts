@@ -40,6 +40,7 @@ import { handleOrderReply, offerMergeOrStart } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
+import { startDeliveryFallback } from "./services/pos-tracking";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
@@ -114,7 +115,7 @@ async function main() {
   // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
   let posPriceChange: (brandId: number) => void = () => undefined;
-  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId)));
+  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -171,6 +172,7 @@ async function main() {
   // Yedekler kalıcı diskte (yükleme klasörünün yanında): üretimde /data/backups
   // Yanıt vermeyen müşteri: 5 dk sonra soru tekrarı + hatırlatma, 5 dk daha yanıt yoksa otomatik iptal
   startOrderTimeouts(db, cloudForAck, Number(process.env.ORDER_TIMEOUT_TICK_MS) || 20_000);
+  startDeliveryFallback(db, cloudForAck, env.publicBaseUrl);
   const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);
   app.use("/api/backups", backupsRouter(backups));
   // Günlük otomatik yedek: her 10 dakikada bugünkü yedek var mı bakılır (sabah 04:00'ten sonra, Türkiye saatiyle)

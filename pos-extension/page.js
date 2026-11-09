@@ -177,6 +177,41 @@
     return out;
   }
 
+  /**
+   * Durum takibi (salt okuma): POS'a girilmiş siparişlerin POS kaydı (cafe/{id}/intOrders, fiş no + "WA#id" notu) okunur.
+   * İptal (1500/1600) → CANCELLED, teslim zamanı → DELIVERED, kapandı (900) → DELIVERED, kuryeye verildi → ON_THE_WAY.
+   */
+  async function trackStatuses(list) {
+    const db = firebase.firestore();
+    const out = [];
+    // İşletme başına tek sorgu: izlenen en eski siparişten 6 saat öncesinden bu yana POS siparişleri (fiş no günlük tekrarlandığı için notla eşlenir)
+    const byCafe = new Map();
+    for (const o of list) byCafe.set(o.posCafeId, Math.min(byCafe.get(o.posCafeId) ?? Infinity, new Date(o.posAt).getTime() - 6 * 60 * 60 * 1000));
+    const docs = new Map();
+    for (const [cafeId, since] of byCafe) {
+      try {
+        const s = await db.collection("cafe").doc(cafeId).collection("intOrders").where("time", ">=", since).limit(1000).get();
+        docs.set(cafeId, s.docs.map((d) => d.data()));
+      } catch {
+        docs.set(cafeId, []);
+      }
+    }
+    for (const o of list) {
+      try {
+        const receipt = String(o.posRef).replace(/^#/, "");
+        const tag = new RegExp(`(^|\\s)WA#${o.id}(?!\\d)`);
+        const doc = (docs.get(o.posCafeId) || []).find((x) => tag.test(x.note || "") && String(x.receiptNo || "") === receipt) || (docs.get(o.posCafeId) || []).find((x) => tag.test(x.note || ""));
+        if (!doc) continue;
+        const st = Number(doc.status);
+        const event = st === 1500 || st === 1600 || doc.cancelledAt || doc.cancelTime ? "CANCELLED" : doc.deliverTime || st === 900 ? "DELIVERED" : doc.handoverTime ? "ON_THE_WAY" : null;
+        if (event) out.push({ id: o.id, event, status: st });
+      } catch {
+        /* okunamayan atlanır, sonraki turda yeniden */
+      }
+    }
+    return out;
+  }
+
   // ---------- sipariş doldurma ----------
   const cartRoot = () => [...document.querySelectorAll("div")].filter((d) => visible(d) && /Toplam Tutar/.test(d.innerText || "") && /Sipariş Oluştur/.test(d.innerText || "")).sort((a, b) => a.innerText.length - b.innerText.length)[0];
   const cartTotal = () => {
@@ -648,7 +683,7 @@
   function post(msg) {
     window.postMessage({ source: "tndrwa-page", ...msg }, location.origin);
   }
-  const commands = { cafeInfo, readMenu, readCustomers, lookupCustomers, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
+  const commands = { cafeInfo, readMenu, readCustomers, lookupCustomers, trackStatuses, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.source !== "tndrwa-ext") return;
     const { id, cmd, args = [] } = e.data;
