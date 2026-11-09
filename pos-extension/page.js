@@ -175,7 +175,8 @@
       [...row.querySelectorAll("button")].find(isPick).click();
       await waitFor(() => !customerModal(), 3000);
       // Seçilen adres WhatsApp adresinden farklı olabilir: kapı/no ya da sokak geçmiyorsa uyar
-      const chip = norm([...document.querySelectorAll("button,div")].filter((el) => visible(el) && /MAHALLES|Mah\.|Sok|Cad/i.test(el.innerText || "") && (el.innerText || "").length < 160).map((el) => el.innerText).sort((a, b) => a.length - b.length)[0]);
+      const picked = [...document.querySelectorAll(".customer-address-button")].find((b) => visible(b) && /selected/.test(b.className)) || [...document.querySelectorAll(".customer-address-button")].find(visible);
+      const chip = picked ? norm(`${picked.getAttribute("title") || ""} ${picked.innerText || ""}`) : norm([...document.querySelectorAll("button,div")].filter((el) => visible(el) && /MAHALLES|Mah\.|Sok|Cad/i.test(el.innerText || "") && (el.innerText || "").length < 160).map((el) => el.innerText).sort((a, b) => a.length - b.length)[0]);
       const words = key(order.address).split(" ").filter((w) => w.length >= 4).slice(0, 4);
       if (order.address && words.length && !words.some((w) => key(chip).includes(w))) warn(`Kayıtlı müşterinin POS adresi WhatsApp adresinden farklı olabilir. WhatsApp adresi: ${order.address}`);
       return "found";
