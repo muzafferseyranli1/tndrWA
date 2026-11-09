@@ -1,6 +1,6 @@
-import { setDefaultResultOrder } from "node:dns";
-// Docker ağında IPv6 yolu yoksa Meta adreslerine bağlanırken aralıklı zaman aşımı olur: önce IPv4
-setDefaultResultOrder("ipv4first");
+import { installDnsCache } from "./lib/dns-cache";
+// Docker DNS ara ara yanıt vermiyor (EAI_AGAIN): son bilinen adres yedeği + IPv4 öncelik
+installDnsCache();
 import express from "express";
 import next from "next";
 import { EnvError, loadEnv } from "./lib/env";
