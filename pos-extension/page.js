@@ -175,10 +175,27 @@
     if (row) {
       [...row.querySelectorAll("button")].find(isPick).click();
       await waitFor(() => !customerModal(), 3000);
+      const words = key(order.address).split(" ").filter((w) => w.length >= 4).slice(0, 4);
+      const score = (t) => words.filter((w) => key(t).includes(w)).length;
+      // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır (kayıtlı adresler + "… Adresle Devam"); WhatsApp adresine en çok benzeyen seçilir
+      const addrDlg = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam/i.test(b.innerText))), 2000);
+      if (addrDlg) {
+        const cards = [...addrDlg.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText).length > 5 && norm(el.innerText).length < 300 && !/Yeni Adres Ekle|Düzenle/i.test(el.innerText));
+        const inner = cards.filter((el) => !cards.some((o) => o !== el && el.contains(o)));
+        const best = (inner.length ? inner : cards).map((el) => ({ el, s: score(el.innerText) })).sort((a, b) => b.s - a.s)[0];
+        if (best && best.s > 0) {
+          best.el.click();
+          await sleep(300);
+        }
+        const go = [...addrDlg.querySelectorAll("button")].find((b) => visible(b) && /Devam/i.test(b.innerText) && !b.disabled);
+        if (go) go.click();
+        await waitFor(() => !visible(addrDlg) || !document.body.contains(addrDlg), 2000);
+        if (order.address && words.length && !(best && best.s > 0)) warn(`Kayıtlı müşterinin POS adreslerinde WhatsApp adresi bulunamadı (varsayılan adres seçildi). WhatsApp adresi: ${order.address}`);
+        return "found";
+      }
       // Seçilen adres WhatsApp adresinden farklı olabilir: kapı/no ya da sokak geçmiyorsa uyar
       const picked = [...document.querySelectorAll(".customer-address-button")].find((b) => visible(b) && /selected/.test(b.className)) || [...document.querySelectorAll(".customer-address-button")].find(visible);
       const chip = picked ? norm(`${picked.getAttribute("title") || ""} ${picked.innerText || ""}`) : norm([...document.querySelectorAll("button,div")].filter((el) => visible(el) && /MAHALLES|Mah\.|Sok|Cad/i.test(el.innerText || "") && (el.innerText || "").length < 160).map((el) => el.innerText).sort((a, b) => a.length - b.length)[0]);
-      const words = key(order.address).split(" ").filter((w) => w.length >= 4).slice(0, 4);
       if (order.address && words.length && !words.some((w) => key(chip).includes(w))) warn(`Kayıtlı müşterinin POS adresi WhatsApp adresinden farklı olabilir. WhatsApp adresi: ${order.address}`);
       return "found";
     }
@@ -257,8 +274,18 @@
     }
     const before = cartLines().length;
     const totalBefore = cartTotal();
-    card.click();
-    const dlg = await waitFor(productModal, 3000);
+    const needsDialog = !!p.variant || p.options.some((g) => g.choices.length);
+    // Yeni POS arayüzü: karta tıklamak ürünü varsayılan porsiyonla doğrudan ekler; porsiyon/seçenek penceresi kartın ⋮ (variant-dropdown-toggle) düğmesiyle açılır
+    const cardEl = card.closest(".product-card") || card;
+    const toggle = cardEl.querySelector(".variant-dropdown-toggle");
+    if (needsDialog && toggle) toggle.click();
+    else card.click();
+    const dlg = await waitFor(productModal, needsDialog ? 3000 : 1200);
+    if (!dlg && needsDialog && cartLines().length > before) {
+      // Pencere açılmadan eklendi: porsiyon/seçenek seçilemedi demektir; personel düzeltmeli
+      const what = [p.variant ? `porsiyon "${p.variant}"` : "", ...p.options.flatMap((g) => g.choices.map((c) => `"${g.group}: ${c}"`))].filter(Boolean).join(", ");
+      warn(`${line.name}: seçim penceresi açılmadı, ${what} seçilemedi; elle düzeltin`);
+    }
     if (dlg) {
       if (p.variant && !(await pick(dlg, "Porsiyon", p.variant))) warn(`${line.name}: porsiyon "${p.variant}" seçilemedi`);
       for (const g of p.options) for (const c of g.choices) if (!(await pick(dlg, g.group, c))) warn(`${line.name}: "${g.group}" içinde "${c}" seçilemedi`);
@@ -273,6 +300,12 @@
       }
     }
     await waitFor(() => cartLines().length > before || cartTotal() !== totalBefore, 2500);
+    // Sepetteki satır doğru porsiyonla mı eklendi ("Kavurma / Kaşar - 1,5 Pors.")
+    if (p.variant) {
+      const added = lastLineOf(p.productName);
+      const title = norm(added?.querySelector(".oi-name")?.innerText || added?.innerText || "");
+      if (added && /\s-\s/.test(title) && !key(title).includes(key(p.variant))) warn(`${line.name}: sepette "${title}" görünüyor, porsiyon "${p.variant}" olmalı`);
+    }
     // Adet: son eklenen satırın "+" düğmesi
     if (line.quantity > 1) {
       const card2 = lastLineOf(p.productName);
