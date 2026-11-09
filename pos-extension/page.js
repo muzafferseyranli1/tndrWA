@@ -190,6 +190,48 @@
   const lastLineOf = (productName) => cartLines().filter((c) => key(lineName(c)).startsWith(key(productName))).pop();
   const customerModal = () => [...document.querySelectorAll("div")].filter((d) => visible(d) && /Müşteri Seç/.test(d.innerText || "") && /Yeni Müşteri/.test(d.innerText || "") && d.querySelector("input")).sort((a, b) => a.innerText.length - b.innerText.length)[0];
 
+  // Adresten mahalle adı: "Sahrayıcedit mh", "Suadiye Mah.", "Caferağa Mahallesi"
+  const mahalleOf = (addr) => (norm(addr).match(/([A-Za-zÇĞİÖŞÜçğıöşü0-9.]+)\s+(mahallesi|mahalle|mah\.?|mh\.?)(?=[\s,]|$)/i) || [])[1] || "";
+
+  /** Formdaki (son) adres bloğunu WhatsApp adresiyle doldurur: başlık, sokak, açıklama, mahalle (il/ilçe şubenin varsayılanı). */
+  async function fillAddressBlock(form, order, warn) {
+    const last = (ph) => [...form.querySelectorAll("input")].filter((i) => i.placeholder === ph).pop();
+    const addr = norm(order.address);
+    if (last("Başlık")) setValue(last("Başlık"), "WhatsApp");
+    if (last("Sokak")) setValue(last("Sokak"), addr.slice(0, 150));
+    if (last("Adres 1")) setValue(last("Adres 1"), addr.slice(0, 250));
+    const mah = mahalleOf(addr);
+    const mahSelect = await waitFor(() => [...form.querySelectorAll("select")].filter((s) => [...s.options].some((o) => /MAHALLE/i.test(o.text))).pop(), 3000);
+    if (mah && mahSelect) {
+      const opt = [...mahSelect.options].find((o) => key(o.text).startsWith(key(mah)));
+      if (opt) setValue(mahSelect, opt.value);
+      else warn(`Mahalle POS listesinde bulunamadı (${mah}); müşteri kaydında mahalleyi seçin.`);
+    } else warn(mah ? "Mahalle listesi yüklenemedi; müşteri kaydında mahalleyi seçin." : "Adreste mahalle bulunamadı; müşteri kaydında mahalleyi kontrol edin.");
+  }
+
+  /** Kayıtlı müşteriye WhatsApp adresini yeni adres olarak ekler ("Adres" penceresi → "Yeni Adres Ekle" → form → "Kaydet"). */
+  async function addAddress(addrDlg, order, warn) {
+    const btn = buttonByText("Yeni Adres Ekle", addrDlg);
+    if (!btn) return false;
+    btn.click();
+    const form = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && buttonByText("Kaydet", m) && [...m.querySelectorAll("input")].some((i) => i.placeholder === "Sokak")), 3000);
+    if (!form) {
+      warn("Müşteriye yeni adres eklenemedi (adres formu açılmadı); adresi elle ekleyin.");
+      return false;
+    }
+    await fillAddressBlock(form, order, warn);
+    await sleep(300);
+    buttonByText("Kaydet", form).click();
+    const closed = await waitFor(() => !visible(form) || !document.body.contains(form), 4000);
+    if (!closed) {
+      const why = lastToastError();
+      buttonByText("İptal", form)?.click();
+      warn(`Müşteriye yeni adres kaydedilemedi${why ? ` (${why})` : ""}; adresi elle ekleyin.`);
+      return false;
+    }
+    return true;
+  }
+
   async function chooseCustomer(order, warn) {
     let modal = customerModal();
     if (!modal) {
@@ -208,28 +250,43 @@
     await sleep(1200);
     const pretty = (s) => s.replace(/\D/g, "");
     const isPick = (b) => /^Seç(\s|$)/.test(norm(b.innerText));
+    const words = key(order.address).split(" ").filter((w) => w.length >= 4).slice(0, 4);
+    const score = (t) => words.filter((w) => key(t).includes(w)).length;
     const rows = [...modal.querySelectorAll("div")].filter((d) => pretty(d.innerText || "").includes(local) && [...d.querySelectorAll("button")].some(isPick));
-    const row = rows.sort((a, b) => a.innerText.length - b.innerText.length)[0];
+    const innerRows = rows.filter((d) => !rows.some((o) => o !== d && d.contains(o)));
+    // Aynı numarayla birden çok kayıt olabilir: adresi WhatsApp adresine benzeyen, yoksa adresi olan kayıt seçilir
+    const row = (innerRows.length ? innerRows : rows).map((d) => ({ d, s: score(d.innerText), a: /\b(Ev|İş|Adres|WhatsApp)\b|Mah|Cad|Sok/i.test(d.innerText) ? 1 : 0 })).sort((a, b) => b.s - a.s || b.a - a.a || a.d.innerText.length - b.d.innerText.length)[0]?.d;
     if (row) {
       [...row.querySelectorAll("button")].find(isPick).click();
       await waitFor(() => !customerModal(), 3000);
-      const words = key(order.address).split(" ").filter((w) => w.length >= 4).slice(0, 4);
-      const score = (t) => words.filter((w) => key(t).includes(w)).length;
-      // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır (kayıtlı adresler + "… Adresle Devam"); WhatsApp adresine en çok benzeyen seçilir
-      const addrDlg = await waitFor(() => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam/i.test(b.innerText))), 2000);
+      // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır (kayıtlı adresler + "… Adresle Devam" ya da "Kayıtlı adres yok" + "Yeni Adres Ekle")
+      const addrDlgNow = () => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam|Yeni Adres Ekle/i.test(b.innerText)));
+      let addrDlg = await waitFor(addrDlgNow, 2000);
       if (addrDlg) {
-        const cards = [...addrDlg.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText).length > 5 && norm(el.innerText).length < 300 && !/Yeni Adres Ekle|Düzenle/i.test(el.innerText));
-        const inner = cards.filter((el) => !cards.some((o) => o !== el && el.contains(o)));
-        const best = (inner.length ? inner : cards).map((el) => ({ el, s: score(el.innerText) })).sort((a, b) => b.s - a.s)[0];
-        if (best && best.s > 0) {
-          best.el.click();
-          await sleep(300);
+        const bestIn = (dlg) => {
+          const cards = [...dlg.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText).length > 5 && norm(el.innerText).length < 300 && !/Yeni Adres Ekle|Düzenle|Kayıtlı adres yok/i.test(el.innerText));
+          const inner = cards.filter((el) => !cards.some((o) => o !== el && el.contains(o)));
+          return (inner.length ? inner : cards).map((el) => ({ el, s: score(el.innerText) })).sort((a, b) => b.s - a.s)[0];
+        };
+        let best = bestIn(addrDlg);
+        // WhatsApp adresi kayıtlı adreslerde yoksa müşteriye yeni adres olarak eklenir
+        if (!(best && best.s > 0) && order.address && words.length) {
+          if (await addAddress(addrDlg, order, warn)) {
+            addrDlg = await waitFor(addrDlgNow, 3000);
+            best = addrDlg ? bestIn(addrDlg) : null;
+          }
         }
-        const go = [...addrDlg.querySelectorAll("button")].find((b) => visible(b) && /Devam/i.test(b.innerText) && !b.disabled);
-        if (go) go.click();
-        await waitFor(() => !visible(addrDlg) || !document.body.contains(addrDlg), 2000);
-        if (order.address && words.length && !(best && best.s > 0)) warn(`Kayıtlı müşterinin POS adreslerinde WhatsApp adresi bulunamadı (varsayılan adres seçildi). WhatsApp adresi: ${order.address}`);
-        return "found";
+        if (addrDlg && document.body.contains(addrDlg)) {
+          if (best && best.s > 0) {
+            best.el.click();
+            await sleep(300);
+          }
+          const go = [...addrDlg.querySelectorAll("button")].find((b) => visible(b) && /Devam/i.test(b.innerText) && !b.disabled);
+          if (go) go.click();
+          else buttonByText("Kapat", addrDlg)?.click();
+          await waitFor(() => !visible(addrDlg) || !document.body.contains(addrDlg), 2000);
+        }
+        if (best && best.s > 0) return "found";
       }
       // Seçilen adres WhatsApp adresinden farklı olabilir: kapı/no ya da sokak geçmiyorsa uyar
       const picked = [...document.querySelectorAll(".customer-address-button")].find((b) => visible(b) && /selected/.test(b.className)) || [...document.querySelectorAll(".customer-address-button")].find(visible);
@@ -258,7 +315,7 @@
     const addr = norm(order.address);
     if (byPh("Sokak")) setValue(byPh("Sokak"), addr.slice(0, 150));
     if (byPh("Adres 1")) setValue(byPh("Adres 1"), addr.slice(0, 250));
-    const mah = (addr.match(/([A-Za-zÇĞİÖŞÜçğıöşü0-9.]+)\s+mah/i) || [])[1];
+    const mah = mahalleOf(addr);
     const mahSelect = await waitFor(() => [...(customerModal() || modal).querySelectorAll("select")].find((s) => [...s.options].some((o) => /MAHALLE/i.test(o.text))), 3000);
     if (mah && mahSelect) {
       const opt = [...mahSelect.options].find((o) => key(o.text).startsWith(key(mah)));
@@ -275,7 +332,8 @@
   const after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
   // Ürün penceresi: .modal.show; grup başlığı .new-option-title ("Porsiyon*"), seçim .new-option-item (seçili: --selected)
   const productModal = () => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && buttonByText("Ekle", m) && m.querySelector(".new-option-title, .new-option-item"));
-  const titleKey = (t) => key(norm(t).replace(/\(opsiyonel\)/i, "").replace(/\*\s*$/, ""));
+  // Başlık: ilk satır (seçim yapılınca alt satıra seçilenler yazılır: "Extra Malzeme (Opsiyonel)" + "Domates -Ex, …")
+  const titleKey = (t) => key(norm(String(t || "").split("\n")[0]).replace(/\(opsiyonel\)/i, "").replace(/\*\s*$/, ""));
   function optionSections(modal) {
     const titles = [...modal.querySelectorAll(".new-option-title")];
     const items = [...modal.querySelectorAll(".new-option-item")];
