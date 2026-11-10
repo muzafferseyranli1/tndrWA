@@ -1,4 +1,4 @@
-// tndrWA POS köprüsü — POS sayfasına "tndrWA" düğmesi ve paneli ekler.
+// yrndWA POS köprüsü — POS sayfasına "yrndWA" düğmesi ve paneli ekler.
 // Panel API'si arka plan betiği üzerinden (anahtarla) çağrılır; POS işlemleri page.js'e (sayfa ortamı) iletilir.
 (() => {
   if (window.__tndrwaContent) return;
@@ -60,7 +60,7 @@
       ul{margin:4px 0 0;padding-left:18px}
     </style>
     <div class="panel" id="panel">
-      <h3>tndrWA · WhatsApp siparişleri</h3>
+      <h3>yrndWA · WhatsApp siparişleri</h3>
       <div id="link" class="muted">Bağlanıyor…</div>
       <label class="muted" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="optSubmit"> Sorun yoksa "Sipariş Oluştur"a da bas</label>
       <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="optAuto"> Yeni siparişleri kendiliğinden gir (bu pencere POS'a ayrılmış olmalı)</label>
@@ -74,7 +74,7 @@
       </div>
       <p class="muted">Menü ve müşteriler POS'tan yalnız okunur. Sipariş POS'a doldurulur; sorun varsa (eşleşmeyen ürün, tutar farkı, uygulanamayan indirim) oluşturulmaz, personele bırakılır.</p>
     </div>
-    <button class="fab" id="fab">tndrWA<span class="badge" id="count" style="display:none">0</span></button>`;
+    <button class="fab" id="fab">yrndWA<span class="badge" id="count" style="display:none">0</span></button>`;
   document.documentElement.appendChild(host);
   const $ = (id) => shadow.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);

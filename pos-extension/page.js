@@ -1,4 +1,4 @@
-// tndrWA POS köprüsü — POS sayfasının kendi ortamında (MAIN world) çalışır.
+// yrndWA POS köprüsü — POS sayfasının kendi ortamında (MAIN world) çalışır.
 // POS'un oturumuyla menüyü/müşterileri YALNIZ OKUR; siparişi POS'un ekranını kullanarak doldurur
 // (veritabanına doğrudan yazmaz). "Sipariş Oluştur"a personel basar.
 (() => {

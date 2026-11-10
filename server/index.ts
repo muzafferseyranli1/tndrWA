@@ -210,7 +210,7 @@ async function main() {
   app.all("*", (req, res) => handle(req, res));
 
   const server = app.listen(env.port, () => {
-    logger.info(`tndrWA http://localhost:${env.port} (${env.nodeEnv}) üzerinde çalışıyor`);
+    logger.info(`yrndWA http://localhost:${env.port} (${env.nodeEnv}) üzerinde çalışıyor`);
   });
 
   const shutdown = () => {

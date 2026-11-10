@@ -1,4 +1,4 @@
-// tndrWA POS köprüsü — panel API'sine anahtarla istek atar (POS sayfasının çerezlerinden ve CORS'tan bağımsız).
+// yrndWA POS köprüsü — panel API'sine anahtarla istek atar (POS sayfasının çerezlerinden ve CORS'tan bağımsız).
 const config = () => new Promise((r) => chrome.storage.local.get(["panelUrl", "token"], r));
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {

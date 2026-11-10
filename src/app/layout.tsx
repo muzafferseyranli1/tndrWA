@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "tndrWA Panel",
+  title: "yrndWA Panel",
   description: "WhatsApp katalog ve sipariş yönetimi",
   robots: { index: false, follow: false },
 };

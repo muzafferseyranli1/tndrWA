@@ -176,7 +176,7 @@ export default function OrdersPage() {
   }, [soundOn, alarmCount, beep]);
 
   useEffect(() => {
-    document.title = alarmCount > 0 ? `(${alarmCount}) Yeni sipariş · tndrWA` : "Siparişler · tndrWA";
+    document.title = alarmCount > 0 ? `(${alarmCount}) Yeni sipariş · yrndWA` : "Siparişler · yrndWA";
   }, [alarmCount]);
 
   // Ses bu cihazda açık bırakıldıysa: kurulu uygulamada tarayıcı hemen izin verebilir, vermezse ekrana ilk dokunuşta başlar

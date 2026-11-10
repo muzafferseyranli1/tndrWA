@@ -107,7 +107,7 @@ export default function RatingsPage() {
 
   useEffect(() => {
     const n = summary?.pendingCount ?? 0;
-    document.title = n > 0 ? `(${n}) Aranacak · tndrWA` : "Değerlendirmeler · tndrWA";
+    document.title = n > 0 ? `(${n}) Aranacak · yrndWA` : "Değerlendirmeler · yrndWA";
   }, [summary]);
 
   const fmt = (n: number | null) => (n === null ? "-" : n.toFixed(1));

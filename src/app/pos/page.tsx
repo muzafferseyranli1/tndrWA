@@ -125,7 +125,7 @@ export default function PosPage() {
                   <b>Paketlenmemiş öğe yükle</b> ile proje klasöründeki <code>pos-extension</code> klasörünü seçin.
                 </li>
                 <li>Eklentinin <b>Seçenekler</b> sayfasına panel adresini ({typeof window !== "undefined" ? window.location.origin : ""}) ve anahtarı girin.</li>
-                <li>POS&apos;ta sağ alttaki <b>tndrWA</b> düğmesinden markayı seçip &quot;Menüyü gönder&quot;e basın.</li>
+                <li>POS&apos;ta sağ alttaki <b>yrndWA</b> düğmesinden markayı seçip &quot;Menüyü gönder&quot;e basın.</li>
               </ol>
             </section>
 

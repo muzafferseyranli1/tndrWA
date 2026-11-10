@@ -85,7 +85,7 @@ export default function AppHeader() {
     <header ref={headerRef} className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
         <Link href="/orders" className="font-semibold text-brand-600">
-          tndrWA
+          yrndWA
         </Link>
         <nav className="order-last -mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] sm:order-none sm:w-auto sm:flex-1" aria-label="Ana menü">
           {sections.map((s) => {

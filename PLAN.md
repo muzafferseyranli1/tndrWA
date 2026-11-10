@@ -1,4 +1,4 @@
-# tndrWA Yol Haritası
+# yrndWA Yol Haritası
 
 Hedef: Müşteri QR/link ile WhatsApp kataloğuna girer, sipariş verir. Panel siparişi yakalar, sesle haber verir, sipariş düzenlenir, müşteriyle yazışılır, durum değişikliklerinde müşteriye WhatsApp mesajı gider.
 
@@ -16,7 +16,7 @@ Hedef: Müşteri QR/link ile WhatsApp kataloğuna girer, sipariş verir. Panel s
 ## Mimari
 ```
 Müşteri → WhatsApp kataloğu → sepet/sipariş mesajı
-   → WAHA (webhook) → tndrWA sunucusu → SQLite
+   → WAHA (webhook) → yrndWA sunucusu → SQLite
    → SSE ile panel (ses + canlı liste) ← → yazışma, durum, düzenleme
    → WAHA ile müşteriye mesaj;  Meta Graph API ← ürün yönetimi
 ```

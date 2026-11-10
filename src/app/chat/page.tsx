@@ -35,7 +35,7 @@ export default function ChatPage() {
 
   const unreadTotal = (list ?? []).reduce((sum, c) => sum + c.unread, 0);
   useEffect(() => {
-    document.title = unreadTotal > 0 ? `(${unreadTotal}) Yazışma · tndrWA` : "Yazışma · tndrWA";
+    document.title = unreadTotal > 0 ? `(${unreadTotal}) Yazışma · yrndWA` : "Yazışma · yrndWA";
   }, [unreadTotal]);
 
   return (
