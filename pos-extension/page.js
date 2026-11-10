@@ -267,6 +267,53 @@
     return true;
   }
 
+  const addrDlgNow = () => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam|Yeni Adres Ekle/i.test(b.innerText)));
+
+  /**
+   * Seçili müşteri için "Adres" penceresinde WhatsApp adresini seçer; kayıtlı adreslerde yoksa yeni adres olarak ekler.
+   * Pencere kapandıysa sipariş ekranındaki adres satırına ("Adres Ekle" / seçili adres) tıklayıp yeniden açar.
+   */
+  async function resolveAddress(order, warn, words, score) {
+    const reopen = async () => {
+      let dlg = addrDlgNow();
+      if (dlg) return dlg;
+      const chip = [...document.querySelectorAll(".customer-address-button, button, div")].find((el) => visible(el) && (/^Adres Ekle$/.test(norm(el.innerText)) || /customer-address-button/.test(el.className || "")) && clickable(el));
+      chip?.click();
+      return waitFor(addrDlgNow, 2500);
+    };
+    const bestIn = (dlg) => {
+      // Adres kartları BUTTON elemanı ("Ev SUADİYE MAHALLESİ, …"); kapatma, "Yeni Adres Ekle", "Düzenle" ve "… Adresle Devam" düğmeleri hariç
+      const cards = [...dlg.querySelectorAll("*")].filter((el) => clickable(el) && !/btn-close/.test(el.className || "") && norm(el.innerText).length > 5 && norm(el.innerText).length < 300 && !/Yeni Adres Ekle|Düzenle|Kayıtlı adres yok|Devam/i.test(el.innerText));
+      const inner = cards.filter((el) => !cards.some((o) => o !== el && el.contains(o)));
+      return (inner.length ? inner : cards).map((el) => ({ el, s: score(el.innerText) })).sort((a, b) => b.s - a.s)[0];
+    };
+    let dlg = await waitFor(addrDlgNow, 2000);
+    if (!dlg) dlg = await reopen();
+    if (!dlg) return { ok: false, diag: "Adres penceresi açılmadı" };
+    let added = false;
+    for (let attempt = 0; attempt < 3 && dlg; attempt++) {
+      const best = bestIn(dlg);
+      if (best && best.s > 0) {
+        best.el.click();
+        await sleep(300);
+        const go = [...dlg.querySelectorAll("button")].find((b) => visible(b) && /Devam/i.test(b.innerText) && !b.disabled);
+        if (go) go.click();
+        else buttonByText("Kapat", dlg)?.click();
+        await waitFor(() => !visible(dlg) || !document.body.contains(dlg), 2500);
+        return { ok: true };
+      }
+      if (added || !order.address || !words.length) break;
+      if (!(await addAddress(dlg, order, warn))) return { ok: false, diag: "yeni adres eklenemedi" };
+      added = true;
+      // Kaydet sonrası pencere kapanmış olabilir: adres satırından yeniden aç
+      dlg = await waitFor(addrDlgNow, 2500);
+      if (!dlg) dlg = await reopen();
+    }
+    const seen = dlg ? norm(dlg.innerText).slice(0, 140) : "pencere kapalı";
+    if (dlg) buttonByText("Kapat", dlg)?.click();
+    return { ok: false, diag: `adres penceresi: ${seen}` };
+  }
+
   async function chooseCustomer(order, warn) {
     let modal = customerModal();
     if (!modal) {
@@ -294,8 +341,13 @@
     const here = norm((await cafeInfo().catch(() => null))?.cafeName || "");
     const otherCafe = (t) => /\S+\s\|\s\S+/.test(t) && !(here && norm(t).includes(here));
     const row = (innerRows.length ? innerRows : rows)
-      .map((d) => ({ d, o: otherCafe(d.innerText) ? 1 : 0, s: score(d.innerText), a: /\b(Ev|İş|Adres|WhatsApp)\b|Mah|Cad|Sok/i.test(d.innerText) ? 1 : 0 }))
-      .sort((a, b) => a.o - b.o || b.s - a.s || b.a - a.a || a.d.innerText.length - b.d.innerText.length)[0]?.d;
+      .map((d) => {
+        const t = norm(d.innerText);
+        // "Kayıtlı adres yok" yazısı adres sayılmaz; "N sipariş" sayısı asıl kaydı ayırt eder (aynı numarayla boş kayıtlar olabiliyor)
+        return { d, o: otherCafe(d.innerText) ? 1 : 0, s: score(d.innerText), a: /Kayıtlı adres yok/i.test(t) ? 0 : 1, n: Number((t.match(/(\d+)\s*sipariş/i) || [])[1]) || 0, len: t.length };
+      })
+      .sort((a, b) => a.o - b.o || b.s - a.s || b.a - a.a || b.n - a.n || a.len - b.len)[0]?.d;
+    let diag = "";
     if (row) {
       [...row.querySelectorAll("button")].find(isPick).click();
       await waitFor(() => !customerModal(), 3000);
@@ -307,39 +359,14 @@
         stay.click();
         await waitFor(() => !visible(elsewhere) || !document.body.contains(elsewhere), 3000);
       }
-      // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır (kayıtlı adresler + "… Adresle Devam" ya da "Kayıtlı adres yok" + "Yeni Adres Ekle")
-      const addrDlgNow = () => [...document.querySelectorAll(".modal.show")].find((m) => visible(m) && /^Adres/.test(norm(m.innerText)) && [...m.querySelectorAll("button")].some((b) => /Devam|Yeni Adres Ekle/i.test(b.innerText)));
-      let addrDlg = await waitFor(addrDlgNow, 2000);
-      if (addrDlg) {
-        const bestIn = (dlg) => {
-          const cards = [...dlg.querySelectorAll("*")].filter((el) => clickable(el) && el.tagName !== "BUTTON" && norm(el.innerText).length > 5 && norm(el.innerText).length < 300 && !/Yeni Adres Ekle|Düzenle|Kayıtlı adres yok/i.test(el.innerText));
-          const inner = cards.filter((el) => !cards.some((o) => o !== el && el.contains(o)));
-          return (inner.length ? inner : cards).map((el) => ({ el, s: score(el.innerText) })).sort((a, b) => b.s - a.s)[0];
-        };
-        let best = bestIn(addrDlg);
-        // WhatsApp adresi kayıtlı adreslerde yoksa müşteriye yeni adres olarak eklenir
-        if (!(best && best.s > 0) && order.address && words.length) {
-          if (await addAddress(addrDlg, order, warn)) {
-            addrDlg = await waitFor(addrDlgNow, 3000);
-            best = addrDlg ? bestIn(addrDlg) : null;
-          }
-        }
-        if (addrDlg && document.body.contains(addrDlg)) {
-          if (best && best.s > 0) {
-            best.el.click();
-            await sleep(300);
-          }
-          const go = [...addrDlg.querySelectorAll("button")].find((b) => visible(b) && /Devam/i.test(b.innerText) && !b.disabled);
-          if (go) go.click();
-          else buttonByText("Kapat", addrDlg)?.click();
-          await waitFor(() => !visible(addrDlg) || !document.body.contains(addrDlg), 2000);
-        }
-        if (best && best.s > 0) return "found";
-      }
+      // Yeni POS arayüzü: müşteri seçilince "Adres" penceresi açılır; WhatsApp adresine en çok benzeyen kayıtlı adres seçilir, yoksa müşteriye yeni adres olarak eklenir
+      const addrResult = await resolveAddress(order, warn, words, score);
+      if (addrResult.ok) return "found";
+      diag = addrResult.diag;
       // Seçilen adres WhatsApp adresinden farklı olabilir: kapı/no ya da sokak geçmiyorsa uyar
       const picked = [...document.querySelectorAll(".customer-address-button")].find((b) => visible(b) && /selected/.test(b.className)) || [...document.querySelectorAll(".customer-address-button")].find(visible);
       const chip = picked ? norm(`${picked.getAttribute("title") || ""} ${picked.innerText || ""}`) : norm([...document.querySelectorAll("button,div")].filter((el) => visible(el) && /MAHALLES|Mah\.|Sok|Cad/i.test(el.innerText || "") && (el.innerText || "").length < 160).map((el) => el.innerText).sort((a, b) => a.length - b.length)[0]);
-      if (order.address && words.length && !words.some((w) => key(chip).includes(w))) warn(`Kayıtlı müşterinin POS adresi WhatsApp adresinden farklı olabilir. WhatsApp adresi: ${order.address}`);
+      if (order.address && words.length && !words.some((w) => key(chip).includes(w))) warn(`Siparişe adres seçilemedi (POS'taki adres: "${chip || "yok"}"${diag ? `; ${diag}` : ""}). WhatsApp adresi: ${order.address}`);
       return "found";
     }
     // Yeni müşteri: ad, telefon, adres (il/ilçe şubenin varsayılanı; mahalle adresten tahmin edilir)
