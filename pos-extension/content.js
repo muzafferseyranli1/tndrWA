@@ -239,6 +239,20 @@
     }
   }
 
+  // Otomatik mod kesicisi: art arda 2 sipariş takılırsa (blokaj ya da hata) otomatik mod kendini kapatır; arayüz değiştiğinde onlarca sipariş tek tek takılmasın
+  let failStreak = 0;
+  const AUTO_MAX_FAILS = 2;
+  async function autoFailed(id, why) {
+    if (++failStreak < AUTO_MAX_FAILS || !opts.auto) return;
+    opts.auto = false;
+    $("optAuto").checked = false;
+    await saveOpts();
+    const text = `Art arda ${failStreak} sipariş POS'a yazılamadı (son: WA #${id}, ${why}). Otomatik mod kapatıldı; siparişleri elle girin, sorun giderilince modu yeniden açın.`;
+    alarm("Otomatik mod kapandı");
+    show("err", `<b>Otomatik mod kapandı.</b> ${esc(text)}`);
+    api("POST", "/api/pos-ext/alert", { kind: "auto", text }).catch(() => undefined);
+  }
+
   async function fill(id, auto = false) {
     if (busy) return;
     const order = orders.find((o) => o.id === id);
@@ -273,7 +287,9 @@
         await api("POST", `/api/pos-ext/orders/${id}/done`, { cafeId: order.brand.posCafeId, posRef: r.posRef });
         show(r.warnings.length ? "warn" : "ok", `WA #${id} POS'ta <b>${esc(r.posRef)}</b> olarak oluşturuldu (${who}), panele işlendi.${list}`);
         refresh();
+        if (auto) failStreak = 0;
       } else if (r.submitted) {
+        if (auto) failStreak = 0;
         await store.set("tndrwaPending", { id, cafeId: order.brand.posCafeId, at: Date.now() });
         show("warn", `WA #${id} oluşturuldu; POS numarası sipariş listesinden okunacak.${list}`);
       } else {
@@ -283,6 +299,7 @@
           await store.set("tndrwaSkip", skipped);
           alarm(`WA #${id} POS'a eksik yazıldı`);
           show("err", `WA #${id} dolduruldu ama <b>oluşturulmadı</b>, kontrol gerekiyor (${who}):${list}<b>Düzeltip "Sipariş Oluştur"a basın.</b>`);
+          if (auto) await autoFailed(id, r.blockers[0]);
         } else {
           show("ok", `WA #${id} dolduruldu (${who}${r.posTotal !== null ? `, POS toplamı ${r.posTotal.toFixed(2)} TL` : ""}).<br><b>Kontrol edip "Sipariş Oluştur"a basın.</b>${list}`);
         }
@@ -292,6 +309,9 @@
         skipped[id] = Date.now();
         await store.set("tndrwaSkip", skipped);
         alarm(`WA #${id} POS'a yazılamadı`);
+        show("err", `WA #${id}: ${esc(err.message)}`);
+        await autoFailed(id, err.message);
+        return;
       }
       show("err", `WA #${id}: ${esc(err.message)}`);
     } finally {
@@ -399,6 +419,43 @@
       tracking = false;
     }
   }
+  // Arayüz erken uyarısı: POS açıkken eklentinin dayandığı parçalar yoklanır; eksik varsa panele uyarı gider, otomatik mod kapanır
+  let uiChecking = false;
+  async function uiCheck() {
+    if (uiChecking || busy) return;
+    uiChecking = true;
+    try {
+      let r = await page("selfCheck");
+      if (r.skipped) return;
+      if (r.missing.length) {
+        await new Promise((res) => setTimeout(res, 10000)); // ekran yeni açıldıysa yüklenmesini bekle, sonra bir daha bak
+        if (busy) return;
+        const r2 = await page("selfCheck");
+        if (r2.skipped) return;
+        r = { ...r2, missing: r.missing.filter((m) => r2.missing.includes(m)) };
+      }
+      if (!r.missing.length) {
+        await api("POST", "/api/pos-ext/alert", { kind: "ui", clear: true });
+        return;
+      }
+      const text = `Ekranda (${r.path}) bulunamayan parça: ${r.missing.join(", ")}. Suitable arayüzü değişmiş olabilir; siparişleri elle girin, haber verin.`;
+      await api("POST", "/api/pos-ext/alert", { kind: "ui", text });
+      alarm("POS arayüzü değişmiş olabilir");
+      show("err", `<b>POS arayüzü değişmiş olabilir.</b> ${esc(text)}`);
+      if (opts.auto) {
+        opts.auto = false;
+        $("optAuto").checked = false;
+        await saveOpts();
+        show("err", `<b>POS arayüzü değişmiş olabilir; otomatik mod kapatıldı.</b> ${esc(text)}`);
+      }
+    } catch {
+      /* sonraki turda */
+    } finally {
+      uiChecking = false;
+    }
+  }
+  setTimeout(uiCheck, 25000);
+  setInterval(uiCheck, 5 * 60 * 1000);
   setTimeout(trackTick, 10000);
   setInterval(trackTick, 60000);
   setTimeout(autoSync, 20000); // açılışta (arayüz yüklendikten sonra)

@@ -696,7 +696,30 @@
   function post(msg) {
     window.postMessage({ source: "tndrwa-page", ...msg }, location.origin);
   }
-  const commands = { cafeInfo, readMenu, readCustomers, lookupCustomers, trackStatuses, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
+  /**
+   * Arayüz kendi kendine kontrolü (salt okuma): bulunduğu ekranda eklentinin dayandığı parçalar var mı?
+   * Suitable arayüzü değişince siparişe dokunmadan önce haber vermek için. Pencere açıkken ya da ekran yüklenmemişken atlanır.
+   */
+  function selfCheck() {
+    const path = location.pathname;
+    const open = [...document.querySelectorAll(".modal.show")].some(visible);
+    if (open) return { path, missing: [], skipped: "pencere açık" };
+    const has = (sel) => [...document.querySelectorAll(sel)].some(visible);
+    const missing = [];
+    if (/\/app\/order\/Paket/.test(path)) {
+      if (!document.querySelector(".order-container, .order-left-col, .order-item-card, [class*='order-']")) return { path, missing: [], skipped: "ekran yüklenmedi" };
+      if (!buttonByText("Sipariş Oluştur")) missing.push('"Sipariş Oluştur" düğmesi');
+      if (!has(".order-quick-action-btn")) missing.push("sepet hızlı işlem düğmeleri (sipariş notu)");
+      if (!buttonByText("Kredi Kartı") && !buttonByText("Nakit")) missing.push("ödeme düğmeleri");
+      if (![...document.querySelectorAll("input")].some((i) => i.placeholder === "Ürün Ara" && visible(i))) missing.push("ürün arama kutusu");
+    } else if (/\/app\/(tables|orderlist|all-orders)/.test(path)) {
+      if (!buttonByText("Menü")) return { path, missing: [], skipped: "ekran yüklenmedi" };
+      if (!paketButton()) missing.push("Paket sipariş düğmesi");
+    } else return { path, missing: [], skipped: "bu ekran izlenmiyor" };
+    return { path, missing };
+  }
+
+  const commands = { cafeInfo, selfCheck, readMenu, readCustomers, lookupCustomers, trackStatuses, fillOrder, findCreated, openPaketFor, needsSwitch, switchCafe };
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.data?.source !== "tndrwa-ext") return;
     const { id, cmd, args = [] } = e.data;

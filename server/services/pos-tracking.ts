@@ -14,6 +14,33 @@ import type { WhatsappCloudClient } from "./whatsapp-cloud";
 export const DELIVERY_FALLBACK_MS = 60 * 60 * 1000;
 const TRACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** Eklentinin panele bıraktığı uyarılar: "ui" = POS arayüzünde beklenen parça yok, "auto" = otomatik mod art arda hata verip kendini kapattı. */
+export type PosAlertKind = "ui" | "auto";
+export type PosAlerts = Partial<Record<PosAlertKind, { text: string; at: string }>>;
+const ALERT_KEY = "pos.alerts";
+
+export async function readPosAlerts(db: PrismaClient): Promise<PosAlerts> {
+  const raw = (await db.setting.findUnique({ where: { key: ALERT_KEY } }))?.value;
+  try {
+    return raw ? (JSON.parse(raw) as PosAlerts) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writePosAlerts(db: PrismaClient, alerts: PosAlerts): Promise<void> {
+  const value = JSON.stringify(alerts);
+  await db.setting.upsert({ where: { key: ALERT_KEY }, create: { key: ALERT_KEY, value }, update: { value } });
+}
+
+/** Uyarı bırakır (aynı türün üzerine yazar) ya da temizler. */
+export async function setPosAlert(db: PrismaClient, kind: PosAlertKind, text: string | null): Promise<void> {
+  const alerts = await readPosAlerts(db);
+  if (text === null) delete alerts[kind];
+  else alerts[kind] = { text: text.slice(0, 400), at: new Date().toISOString() };
+  await writePosAlerts(db, alerts);
+}
+
 export type PosEvent = "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
 const RANK: Record<string, number> = { NEW: 0, PREPARING: 1, ON_THE_WAY: 2, DELIVERED: 3, CANCELLED: 3 };
 

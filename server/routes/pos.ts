@@ -5,7 +5,7 @@ import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
 import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, syncPricesFromPos, verifyPosToken } from "../services/pos-bridge";
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
-import { applyPosEvents, markPosEntered, trackingList } from "../services/pos-tracking";
+import { applyPosEvents, markPosEntered, readPosAlerts, setPosAlert, trackingList } from "../services/pos-tracking";
 import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
@@ -140,6 +140,15 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
     res.json({ ok: true });
   });
 
+  // Eklentinin kendi kendine kontrolü: POS arayüzünde beklenen parça bulunamazsa ya da otomatik mod art arda hata verirse uyarı bırakır
+  router.post("/alert", async (req, res) => {
+    const parsed = z.object({ kind: z.enum(["ui", "auto"]), text: z.string().trim().max(400).optional(), clear: z.boolean().optional() }).safeParse(req.body ?? {});
+    if (!parsed.success || (!parsed.data.clear && !parsed.data.text)) return res.status(400).json({ error: "Geçersiz istek." });
+    await setPosAlert(db, parsed.data.kind, parsed.data.clear ? null : parsed.data.text!);
+    if (!parsed.data.clear) logger.warn({ kind: parsed.data.kind, text: parsed.data.text }, "POS eklentisi uyarı bıraktı");
+    res.json({ ok: true });
+  });
+
   // Durum takibi: eklenti POS'a girilmiş, bitmemiş siparişleri alır; POS'ta gördüğü değişiklikleri gönderir
   router.get("/tracking", async (_req, res) => {
     res.json({ orders: await trackingList(db) });
@@ -164,7 +173,14 @@ export function posAdminRouter(db: PrismaClient): Router {
     const brand = await resolveBrand(db, req.query.brandId);
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     const customers = (await db.setting.findUnique({ where: { key: customersKey(brand.code) } }))?.value;
-    res.json({ tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id) });
+    res.json({ tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
+  });
+
+  router.delete("/alerts/:kind", async (req, res) => {
+    const kind = req.params.kind;
+    if (kind !== "ui" && kind !== "auto") return res.status(400).json({ error: "Geçersiz uyarı türü." });
+    await setPosAlert(db, kind, null);
+    res.json({ ok: true });
   });
 
   router.post("/token", async (_req, res) => {
