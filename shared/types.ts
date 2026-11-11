@@ -152,7 +152,8 @@ import type { ChannelKind } from "./channels";
 export interface PublicBrandDto {
   code: string;
   name: string;
-  channels: { kind: ChannelKind; label: string; href: string }[];
+  /** soon: bağlantısı henüz olmayan kanal; sayfada pasif "Çok yakında" düğmesi olarak görünür (href boş) */
+  channels: { kind: ChannelKind; label: string; href: string | null; soon?: boolean }[];
 }
 
 export interface ChannelDto {

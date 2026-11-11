@@ -9,6 +9,7 @@ import type { PublicBrandDto } from "@shared/types";
 const STYLE: Record<string, { cls: string; icon: string }> = {
   CALL: { cls: "bg-emerald-700 text-white", icon: "📞" },
   WHATSAPP: { cls: "bg-[#128C7E] text-white", icon: "💬" },
+  TELEGRAM: { cls: "bg-[#229ED9] text-white", icon: "✈️" },
   YEMEKSEPETI: { cls: "bg-[#fa0050] text-white", icon: "🛵" },
   // Trendyol Go, Türkiye'de Uber Eats adına geçti: markanın siyah/yeşil renkleri
   TRENDYOLGO: { cls: "bg-black text-[#06C167]", icon: "🛵" },
@@ -52,6 +53,24 @@ export default function BrandChannels({ code }: { code: string }) {
       <div className="flex flex-col gap-3">
         {brand?.channels.map((c) => {
           const style = STYLE[c.kind] ?? { cls: "bg-slate-800 text-white", icon: "➡️" };
+          // Bağlantısı henüz olmayan kanal: tıklanamaz, "Çok yakında" etiketli
+          if (!c.href) {
+            return (
+              <div
+                key={c.kind}
+                aria-disabled="true"
+                className={`flex min-h-[5rem] w-full cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl px-5 py-4 text-center opacity-55 ${style.cls}`}
+              >
+                <span className="flex items-center gap-3 text-xl font-semibold">
+                  <span aria-hidden="true" className="text-2xl">
+                    {style.icon}
+                  </span>
+                  <span>{c.label}</span>
+                </span>
+                <span className="text-sm font-medium opacity-90">Çok yakında</span>
+              </div>
+            );
+          }
           return (
             <a
               key={c.kind}

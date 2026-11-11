@@ -1,4 +1,4 @@
-export const CHANNEL_KINDS = ["CALL", "WHATSAPP", "YEMEKSEPETI", "TRENDYOLGO", "GETIR", "MAPS", "REVIEW"] as const;
+export const CHANNEL_KINDS = ["CALL", "WHATSAPP", "TELEGRAM", "YEMEKSEPETI", "TRENDYOLGO", "GETIR", "MAPS", "REVIEW"] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 export interface ChannelSpec {
@@ -13,6 +13,7 @@ export interface ChannelSpec {
 /** Açılış sayfasındaki varsayılan buton sırası. */
 export const CHANNEL_SPECS: ChannelSpec[] = [
   { kind: "WHATSAPP", label: "WhatsApp'tan sipariş ver", valueHint: "WhatsApp numarası (örn. 0533 123 45 67)", valueType: "phone" },
+  { kind: "TELEGRAM", label: "Telegram'dan sipariş ver", valueHint: "Telegram bot bağlantısı (@botadi ya da https://t.me/botadi). Boş bırakıp açarsanız sayfada \"Çok yakında\" olarak görünür", valueType: "url" },
   { kind: "CALL", label: "Telefonla sipariş ver", valueHint: "Telefon numarası (örn. 0212 123 45 67)", valueType: "phone" },
   { kind: "YEMEKSEPETI", label: "Yemeksepeti", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
   { kind: "TRENDYOLGO", label: "Uber Eats", valueHint: "Restoran sayfasının https bağlantısı (Trendyol Go bağlantısı; Türkiye'de Uber Eats adına geçti)", valueType: "url" },
@@ -60,6 +61,11 @@ export function validateChannelValue(kind: ChannelKind, raw: string): ValueResul
   if (spec.valueType === "phone") {
     const phone = normalizePhone(text);
     return phone ? { ok: true, value: phone } : { ok: false, error: "Geçerli bir telefon numarası girin (örn. 0212 123 45 67)." };
+  }
+  if (kind === "TELEGRAM") {
+    // "@botadi", "t.me/botadi" ya da tam bağlantı kabul edilir
+    const handle = text.match(/^@([A-Za-z0-9_]{4,32})$/)?.[1] ?? text.match(/^(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{4,32})\/?$/i)?.[1];
+    if (handle) return { ok: true, value: `https://t.me/${handle}` };
   }
   if (spec.valueType === "url") {
     const url = normalizeUrl(text);

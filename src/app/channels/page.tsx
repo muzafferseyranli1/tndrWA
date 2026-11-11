@@ -57,6 +57,7 @@ function Row({ c, first, last, onMove, onSaved, clicks }: { c: ChannelDto; first
         <label className="block text-sm">
           <span className="mb-1 block text-slate-600">{c.kind === "REVIEW" ? "Google yorum bağlantısı (değerlendirme sonrası)" : c.valueType === "phone" ? "Numara" : c.valueType === "place" ? "Adres / harita bağlantısı" : "Bağlantı"}</span>
           <input value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder={c.valueHint} className={field} />
+          {c.kind === "TELEGRAM" && <span className="mt-1 block text-xs text-slate-500">Bağlantıyı boş bırakıp &quot;Sayfada göster&quot;i açarsanız müşteriler düğmeyi gri ve &quot;Çok yakında&quot; yazılı görür. Bağlantı girilince düğme çalışır. (Telegram sipariş botu henüz yapılmadı.)</span>}
           {c.kind === "REVIEW" && <span className="mt-1 block text-xs text-slate-500">Buton yine bizim değerlendirme sayfamızı açar; Google bağlantısı, değerlendirmeyi gönderen herkese teşekkür ekranında gösterilir.</span>}
         </label>
       </div>
