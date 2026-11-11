@@ -18,6 +18,15 @@ export interface WahaEnv {
   hmacKey: string;
 }
 
+export interface TelegramEnv {
+  /** Marka kodu (küçük harf, örn. "pide") -> BotFather jetonu. Jeton TELEGRAM_BOT_TOKEN_<KOD> ortam değişkeninden okunur. */
+  bots: Record<string, string>;
+  /** Telegram Bot API adresi (testte sahte sunucuya çevrilir) */
+  apiBase: string;
+  /** true ise açılışta webhook, komutlar ve açıklama Telegram'a yazılır (yalnız canlıda açılır; yerel/test sunucusu canlı webhook'u ezmesin) */
+  configureOnStart: boolean;
+}
+
 export interface WhatsappCloudEnv {
   /** Meta uygulama sırrı: webhook imzası (X-Hub-Signature-256) bununla doğrulanır */
   appSecret: string;
@@ -48,6 +57,8 @@ export interface Env {
   waha: WahaEnv | null;
   /** Resmi WhatsApp Cloud API ayarları eksikse null: webhook kabul edilmez, panel "ayar eksik" der. */
   whatsappCloud: WhatsappCloudEnv | null;
+  /** Telegram botları (marka başına jeton); hiç jeton yoksa null: webhook kabul edilmez. */
+  telegram: TelegramEnv | null;
 }
 
 export class EnvError extends Error {
@@ -141,6 +152,19 @@ export function loadEnv(source: Source = process.env): Env {
     problems.push(`WhatsApp Cloud API ayarları yarım: ${cloudKeys.filter((k) => !source[k]?.trim()).join(", ")} eksik`);
   }
 
+  // Telegram: marka başına bot jetonu (TELEGRAM_BOT_TOKEN_PIDE, TELEGRAM_BOT_TOKEN_TANDIR ...)
+  const tgBots: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    const m = /^TELEGRAM_BOT_TOKEN_([A-Z0-9_]+)$/.exec(key);
+    if (!m || !value?.trim()) continue;
+    const token = value.trim();
+    if (!/^\d{6,14}:[A-Za-z0-9_-]{30,60}$/.test(token)) problems.push(`${key} geçerli bir BotFather jetonu gibi görünmüyor`);
+    else tgBots[m[1].toLowerCase()] = token;
+  }
+  const telegram: TelegramEnv | null = Object.keys(tgBots).length
+    ? { bots: tgBots, apiBase: (source.TELEGRAM_API_BASE?.trim() || "https://api.telegram.org").replace(/\/+$/, ""), configureOnStart: source.TELEGRAM_SET_WEBHOOK?.trim() === "1" }
+    : null;
+
   const publicRaw = source.PUBLIC_BASE_URL?.trim();
   let publicBaseUrl: string | null = null;
   if (publicRaw) {
@@ -166,5 +190,6 @@ export function loadEnv(source: Source = process.env): Env {
     metaAutoSync: source.META_AUTO_SYNC?.trim().toLowerCase() === "true",
     waha,
     whatsappCloud,
+    telegram,
   };
 }

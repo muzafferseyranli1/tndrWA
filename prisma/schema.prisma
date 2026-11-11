@@ -117,6 +117,8 @@ model Customer {
   id        Int      @id @default(autoincrement())
   waId      String?  @unique
   bsuid     String?  @unique
+  // Telegram kullanıcı kimliği (özel sohbette sohbet kimliğiyle aynı); telefon paylaşılınca waId ile aynı kayıtta birleşir
+  tgId      String?  @unique
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -144,6 +146,8 @@ model Order {
   customer    Customer    @relation(fields: [customerId], references: [id])
   // Meta mesaj kimliği: aynı sipariş webhook'u tekrar gelirse ikinci kayıt açılmaz
   waMessageId String      @unique
+  // whatsapp | telegram: siparişin geldiği ve müşteriyle yazışılacak kanal
+  channel     String      @default("whatsapp")
   // NEW | PREPARING | ON_THE_WAY | DELIVERED | CANCELLED
   status      String      @default("NEW")
   note        String      @default("")
@@ -217,7 +221,9 @@ model Message {
   // text | order | catalog | image | audio ... (gelen türler Meta'dan olduğu gibi)
   type        String
   body        String
-  // Meta mesaj kimliği; giden mesajın teslim durumu bu kimlikle eşlenir
+  // whatsapp | telegram
+  channel     String   @default("whatsapp")
+  // Meta mesaj kimliği (Telegram'da "tg:<marka>:<sohbet>:<mesaj>"); giden mesajın teslim durumu bu kimlikle eşlenir
   waMessageId String?  @unique
   // IN: RECEIVED | OUT: SENT | DELIVERED | READ | FAILED
   status      String

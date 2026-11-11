@@ -7,6 +7,8 @@ import { verifyWahaSignature } from "../lib/waha-hmac";
 import { extractCloudEvents } from "../services/whatsapp-cloud";
 import { ingestCloudOrder } from "../services/orders";
 import { recordInbound, recordStatus, type InboundRecord } from "../services/chat";
+import { TelegramClient, webhookSecret } from "../services/telegram";
+import { handleTelegramUpdate, type TgUpdate } from "../services/telegram-bot";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
 export function detectMessageType(payload: unknown): string | null {
@@ -104,6 +106,23 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
     if (isDiscoveryEvent(event, messageType, text)) {
       logger.info({ event, session, messageType, raw: compactForLog(text) }, "WAHA keşif: sipariş/katalog olayı");
     }
+    res.json({ ok: true });
+  });
+
+  // ---- Telegram: marka başına bir bot, adres /telegram/<marka kodu> ----
+  // Telegram her isteğe, webhook kurulurken verilen gizli anahtarı X-Telegram-Bot-Api-Secret-Token başlığıyla ekler.
+  router.post("/telegram/:code", express.json({ limit: "1mb" }), async (req, res) => {
+    const code = req.params.code.toLowerCase();
+    const token = env.telegram?.bots[code];
+    if (!env.telegram || !token) return res.status(404).json({ error: "Bu marka için Telegram botu tanımlı değil." });
+    if (!sameSecret(req.header("x-telegram-bot-api-secret-token"), webhookSecret(token))) {
+      logger.warn({ ip: req.ip, code }, "Telegram webhook: gizli anahtar geçersiz");
+      return res.status(401).json({ error: "Gizli anahtar geçersiz." });
+    }
+    const brand = await db.brand.findUnique({ where: { code } });
+    if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
+    // Telegram 200 görmezse güncellemeyi yeniden gönderir: işleme hataları kendi içinde yutulur ve günlüğe yazılır
+    await handleTelegramUpdate({ db, brand, client: new TelegramClient(token, env.telegram.apiBase) }, req.body as TgUpdate);
     res.json({ ok: true });
   });
 

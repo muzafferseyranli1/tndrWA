@@ -41,6 +41,8 @@ import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } fro
 import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
 import { startDeliveryFallback } from "./services/pos-tracking";
+import { TelegramClient } from "./services/telegram";
+import { configureTelegramBots } from "./services/telegram-bot";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
@@ -173,6 +175,11 @@ async function main() {
   // Yanıt vermeyen müşteri: 5 dk sonra soru tekrarı + hatırlatma, 5 dk daha yanıt yoksa otomatik iptal
   startOrderTimeouts(db, cloudForAck, Number(process.env.ORDER_TIMEOUT_TICK_MS) || 20_000);
   startDeliveryFallback(db, cloudForAck, env.publicBaseUrl);
+  // Telegram: yalnız canlıda (TELEGRAM_SET_WEBHOOK=1) webhook ve bot açıklaması yazılır; arka planda, açılışı geciktirmez
+  if (env.telegram?.configureOnStart && env.publicBaseUrl?.startsWith("https://")) {
+    const clients = Object.fromEntries(Object.entries(env.telegram.bots).map(([code, token]) => [code, new TelegramClient(token, env.telegram!.apiBase)]));
+    void configureTelegramBots(db, clients, env.publicBaseUrl);
+  }
   const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);
   app.use("/api/backups", backupsRouter(backups));
   // Günlük otomatik yedek: her 10 dakikada bugünkü yedek var mı bakılır (sabah 04:00'ten sonra, Türkiye saatiyle)
