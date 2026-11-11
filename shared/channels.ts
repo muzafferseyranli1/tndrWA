@@ -12,10 +12,10 @@ export interface ChannelSpec {
 
 /** Açılış sayfasındaki varsayılan buton sırası. */
 export const CHANNEL_SPECS: ChannelSpec[] = [
-  { kind: "CALL", label: "Telefonla sipariş ver", valueHint: "Telefon numarası (örn. 0212 123 45 67)", valueType: "phone" },
   { kind: "WHATSAPP", label: "WhatsApp'tan sipariş ver", valueHint: "WhatsApp numarası (örn. 0533 123 45 67)", valueType: "phone" },
+  { kind: "CALL", label: "Telefonla sipariş ver", valueHint: "Telefon numarası (örn. 0212 123 45 67)", valueType: "phone" },
   { kind: "YEMEKSEPETI", label: "Yemeksepeti", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
-  { kind: "TRENDYOLGO", label: "Trendyol Go", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
+  { kind: "TRENDYOLGO", label: "Uber Eats", valueHint: "Restoran sayfasının https bağlantısı (Trendyol Go bağlantısı; Türkiye'de Uber Eats adına geçti)", valueType: "url" },
   { kind: "GETIR", label: "Getir", valueHint: "Restoran sayfasının https bağlantısı", valueType: "url" },
   { kind: "MAPS", label: "Yol tarifi al", valueHint: "Adres ya da Google Haritalar bağlantısı", valueType: "place" },
   { kind: "REVIEW", label: "Bizi değerlendirin", valueHint: "Google yorum bağlantısı (https://g.page/r/…); değerlendirme sonrası herkese gösterilir, boşsa gösterilmez", valueType: "url" },

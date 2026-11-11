@@ -10,7 +10,8 @@ const STYLE: Record<string, { cls: string; icon: string }> = {
   CALL: { cls: "bg-emerald-700 text-white", icon: "📞" },
   WHATSAPP: { cls: "bg-[#128C7E] text-white", icon: "💬" },
   YEMEKSEPETI: { cls: "bg-[#fa0050] text-white", icon: "🛵" },
-  TRENDYOLGO: { cls: "bg-[#f27a1a] text-white", icon: "🛵" },
+  // Trendyol Go, Türkiye'de Uber Eats adına geçti: markanın siyah/yeşil renkleri
+  TRENDYOLGO: { cls: "bg-black text-[#06C167]", icon: "🛵" },
   GETIR: { cls: "bg-[#5d3ebc] text-white", icon: "🛵" },
   MAPS: { cls: "bg-[#1a73e8] text-white", icon: "📍" },
   REVIEW: { cls: "bg-amber-400 text-slate-900", icon: "⭐" },
