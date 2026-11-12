@@ -18,6 +18,27 @@ const STYLE: Record<string, { cls: string; icon: string }> = {
   REVIEW: { cls: "bg-amber-400 text-slate-900", icon: "⭐" },
 };
 
+// Kanal başına indirim patlangıcı: Telegram ve WhatsApp %15 (zıplar), telefonla arama %10 (sabit)
+const BURST: Record<string, { pct: number; bounce: boolean }> = {
+  TELEGRAM: { pct: 15, bounce: true },
+  WHATSAPP: { pct: 15, bounce: true },
+  CALL: { pct: 10, bounce: false },
+};
+const BURST_CLIP = "polygon(50.0% 0.0%, 57.4% 12.7%, 69.1% 3.8%, 71.1% 18.4%, 85.4% 14.6%, 81.6% 28.9%, 96.2% 30.9%, 87.3% 42.6%, 100.0% 50.0%, 87.3% 57.4%, 96.2% 69.1%, 81.6% 71.1%, 85.4% 85.4%, 71.1% 81.6%, 69.1% 96.2%, 57.4% 87.3%, 50.0% 100.0%, 42.6% 87.3%, 30.9% 96.2%, 28.9% 81.6%, 14.6% 85.4%, 18.4% 71.1%, 3.8% 69.1%, 12.7% 57.4%, 0.0% 50.0%, 12.7% 42.6%, 3.8% 30.9%, 18.4% 28.9%, 14.6% 14.6%, 28.9% 18.4%, 30.9% 3.8%, 42.6% 12.7%)";
+
+function Burst({ pct, bounce }: { pct: number; bounce: boolean }) {
+  return (
+    <span
+      aria-label={`%${pct} indirim`}
+      className={`pointer-events-none absolute -right-2 -top-3 z-10 flex h-[4.5rem] w-[4.5rem] rotate-12 flex-col items-center justify-center bg-yellow-300 text-red-600 drop-shadow-md ${bounce ? "burst-bounce" : ""}`}
+      style={{ clipPath: BURST_CLIP }}
+    >
+      <span className="text-lg font-extrabold leading-none">%{pct}</span>
+      <span className="text-[0.6rem] font-extrabold leading-none">İNDİRİM</span>
+    </span>
+  );
+}
+
 /** Marka sayfası: sipariş kanalları, her biri ekranı yatay dolduran büyük buton. */
 export default function BrandChannels({ code }: { code: string }) {
   const [brand, setBrand] = useState<PublicBrandDto | null>(null);
@@ -37,6 +58,7 @@ export default function BrandChannels({ code }: { code: string }) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-4 px-4 py-6">
+      <style>{`@keyframes burstbounce{0%,100%{transform:rotate(12deg) translateY(0) scale(1)}25%{transform:rotate(12deg) translateY(-9px) scale(1.12)}50%{transform:rotate(12deg) translateY(0) scale(1)}65%{transform:rotate(12deg) translateY(-4px) scale(1.05)}80%{transform:rotate(12deg) translateY(0) scale(1)}}.burst-bounce{animation:burstbounce 1.4s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.burst-bounce{animation:none}}`}</style>
       <Link href="/" className="text-sm text-slate-500 hover:text-brand-700">
         ← Markalar
       </Link>
@@ -76,12 +98,13 @@ export default function BrandChannels({ code }: { code: string }) {
               key={c.kind}
               href={c.href}
               onClick={() => trackHit({ event: "click", brand: code, kind: c.kind })}
-              className={`flex min-h-[5rem] w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-center text-xl font-semibold shadow-md active:scale-[0.98] ${style.cls}`}
+              className={`relative flex min-h-[5rem] w-full items-center justify-center gap-3 rounded-2xl px-5 py-4 text-center text-xl font-semibold shadow-md active:scale-[0.98] ${style.cls}`}
             >
               <span aria-hidden="true" className="text-2xl">
                 {style.icon}
               </span>
               <span>{c.label}</span>
+              {BURST[c.kind] && <Burst {...BURST[c.kind]} />}
             </a>
           );
         })}
