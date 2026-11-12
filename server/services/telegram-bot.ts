@@ -1,11 +1,14 @@
-import type { Brand, Customer, PrismaClient } from "@prisma/client";
+import type { Brand, Customer, Message, PrismaClient } from "@prisma/client";
 import { channelHref, normalizePhone } from "../../shared/channels";
 import { hoursSummary, nextOpeningText, orderingState } from "../../shared/hours";
 import { logger } from "../lib/logger";
 import { getHours } from "./hours";
+import type { Gateway } from "./messenger";
 import { markNoticeSent, noticeLine } from "./notice";
+import { handleOrderReply, OPEN_ORDER_WINDOW_MS, WAITING_STAGES } from "./order-flow";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
-import { TelegramApiError, type TelegramClient } from "./telegram";
+import { repeatOrderIfAsked } from "./repeat-order";
+import { TelegramApiError, type ReplyMarkup, type TelegramClient } from "./telegram";
 
 // ---- Telegram güncelleme biçimi (yalnız kullandığımız alanlar) ----
 interface TgUser {
@@ -21,6 +24,7 @@ interface TgMessage {
   text?: string;
   contact?: { phone_number: string; user_id?: number };
   location?: { latitude: number; longitude: number };
+  reply_markup?: { inline_keyboard?: { text: string; callback_data?: string }[][] };
 }
 export interface TgUpdate {
   update_id: number;
@@ -32,6 +36,10 @@ export interface TelegramContext {
   db: PrismaClient;
   brand: Brand;
   client: TelegramClient;
+  /** Sohbet akışının (ödeme, adres, durum) mesaj gönderdiği geçit; yoksa yalnız karşılama çalışır */
+  gateway: Gateway | null;
+  /** Mini App adresi için herkese açık HTTPS adres */
+  publicBaseUrl: string | null;
 }
 
 const fullName = (u: TgUser) => [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || null;
@@ -74,8 +82,18 @@ export async function linkPhone(db: PrismaClient, customer: Customer, phone: str
   });
 }
 
+/** Mini App (menü ve sepet) adresi; herkese açık HTTPS adres yoksa Telegram düğmeyi kabul etmez, null döner. */
+export function miniAppUrl(publicBaseUrl: string | null, brandCode: string): string | null {
+  return publicBaseUrl?.startsWith("https://") ? `${publicBaseUrl}/tg/${brandCode}` : null;
+}
+
+function menuMarkup(ctx: TelegramContext): ReplyMarkup | undefined {
+  const url = miniAppUrl(ctx.publicBaseUrl, ctx.brand.code);
+  return url ? { inline_keyboard: [[{ text: "🍽 Menüyü aç", web_app: { url } }]] } : undefined;
+}
+
 /** Giden mesajı gönderir ve yazışmaya kaydeder (gönderilemezse kırmızı "gitmedi" + sebep). */
-async function say(ctx: TelegramContext, customer: Customer, text: string, markup?: Parameters<TelegramClient["sendMessage"]>[2]): Promise<void> {
+export async function say(ctx: TelegramContext, customer: Customer, text: string, markup?: ReplyMarkup): Promise<void> {
   const chatId = customer.tgId!;
   const base = { brandId: ctx.brand.id, customerId: customer.id, type: "text" as const, body: text, channel: "telegram", waMessageId: null as string | null };
   try {
@@ -87,52 +105,78 @@ async function say(ctx: TelegramContext, customer: Customer, text: string, marku
   }
 }
 
-const SHARE_PHONE = { keyboard: [[{ text: "📱 Numaramı paylaş", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
+export const SHARE_PHONE: ReplyMarkup = { keyboard: [[{ text: "📱 Numaramı paylaş", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
 
 async function whatsappLine(db: PrismaClient, brand: Brand): Promise<string> {
   const ch = await db.brandChannel.findFirst({ where: { brandId: brand.id, kind: "WHATSAPP", enabled: true } });
   const href = ch?.value ? channelHref("WHATSAPP", ch.value, "Merhaba, sipariş vermek istiyorum.") : null;
-  return href ? `Şimdilik WhatsApp'tan sipariş verebilirsiniz: ${href}` : "";
+  return href ? `WhatsApp'tan da sipariş verebilirsiniz: ${href}` : "";
 }
 
-/** Karşılama: marka adı, (kapalıysa) çalışma saatleri, ilk temasta KVKK bilgilendirmesi; telefon yoksa paylaşma isteği. */
+/** Karşılama: marka adı, (kapalıysa) çalışma saatleri, ilk temasta KVKK bilgilendirmesi ve "Menüyü aç" düğmesi. */
 async function welcome(ctx: TelegramContext, customer: Customer): Promise<void> {
   const hours = await getHours(ctx.db, ctx.brand.code);
   const closed = orderingState(hours, new Date()) === "closed";
   const kvkk = await noticeLine(ctx.db, customer);
+  const markup = menuMarkup(ctx);
   const lines = [
     `Merhaba${customer.name ? " " + customer.name : ""}! 👋 ${ctx.brand.name} sipariş botuna hoş geldiniz.`,
     closed ? `Şu an kapalıyız (${hoursSummary(hours)}). Bir sonraki açılış: ${nextOpeningText(hours, new Date())}.` : "",
-    customer.waId ? "Menü ve sipariş özelliği çok yakında bu botta olacak." : "Siparişinizi size ulaştırabilmemiz için aşağıdaki düğmeyle telefon numaranızı paylaşın.",
-    customer.waId ? await whatsappLine(ctx.db, ctx.brand) : "",
+    markup ? "Menüyü açıp sepetinizi hazırlayabilirsiniz." : "Menü şu an açılamıyor; WhatsApp'tan sipariş verebilirsiniz.",
+    markup ? "" : await whatsappLine(ctx.db, ctx.brand),
     kvkk,
   ].filter(Boolean);
-  await say(ctx, customer, lines.join("\n\n"), customer.waId ? undefined : SHARE_PHONE);
+  await say(ctx, customer, lines.join("\n\n"), markup);
   if (kvkk) await markNoticeSent(ctx.db, customer.id);
+}
+
+/** Gelen mesajı yazışmaya kaydeder; Telegram aynı güncellemeyi yeniden gönderdiyse null döner. */
+async function recordIn(ctx: TelegramContext, customer: Customer, waMessageId: string, type: string, body: string): Promise<Message | null> {
+  if (await ctx.db.message.findUnique({ where: { waMessageId } })) return null;
+  try {
+    return await ctx.db.message.create({ data: { brandId: ctx.brand.id, customerId: customer.id, direction: "IN", type, body, waMessageId, status: "RECEIVED", channel: "telegram" } });
+  } catch (err) {
+    if ((err as { code?: string }).code === "P2002") return null; // eşzamanlı yeniden gönderim
+    throw err;
+  }
+}
+
+/** Müşterinin bu markada, Telegram'da yanıt beklenen açık siparişi var mı (ödeme, adres, seçenek, KVKK onayı)? */
+async function hasOpenOrder(ctx: TelegramContext, customer: Customer): Promise<boolean> {
+  const open = await ctx.db.order.findFirst({
+    where: { brandId: ctx.brand.id, customerId: customer.id, channel: "telegram", status: "NEW", stage: { in: WAITING_STAGES }, createdAt: { gte: new Date(Date.now() - OPEN_ORDER_WINDOW_MS) } },
+    select: { id: true },
+  });
+  return !!open;
 }
 
 /** Bir Telegram güncellemesini işler. Hata fırlatmaz (Telegram yeniden denemesin diye); sorunlar günlüğe yazılır. */
 export async function handleTelegramUpdate(ctx: TelegramContext, update: TgUpdate): Promise<void> {
   try {
-    if (update.callback_query) {
-      // Düğme yanıtları sipariş akışına bağlanınca işlenecek; şimdilik yalnız "yükleniyor" göstergesini kapatır
-      await ctx.client.answerCallbackQuery(update.callback_query.id).catch(() => undefined);
+    // Düğme yanıtı: sohbet akışının kimliği (ör. "pay:12:3") WhatsApp liste yanıtı gibi akışa verilir
+    const cb = update.callback_query;
+    if (cb) {
+      await ctx.client.answerCallbackQuery(cb.id).catch(() => undefined);
+      const chat = cb.message?.chat;
+      if (!cb.data || cb.from.is_bot || !chat || chat.type !== "private" || !ctx.gateway) return;
+      const customer = await upsertTelegramCustomer(ctx.db, cb.from);
+      // Eski mesajın düğmeleri kalksın (iki kez dokunulmasın)
+      if (cb.message) void ctx.client.editMessageReplyMarkup(chat.id, cb.message.message_id).catch(() => undefined);
+      const title = cb.message?.reply_markup?.inline_keyboard?.flat().find((b) => b.callback_data === cb.data)?.text;
+      const message = await recordIn(ctx, customer, `tg:${ctx.brand.code}:${chat.id}:cb:${cb.id}`, "interactive", title ?? cb.data);
+      if (!message) return;
+      await handleOrderReply(ctx.db, ctx.gateway, ctx.brand, customer, message, { type: "interactive", interactive: { list_reply: { id: cb.data } } });
       return;
     }
+
     const msg = update.message;
     if (!msg?.from || msg.from.is_bot || msg.chat.type !== "private") return; // yalnız kullanıcıyla özel sohbet
 
     let customer = await upsertTelegramCustomer(ctx.db, msg.from);
     const type = msg.contact ? "contact" : msg.location ? "location" : msg.text ? "text" : "other";
     const body = msg.text ?? (msg.contact ? "Telefon numarası paylaşıldı" : msg.location ? `Konum: ${msg.location.latitude.toFixed(5)}, ${msg.location.longitude.toFixed(5)}` : "[desteklenmeyen mesaj]");
-    const waMessageId = `tg:${ctx.brand.code}:${msg.chat.id}:${msg.message_id}`;
-    if (await ctx.db.message.findUnique({ where: { waMessageId } })) return; // Telegram aynı güncellemeyi yeniden gönderdi
-    try {
-      await ctx.db.message.create({ data: { brandId: ctx.brand.id, customerId: customer.id, direction: "IN", type, body, waMessageId, status: "RECEIVED", channel: "telegram" } });
-    } catch (err) {
-      if ((err as { code?: string }).code === "P2002") return; // eşzamanlı yeniden gönderim
-      throw err;
-    }
+    const message = await recordIn(ctx, customer, `tg:${ctx.brand.code}:${msg.chat.id}:${msg.message_id}`, type, body);
+    if (!message) return; // aynı güncelleme yeniden geldi
 
     if (msg.contact) {
       // Yalnızca kendi numarasını paylaşan kabul edilir (başkasının kişisini iletmek numarayı çalamaz)
@@ -142,14 +186,24 @@ export async function handleTelegramUpdate(ctx: TelegramContext, update: TgUpdat
         return;
       }
       customer = await linkPhone(ctx.db, customer, phone);
-      await say(ctx, customer, "Teşekkürler, numaranız kaydedildi ✅\n\nMenü ve sipariş özelliği çok yakında bu botta olacak.\n" + (await whatsappLine(ctx.db, ctx.brand)), { remove_keyboard: true });
+      const markup = menuMarkup(ctx);
+      await say(ctx, customer, "Teşekkürler, numaranız kaydedildi ✅" + (markup ? "\n\nMenüyü açıp sipariş verebilirsiniz." : ""), markup ?? { remove_keyboard: true });
       return;
     }
 
     const command = msg.text?.trim().split(/[\s@]/)[0].toLowerCase();
     if (command === "/start" || command === "/menu") return await welcome(ctx, customer);
-    if (!customer.waId) return await say(ctx, customer, "Siparişiniz için önce telefon numaranızı paylaşın.", SHARE_PHONE);
-    await say(ctx, customer, "Menü ve sipariş özelliği çok yakında bu botta olacak.\n" + (await whatsappLine(ctx.db, ctx.brand)));
+
+    // Konum ya da yazı: bekleyen siparişin adresi/yanıtı olabilir; "1" son siparişi tekrarlar
+    if ((msg.text || msg.location) && ctx.gateway) {
+      if (await repeatOrderIfAsked(ctx.db, ctx.gateway, ctx.brand, customer, message)) return;
+      if (await hasOpenOrder(ctx, customer)) {
+        const raw = msg.location ? { type: "location", location: { latitude: msg.location.latitude, longitude: msg.location.longitude } } : { type: "text", text: { body: msg.text } };
+        await handleOrderReply(ctx.db, ctx.gateway, ctx.brand, customer, message, raw);
+        return;
+      }
+    }
+    await say(ctx, customer, "Sipariş vermek için menüyü açın.", menuMarkup(ctx));
   } catch (err) {
     if (err instanceof TelegramApiError) logger.warn({ brand: ctx.brand.code, err: err.message }, "Telegram güncellemesi işlenemedi");
     else logger.error({ brand: ctx.brand.code, err }, "Telegram güncellemesi işlenemedi");
@@ -157,7 +211,7 @@ export async function handleTelegramUpdate(ctx: TelegramContext, update: TgUpdat
 }
 
 /**
- * Açılışta her bot için webhook, komutlar ve açıklamayı Telegram'a yazar (yalnız TELEGRAM_SET_WEBHOOK=1 iken, yani canlıda).
+ * Açılışta her bot için webhook, komutlar, açıklama ve menü düğmesini Telegram'a yazar (yalnız TELEGRAM_SET_WEBHOOK=1 iken, yani canlıda).
  * Jetonun gerçekten o markanın botuna ait olduğu kullanıcı adından doğrulanır; uyuşmazsa HİÇBİR ŞEY yazılmaz (jetonlar yer değiştirmiş olabilir).
  */
 export async function configureTelegramBots(db: PrismaClient, clients: Record<string, TelegramClient>, publicBaseUrl: string): Promise<void> {
@@ -182,6 +236,9 @@ export async function configureTelegramBots(db: PrismaClient, clients: Record<st
       ]);
       await client.setMyShortDescription(`${brand.name}: menüyü açın, sipariş verin.`);
       await client.setMyDescription(`${brand.name} sipariş botu. Menüyü görmek, sipariş vermek ve siparişinizin durumunu öğrenmek için Başla'ya dokunun.`);
+      // Sohbet kutusunun yanındaki "Menü" düğmesi doğrudan Mini App'i açar
+      const app = miniAppUrl(publicBaseUrl, code);
+      if (app) await client.setChatMenuButton({ type: "web_app", text: "Menü", web_app: { url: app } });
       logger.info({ code, bot: me.username, url }, "Telegram botu yapılandırıldı");
     } catch (err) {
       logger.warn({ code, err: (err as Error).message }, "Telegram botu yapılandırılamadı");

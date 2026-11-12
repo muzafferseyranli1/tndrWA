@@ -2,7 +2,7 @@ import type { Brand, Customer, Order, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
 import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import { addrOf, type Messenger } from "./messenger";
 
 export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET" | "ORDER_REMINDER" | "ORDER_TIMEOUT" | "KVKK_NOTICE" | "MERGE_ASK" | "MERGE_DONE" | "MERGE_REMINDER" | "MERGE_TIMEOUT";
 export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "KVKK_NOTICE", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_REMINDER", "ORDER_TIMEOUT", "MERGE_ASK", "MERGE_DONE", "MERGE_REMINDER", "MERGE_TIMEOUT", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
@@ -102,18 +102,19 @@ export function ratingUrlFor(publicBaseUrl: string | null, brandCode: string, to
 /** Siparişin yeni durumunu müşteriye WhatsApp'tan bildirir. Hata fırlatmaz; sonucu döndürür (sipariş durumu yine de değişir). */
 export async function notifyOrderStatus(
   db: PrismaClient,
-  cloud: WhatsappCloudClient | null,
+  cloud: Messenger | null,
   order: Order & { brand: Brand; customer: Customer },
   status: OrderStatus,
   publicBaseUrl: string | null = null,
 ): Promise<NotifyResult> {
-  if (!cloud) return { sent: false, error: "WhatsApp gönderim jetonu tanımlı değil." };
-  if (!order.brand.waPhoneNumberId) return { sent: false, error: "Markanın Cloud API numara kimliği girilmemiş." };
-  if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok (yalnızca Meta kullanıcı kimliği var)." };
+  if (!cloud) return { sent: false, error: "Mesaj gönderim kanalı tanımlı değil." };
+  const a = addrOf(order.brand, order.customer, order.channel);
+  if (!a) return { sent: false, error: order.channel === "telegram" ? "Müşterinin Telegram sohbeti yok." : !order.brand.waPhoneNumberId ? "Markanın Cloud API numara kimliği girilmemiş." : "Müşterinin telefon numarası yok (yalnızca Meta kullanıcı kimliği var)." };
+  if (!(cloud.can?.(a[0]) ?? true)) return { sent: false, error: order.channel === "telegram" ? "Bu marka için Telegram botu tanımlı değil." : "WhatsApp gönderim jetonu tanımlı değil." };
   try {
     const text = renderTemplate(await templateFor(db, order.brand.code, status), orderVars(order, order.customer, ratingUrlFor(publicBaseUrl, order.brand.code, order.ratingToken)));
-    const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
-    await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId: order.id });
+    const id = await cloud.sendText(...a, text);
+    await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId: order.id, channel: order.channel });
     return { sent: true };
   } catch (err) {
     return { sent: false, error: (err as Error).message };

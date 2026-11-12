@@ -4,7 +4,7 @@ import { formatTRY } from "../../shared/money";
 import { logger } from "../lib/logger";
 import { renderTemplate, templateFor } from "./order-messages";
 import { recordOutbound } from "./outbound";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import { addrOf, type Messenger } from "./messenger";
 
 const key = (brandCode: string) => `hours.${brandCode}`;
 const minKey = (brandCode: string) => `minbasket.${brandCode}`;
@@ -46,42 +46,43 @@ export async function brandOrderingState(db: PrismaClient, brand: Pick<Brand, "c
   return orderingState(await getHours(db, brand.code), now);
 }
 
-async function send(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, body: string, orderId?: number): Promise<void> {
-  if (!cloud || !brand.waPhoneNumberId || !customer.waId) return;
-  const id = await cloud.sendText(brand.waPhoneNumberId, customer.waId, body);
-  await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "text", body, waMessageId: id, orderId: orderId ?? null });
+async function send(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, body: string, orderId?: number, channel = "whatsapp"): Promise<void> {
+  const a = addrOf(brand, customer, channel);
+  if (!cloud || !a || !(cloud.can?.(a[0]) ?? true)) return;
+  const id = await cloud.sendText(...a, body);
+  await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "text", body, waMessageId: id, orderId: orderId ?? null, channel });
 }
 
 /** Kapalı mesajı: kapalıyken sepet gönderen ya da "1" yazan müşteriye. Hata fırlatmaz. */
-export async function sendClosedNotice(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, now = new Date()): Promise<void> {
+export async function sendClosedNotice(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, now = new Date(), channel = "whatsapp"): Promise<void> {
   try {
     const cfg = await getHours(db, brand.code);
     const body = renderTemplate(await templateFor(db, brand.code, "CLOSED"), { ad: customer.name, saatler: hoursSummary(cfg), acilis: nextOpeningText(cfg, now) });
-    await send(db, cloud, brand, customer, body);
+    await send(db, cloud, brand, customer, body, undefined, channel);
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "Kapalı mesajı gönderilemedi");
   }
 }
 
 /** Minimum sepet altında kalan müşteriye ne kadar daha ürün ekleyeceğini söyler. Hata fırlatmaz. */
-export async function sendMinBasketNotice(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, totalKurus: number, minKurus: number): Promise<void> {
+export async function sendMinBasketNotice(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, totalKurus: number, minKurus: number, channel = "whatsapp"): Promise<void> {
   try {
     const body = renderTemplate(await templateFor(db, brand.code, "MIN_BASKET"), { ad: customer.name, limit: formatTRY(minKurus), eksik: formatTRY(Math.max(0, minKurus - totalKurus)), toplam: formatTRY(totalKurus) });
-    await send(db, cloud, brand, customer, body);
+    await send(db, cloud, brand, customer, body, undefined, channel);
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "Minimum sepet mesajı gönderilemedi");
   }
 }
 
 /** Açılıştan önceki 1 saatte verilen siparişte müşteriye "açılışta hazırlanır" notu gönderir (açıksa hiçbir şey yapmaz). */
-export async function sendPreorderNoticeIfNeeded(db: PrismaClient, cloud: WhatsappCloudClient | null, orderId: number, now = new Date()): Promise<void> {
+export async function sendPreorderNoticeIfNeeded(db: PrismaClient, cloud: Messenger | null, orderId: number, now = new Date()): Promise<void> {
   try {
     const order = await db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true } });
     if (!order) return;
     const cfg = await getHours(db, order.brand.code);
     if (orderingState(cfg, now) !== "pre") return;
     const body = renderTemplate(await templateFor(db, order.brand.code, "PREORDER"), { ad: order.customer.name, no: order.id, saatler: hoursSummary(cfg), acilis: nextOpeningText(cfg, now) });
-    await send(db, cloud, order.brand, order.customer, body, order.id);
+    await send(db, cloud, order.brand, order.customer, body, order.id, order.channel);
   } catch (err) {
     logger.warn({ err: (err as Error).message }, "Açılış öncesi sipariş notu gönderilemedi");
   }

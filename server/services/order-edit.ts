@@ -6,7 +6,7 @@ import { orderDiscount } from "./discount";
 import { describeOptions } from "./option-format";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
 import { recordOutbound } from "./outbound";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import { addrOf, type Messenger } from "./messenger";
 
 /** Yola çıkmış ya da bitmiş siparişte düzenleme anlamsızdır. */
 export const EDITABLE_STATUSES = ["NEW", "PREPARING"];
@@ -160,19 +160,19 @@ export interface UpdateNotice {
 }
 
 /** Güncel özeti müşteriye gönderir ("Siparişiniz güncellendi"). Başarılı olursa bekleyen bildirim işareti kalkar. */
-export async function sendUpdateNotice(db: Db, cloud: WhatsappCloudClient | null, orderId: number): Promise<UpdateNotice> {
+export async function sendUpdateNotice(db: Db, cloud: Messenger | null, orderId: number): Promise<UpdateNotice> {
   const order = (await db.order.findUnique({ where: { id: orderId }, include: { items: { orderBy: { id: "asc" }, include: { options: true } }, brand: true, customer: true } })) as
     | (Order & { items: (OrderItem & { options: OrderItemOption[] })[]; brand: Brand; customer: Customer })
     | null;
   if (!order) throw new EditError("Sipariş bulunamadı.", 404);
-  if (!cloud) return { sent: false, error: "WhatsApp gönderim jetonu tanımlı değil." };
-  if (!order.brand.waPhoneNumberId) return { sent: false, error: "Markanın Cloud API numara kimliği girilmemiş." };
-  if (!order.customer.waId) return { sent: false, error: "Müşterinin telefon numarası yok." };
+  if (!cloud) return { sent: false, error: "Mesaj gönderim kanalı tanımlı değil." };
+  const a = addrOf(order.brand, order.customer, order.channel);
+  if (!a) return { sent: false, error: order.channel === "telegram" ? "Müşterinin Telegram sohbeti yok." : !order.brand.waPhoneNumberId ? "Markanın Cloud API numara kimliği girilmemiş." : "Müşterinin telefon numarası yok." };
   try {
     const urunler = itemLines(order.items);
     const text = renderTemplate(await templateFor(db, order.brand.code, "ORDER_UPDATED"), { ...orderVars(order, order.customer), urunler });
-    const id = await cloud.sendText(order.brand.waPhoneNumberId, order.customer.waId, text);
-    await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId });
+    const id = await cloud.sendText(...a, text);
+    await recordOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body: text, waMessageId: id, orderId, channel: order.channel });
     await db.order.update({ where: { id: orderId }, data: { noticePending: false } });
     await note(db, orderId, "Müşteriye güncel özet gönderildi");
     return { sent: true };

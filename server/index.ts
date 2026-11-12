@@ -42,6 +42,8 @@ import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
 import { startDeliveryFallback } from "./services/pos-tracking";
 import { TelegramClient } from "./services/telegram";
+import { telegramAppRouter } from "./routes/telegram-app";
+import { Gateway } from "./services/messenger";
 import { configureTelegramBots } from "./services/telegram-bot";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
@@ -72,9 +74,11 @@ async function main() {
   app.disable("x-powered-by");
   app.set("trust proxy", 1); // Traefik arkasında gerçek istemci IP'si
 
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
+    // Telegram Mini App, Telegram'ın web istemcisinde çerçeve içinde açılır: yalnız /tg/ için Telegram'a izin verilir, diğer her yer çerçevelenemez
+    if (req.path.startsWith("/tg/")) res.setHeader("Content-Security-Policy", "frame-ancestors https://web.telegram.org https://*.telegram.org");
+    else res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "same-origin");
     next();
   });
@@ -94,10 +98,15 @@ async function main() {
 
   // WAHA webhook: oturum çerezi yok, HMAC imzasıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Yeni siparişte müşteriye "siparişinizi aldık" mesajı (hata sipariş kaydını etkilemez)
-  const cloudForAck = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
+  // Müşteriye mesaj gönderen tek geçit: sipariş WhatsApp'tan mı Telegram'dan mı geldiyse oradan gider
+  const whatsappClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
+  const telegramClients = Object.fromEntries(Object.entries(env.telegram?.bots ?? {}).map(([code, token]) => [code, new TelegramClient(token, env.telegram!.apiBase)]));
+  const gateway = new Gateway(whatsappClient, telegramClients);
+  const cloudForAck = gateway;
   app.use(
     "/api/webhooks",
     webhooksRouter(db, env, {
+      gateway,
       // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
       onOrderCreated: (orderId) =>
         void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => offerMergeOrStart(db, cloudForAck, orderId)),
@@ -114,6 +123,7 @@ async function main() {
   );
 
   app.use("/api/public", publicRouter(db));
+  app.use("/api/tg", telegramAppRouter(db, env, gateway));
   // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
   let posPriceChange: (brandId: number) => void = () => undefined;
@@ -158,12 +168,11 @@ async function main() {
   app.use("/api/categories", categoriesRouter(db, onChange));
   app.use("/api/menu-sync", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), menuSyncRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
-  const cloudClient = env.whatsappCloud?.token ? new WhatsappCloudClient(env.whatsappCloud) : null;
-  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, cloudClient));
-  app.use("/api/orders", ordersRouter(db, cloudClient, env.publicBaseUrl));
+  app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, whatsappClient));
+  app.use("/api/orders", ordersRouter(db, gateway, env.publicBaseUrl));
   app.use("/api/sound", soundRouter(db, env.uploadDir));
   app.use("/api/messages", messagesRouter(db));
-  app.use("/api/chat", chatRouter(db, cloudClient));
+  app.use("/api/chat", chatRouter(db, gateway));
   app.use("/api/channels", channelsRouter(db, env.publicBaseUrl));
   app.use("/api/payments", paymentsRouter(db));
   app.use("/api/options", optionsRouter(db));
@@ -177,8 +186,7 @@ async function main() {
   startDeliveryFallback(db, cloudForAck, env.publicBaseUrl);
   // Telegram: yalnız canlıda (TELEGRAM_SET_WEBHOOK=1) webhook ve bot açıklaması yazılır; arka planda, açılışı geciktirmez
   if (env.telegram?.configureOnStart && env.publicBaseUrl?.startsWith("https://")) {
-    const clients = Object.fromEntries(Object.entries(env.telegram.bots).map(([code, token]) => [code, new TelegramClient(token, env.telegram!.apiBase)]));
-    void configureTelegramBots(db, clients, env.publicBaseUrl);
+    void configureTelegramBots(db, telegramClients, env.publicBaseUrl);
   }
   const backups = new BackupService(db, process.env.BACKUP_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "backups"), env.uploadDir);
   app.use("/api/backups", backupsRouter(backups));

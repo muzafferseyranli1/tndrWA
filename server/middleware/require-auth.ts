@@ -6,7 +6,8 @@ export type Role = "ADMIN" | "USER";
 // /uploads/: Meta ürün görsellerini girişsiz çekebilmeli
 // / ve /m/<marka>: herkese açık açılış sayfası (QR kodunun gittiği yer); /api/public/: onun verisi ve sayacı
 // /icons/, /manifest.webmanifest, /sw.js, /offline.html: tabletin paneli uygulama olarak kurabilmesi için (giriş öncesi de istenir)
-const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/", "/m/", "/api/public/", "/icons/"];
+// /tg/ ve /api/tg/: Telegram Mini App (menü ve sepet); sipariş Telegram imzasıyla doğrulanır
+const PUBLIC_PREFIXES = ["/_next/", "/favicon.ico", "/uploads/", "/m/", "/api/public/", "/icons/", "/tg/", "/api/tg/"];
 // /api/webhooks/waha: WAHA oturumsuz çağırır; kimlik doğrulaması HMAC imzasıyla yapılır
 const PUBLIC_PATHS = new Set(["/", "/gizlilik", "/veri-silme", "/login", "/api/auth/login", "/api/health", "/api/webhooks/waha", "/api/webhooks/meta", "/manifest.webmanifest", "/sw.js", "/offline.html"]);
 

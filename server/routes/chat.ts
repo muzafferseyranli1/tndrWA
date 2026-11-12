@@ -7,13 +7,18 @@ import { logger } from "../lib/logger";
 import { resolveBrand } from "../services/brands";
 import { SESSION_WINDOW_MS, sendFailureText } from "../services/chat";
 import { recordOutbound } from "../services/outbound";
-import { CloudApiError, type WhatsappCloudClient } from "../services/whatsapp-cloud";
+import { CloudApiError } from "../services/whatsapp-cloud";
+import { TelegramApiError } from "../services/telegram";
+import { addrOf, type Messenger } from "../services/messenger";
 
 const MAX_TEXT = 1000;
 const CATALOG_TEXT = "Menümüzü görmek için aşağıdaki düğmeye dokunabilirsiniz.";
 
+const asChannel = (c: string | null | undefined): "whatsapp" | "telegram" => (c === "telegram" ? "telegram" : "whatsapp");
+
 const toMessageDto = (m: Message): ChatMessageDto => ({
   id: m.id,
+  channel: asChannel(m.channel),
   direction: m.direction === "IN" ? "IN" : "OUT",
   type: m.type,
   body: m.body,
@@ -23,15 +28,23 @@ const toMessageDto = (m: Message): ChatMessageDto => ({
   createdAt: m.createdAt.toISOString(),
 });
 
-/** Müşterinin son mesajından itibaren 24 saat: serbest metin yalnızca bu pencerede gönderilebilir. */
+/** Yanıtın gideceği kanal: müşterinin son gelen mesajının kanalı; hiç mesajı yoksa elindeki kimliğe göre. */
+async function replyChannel(db: PrismaClient, brandId: number, customer: Pick<Customer, "id" | "waId" | "tgId">): Promise<"whatsapp" | "telegram"> {
+  const lastIn = await db.message.findFirst({ where: { brandId, customerId: customer.id, direction: "IN" }, orderBy: { createdAt: "desc" }, select: { channel: true } });
+  if (lastIn) return asChannel(lastIn.channel);
+  return customer.waId ? "whatsapp" : customer.tgId ? "telegram" : "whatsapp";
+}
+
+/** Müşterinin son mesajından itibaren 24 saat: WhatsApp'ta serbest metin yalnızca bu pencerede gönderilebilir. Telegram'da pencere yoktur. */
 async function windowOf(db: PrismaClient, brandId: number, customerId: number, now = new Date()): Promise<{ open: boolean; endsAt: string | null }> {
   const lastIn = await db.message.findFirst({ where: { brandId, customerId, direction: "IN" }, orderBy: { createdAt: "desc" } });
   if (!lastIn) return { open: false, endsAt: null };
+  if (lastIn.channel === "telegram") return { open: true, endsAt: null };
   const end = new Date(lastIn.createdAt.getTime() + SESSION_WINDOW_MS);
   return { open: end.getTime() > now.getTime(), endsAt: end.toISOString() };
 }
 
-export function chatRouter(db: PrismaClient, cloud: WhatsappCloudClient | null): Router {
+export function chatRouter(db: PrismaClient, cloud: Messenger | null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 
@@ -62,6 +75,7 @@ export function chatRouter(db: PrismaClient, cloud: WhatsappCloudClient | null):
         lastAt: last.createdAt.toISOString(),
         unread,
         windowOpen: win.open,
+        channel: asChannel(last.direction === "IN" ? last.channel : await replyChannel(db, brand.id, c)),
       });
     }
     res.json(out);
@@ -88,6 +102,7 @@ export function chatRouter(db: PrismaClient, cloud: WhatsappCloudClient | null):
     const win = await windowOf(db, brand.id, customerId);
     const dto: ChatThreadDto = {
       customer: { id: customer.id, name: customer.name, phone: customer.waId },
+      channel: await replyChannel(db, brand.id, customer),
       messages: recent.reverse().map(toMessageDto),
       windowOpen: win.open,
       windowEndsAt: win.endsAt,
@@ -107,7 +122,23 @@ export function chatRouter(db: PrismaClient, cloud: WhatsappCloudClient | null):
     const customer = Number.isInteger(customerId) ? await db.customer.findUnique({ where: { id: customerId } }) : null;
     if (!customer) return res.status(404).json({ error: "Müşteri bulunamadı." });
 
-    if (!cloud) return res.status(503).json({ error: "WhatsApp gönderim jetonu (WHATSAPP_CLOUD_TOKEN) tanımlı değil." });
+    const channel = await replyChannel(db, brand.id, customer);
+    if (!cloud) return res.status(503).json({ error: "Mesaj gönderim kanalı tanımlı değil." });
+    if (channel === "telegram") {
+      const a = addrOf(brand, customer, "telegram");
+      if (!a) return res.status(409).json({ error: "Bu müşterinin Telegram sohbeti yok, mesaj gönderilemez." });
+      if (!(cloud.can?.(a[0]) ?? true)) return res.status(503).json({ error: `${brand.name} için Telegram botu tanımlı değil.` });
+      if (kind === "catalog") return res.status(409).json({ error: "Menü düğmesi yalnız WhatsApp yazışmalarında gönderilir; Telegram'da menü botun menü düğmesindedir." });
+      try {
+        const text = parsed.data.text!;
+        const id = await cloud.sendText(...a, text);
+        res.json(toMessageDto(await recordOutbound(db, { brandId: brand.id, customerId, type: "text", body: text, waMessageId: id, channel: "telegram" })));
+      } catch (err) {
+        logger.warn({ err: (err as Error).message }, "panelden Telegram mesajı gönderilemedi");
+        res.status(err instanceof TelegramApiError ? 502 : 500).json({ error: `Telegram mesajı gönderilemedi: ${(err as Error).message}` });
+      }
+      return;
+    }
     if (!brand.waPhoneNumberId) return res.status(503).json({ error: `${brand.name} için Cloud API telefon numarası kimliği girilmemiş (Markalar sayfası).` });
     if (!customer.waId) return res.status(409).json({ error: "Bu müşterinin telefon numarası yok (yalnızca Meta kullanıcı kimliği var), mesaj gönderilemez." });
     const win = await windowOf(db, brand.id, customerId);

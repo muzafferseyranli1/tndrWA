@@ -9,13 +9,14 @@ export const MERGE_TARGET_STATUSES = ["NEW", "PREPARING"];
 export const MERGE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 /** Müşterinin bu markadaki, adımlarını tamamlamış ve henüz yola çıkmamış en yeni siparişi (yoksa null). */
-export async function findMergeTarget(db: PrismaClient, brandId: number, customerId: number, excludeOrderId: number | null, now = new Date()): Promise<Order | null> {
+export async function findMergeTarget(db: PrismaClient, brandId: number, customerId: number, excludeOrderId: number | null, now = new Date(), channel?: string): Promise<Order | null> {
   return db.order.findFirst({
     where: {
       brandId,
       customerId,
       status: { in: MERGE_TARGET_STATUSES },
       stage: "READY",
+      ...(channel ? { channel } : {}), // ek sepet yalnızca aynı kanaldaki açık siparişe eklenir
       createdAt: { gte: new Date(now.getTime() - MERGE_WINDOW_MS) },
       ...(excludeOrderId !== null ? { id: { not: excludeOrderId } } : {}),
     },

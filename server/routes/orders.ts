@@ -11,7 +11,7 @@ import { EDITABLE_STATUSES, EditError, addItem, editDetails, removeItem, sendUpd
 import { ORDER_STATUSES, type OrderStatus } from "../services/orders";
 import { orderDiscount } from "../services/discount";
 import { newRatingToken } from "../services/ratings";
-import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
+import type { Messenger } from "../services/messenger";
 
 type OrderRow = Order & { items: (OrderItem & { options?: OrderItemOption[] })[]; customer: Customer; changes?: OrderChange[] };
 
@@ -50,7 +50,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
 
 const ACTIVE: OrderStatus[] = ["NEW", "PREPARING", "ON_THE_WAY"];
 
-export function ordersRouter(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null = null): Router {
+export function ordersRouter(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 

@@ -8,6 +8,7 @@ import { extractCloudEvents } from "../services/whatsapp-cloud";
 import { ingestCloudOrder } from "../services/orders";
 import { recordInbound, recordStatus, type InboundRecord } from "../services/chat";
 import { TelegramClient, webhookSecret } from "../services/telegram";
+import type { Gateway } from "../services/messenger";
 import { handleTelegramUpdate, type TgUpdate } from "../services/telegram-bot";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
@@ -57,6 +58,8 @@ export function isDiscoveryEvent(event: string, messageType: string | null, rawT
 }
 
 export interface WebhookHooks {
+  /** Müşteriye mesaj gönderen geçit (Telegram güncellemeleri sohbet akışına bununla bağlanır) */
+  gateway?: Gateway;
   /** Yeni sipariş kaydedildi (müşteriye "aldık" mesajı vb. için) */
   onOrderCreated?: (orderId: number) => void;
   /** Sepet reddedildi (kapalı ya da minimum sepet altında): sipariş açılmadı, müşteriye bilgi verilir */
@@ -122,7 +125,7 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
     const brand = await db.brand.findUnique({ where: { code } });
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     // Telegram 200 görmezse güncellemeyi yeniden gönderir: işleme hataları kendi içinde yutulur ve günlüğe yazılır
-    await handleTelegramUpdate({ db, brand, client: new TelegramClient(token, env.telegram.apiBase) }, req.body as TgUpdate);
+    await handleTelegramUpdate({ db, brand, client: hooks.gateway?.telegramClient(code) ?? new TelegramClient(token, env.telegram.apiBase), gateway: hooks.gateway ?? null, publicBaseUrl: env.publicBaseUrl }, req.body as TgUpdate);
     res.json({ ok: true });
   });
 

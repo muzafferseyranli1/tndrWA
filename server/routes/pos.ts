@@ -6,7 +6,7 @@ import { resolveBrand } from "../services/brands";
 import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingPosLookups, posTokenSet, resolvePosLookups, storeSnapshot, syncPricesFromPos, verifyPosToken } from "../services/pos-bridge";
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
 import { applyPosEvents, markPosEntered, readPosAlerts, setPosAlert, trackingList } from "../services/pos-tracking";
-import type { WhatsappCloudClient } from "../services/whatsapp-cloud";
+import type { Messenger } from "../services/messenger";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -16,7 +16,7 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  * Eklenti uçları (/api/pos-ext): oturum çerezi yok, "X-Pos-Token" başlığındaki anahtarla doğrulanır.
  * POS şubesi (cafeId) bir markaya bağlanır; menü, müşteri ve siparişler o marka için işlenir.
  */
-export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: WhatsappCloudClient | null = null, publicBaseUrl: string | null = null): Router {
+export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: Messenger | null = null, publicBaseUrl: string | null = null): Router {
   const router = Router();
   // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
   router.use((req: Request, res: Response, next: NextFunction) => {

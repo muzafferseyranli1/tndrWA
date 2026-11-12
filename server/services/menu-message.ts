@@ -3,7 +3,8 @@ import { availabilityOf, type ProductStatus } from "../../shared/availability";
 import { logger } from "../lib/logger";
 import { getCatalogThumbnail } from "./catalog-thumb";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
-import { CloudApiError, type WhatsappCloudClient } from "./whatsapp-cloud";
+import { CloudApiError } from "./whatsapp-cloud";
+import type { Messenger } from "./messenger";
 
 /**
  * Müşteriye giden menü mesajı (karşılama, panelden "Katalog gönder", sonlanan siparişten sonra):
@@ -128,13 +129,13 @@ export async function buildMenuList(db: PrismaClient, brandId: number, now: Date
 
 const header = (brand: Brand, extra = "") => `${brand.name} Menü${extra}`.slice(0, HEADER_MAX);
 
-async function sendCategoryList(cloud: WhatsappCloudClient, brand: Brand, to: string, text: string, plan: MenuListPlan, page: number): Promise<string | null> {
+async function sendCategoryList(cloud: Messenger, brand: Brand, to: string, text: string, plan: MenuListPlan, page: number): Promise<string | null> {
   const { rows } = categoryPage(plan.sections, page);
   return cloud.sendList(brand.waPhoneNumberId!, to, { body: text, buttonText: "Kategoriler", rows });
 }
 
 /** Markanın ayarına göre menü mesajını gönderir; mesaj kimliğini döndürür. Liste gönderilemezse katalog düğmesine düşer. */
-export async function sendMenu(db: PrismaClient, cloud: WhatsappCloudClient, brand: Brand, to: string, text: string): Promise<string | null> {
+export async function sendMenu(db: PrismaClient, cloud: Messenger, brand: Brand, to: string, text: string): Promise<string | null> {
   if (!brand.waPhoneNumberId) throw new CloudApiError(`${brand.name} için Cloud API telefon numarası kimliği girilmemiş.`);
   if (brand.metaCatalogId && (await getMenuMode(db, brand.code)) === "list") {
     const plan = await buildMenuList(db, brand.id);
@@ -154,7 +155,7 @@ export async function sendMenu(db: PrismaClient, cloud: WhatsappCloudClient, bra
  * Kategori listesinden seçim (menu:cat:<id>) ya da sonraki sayfa (menu:page:<n>): o kategorinin ürün listesi
  * (30'dan fazlaysa parçalar halinde) ya da kategori listesinin sonraki sayfası gider. Menü seçimi değilse false.
  */
-export async function handleMenuReply(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, raw: unknown): Promise<boolean> {
+export async function handleMenuReply(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, raw: unknown): Promise<boolean> {
   const m = (raw ?? {}) as { interactive?: { list_reply?: { id?: string }; button_reply?: { id?: string } } };
   const id = m.interactive?.list_reply?.id ?? m.interactive?.button_reply?.id ?? "";
   const match = id.match(/^menu:(cat|page):(\d+)$/);

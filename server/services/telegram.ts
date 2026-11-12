@@ -100,6 +100,10 @@ export class TelegramClient {
     const out = await this.call<{ message_id: number }>("sendMessage", { chat_id: chatId, text, ...(markup ? { reply_markup: markup } : {}) });
     return out.message_id;
   }
+  /** Düğmeye basılınca eski mesajın düğmelerini kaldırır (iki kez dokunulmasın) */
+  editMessageReplyMarkup(chatId: string | number, messageId: number): Promise<unknown> {
+    return this.call("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } });
+  }
   answerCallbackQuery(id: string, text?: string): Promise<true> {
     return this.call("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
   }

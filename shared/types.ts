@@ -124,12 +124,15 @@ export interface ChatConversationDto {
   lastDirection: "IN" | "OUT";
   lastAt: string;
   unread: number;
-  /** Müşterinin son mesajından beri 24 saat geçmediyse serbest mesaj gönderilebilir */
+  /** Müşterinin son mesajından beri 24 saat geçmediyse serbest mesaj gönderilebilir (Telegram'da pencere yoktur, hep açık) */
   windowOpen: boolean;
+  /** Müşteriye yanıtın gideceği kanal: son gelen mesajın kanalı */
+  channel: "whatsapp" | "telegram";
 }
 
 export interface ChatMessageDto {
   id: number;
+  channel: "whatsapp" | "telegram";
   direction: "IN" | "OUT";
   type: string;
   body: string;
@@ -142,6 +145,8 @@ export interface ChatMessageDto {
 
 export interface ChatThreadDto {
   customer: { id: number; name: string | null; phone: string | null };
+  /** Yanıtın gideceği kanal */
+  channel: "whatsapp" | "telegram";
   messages: ChatMessageDto[];
   windowOpen: boolean;
   windowEndsAt: string | null;

@@ -8,7 +8,7 @@ import { renderTemplate, templateFor } from "./order-messages";
 import { markNoticeSent, noticeLine } from "./notice";
 import { recordOutbound } from "./outbound";
 import { contactFrom, upsertCustomer } from "./customers";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import type { Messenger } from "./messenger";
 
 /** Müşteri bu süre içinde hiç yazışmadıysa ilk mesajına hoş geldin + katalog gönderilir. */
 export const WELCOME_GAP_MS = 12 * 60 * 60 * 1000;
@@ -130,7 +130,7 @@ export async function recordStatus(db: PrismaClient, eventBody: string): Promise
  * Yazışma sürse de, sürmekte olan siparişi yokken yazı yazan müşteriye son menüden 1 saat sonra menü yeniden gider.
  * Hata fırlatmaz; sipariş/yazışma kaydını etkilemez.
  */
-export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, inbound: Message): Promise<boolean> {
+export async function sendWelcomeIfNeeded(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, inbound: Message): Promise<boolean> {
   try {
     if (!cloud || !brand.waPhoneNumberId || !customer.waId || inbound.type === "order") return false;
     const since = new Date(inbound.createdAt.getTime() - WELCOME_GAP_MS);

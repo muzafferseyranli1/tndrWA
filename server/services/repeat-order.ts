@@ -6,7 +6,7 @@ import { brandOrderingState, getMinBasket, sendClosedNotice, sendMinBasketNotice
 import { WAITING_STAGES, OPEN_ORDER_WINDOW_MS, startOrderConversation } from "./order-flow";
 import { needsOptions } from "./options";
 import { recordOutbound } from "./outbound";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import { addrOf, type Messenger } from "./messenger";
 
 export const REPEAT_HINT = "Son siparişinizi aynen tekrarlamak için *1* yazın.";
 
@@ -24,17 +24,17 @@ export async function findRepeatable(db: PrismaClient, brandId: number, customer
  * Seçenek (ekstra) soruları yeniden sorulur, çünkü seçenekler ve fiyatları değişmiş olabilir. İşlendiyse true döner.
  * Müşterinin yarım bir siparişi varsa dokunmaz (o akış kendi sorusunu tekrarlar).
  */
-export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudClient | null, brand: Brand, customer: Customer, message: Message, now = new Date()): Promise<boolean> {
+export async function repeatOrderIfAsked(db: PrismaClient, cloud: Messenger | null, brand: Brand, customer: Customer, message: Message, now = new Date()): Promise<boolean> {
   try {
     if (message.type !== "text" || message.body.trim() !== "1") return false;
     const last0 = await findRepeatable(db, brand.id, customer.id);
     if (!last0) return false;
     if ((await brandOrderingState(db, brand, now)) === "closed") {
-      await sendClosedNotice(db, cloud, brand, customer);
+      await sendClosedNotice(db, cloud, brand, customer, now, message.channel);
       return true;
     }
     const open = await db.order.findFirst({
-      where: { brandId: brand.id, customerId: customer.id, status: "NEW", stage: { in: WAITING_STAGES }, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } },
+      where: { brandId: brand.id, customerId: customer.id, channel: message.channel, status: "NEW", stage: { in: WAITING_STAGES }, createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } },
     });
     if (open) return false;
     const last = last0;
@@ -56,10 +56,11 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
     }
 
     const send = async (body: string) => {
-      if (!cloud || !brand.waPhoneNumberId || !customer.waId) return;
+      const a = addrOf(brand, customer, message.channel);
+      if (!cloud || !a || !(cloud.can?.(a[0]) ?? true)) return;
       try {
-        const id = await cloud.sendText(brand.waPhoneNumberId, customer.waId, body);
-        await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "text", body, waMessageId: id });
+        const id = await cloud.sendText(...a, body);
+        await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "text", body, waMessageId: id, channel: message.channel });
       } catch (err) {
         logger.warn({ err: (err as Error).message }, "Tekrar sipariş mesajı gönderilemedi");
       }
@@ -73,7 +74,7 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
     const total = kept.reduce((s, k) => s + k.unitKurus * k.quantity, 0);
     const minKurus = await getMinBasket(db, brand.code);
     if (minKurus > 0 && total < minKurus) {
-      await sendMinBasketNotice(db, cloud, brand, customer, total, minKurus);
+      await sendMinBasketNotice(db, cloud, brand, customer, total, minKurus, message.channel);
       return true;
     }
 
@@ -82,6 +83,7 @@ export async function repeatOrderIfAsked(db: PrismaClient, cloud: WhatsappCloudC
       data: {
         brandId: brand.id,
         customerId: customer.id,
+        channel: message.channel,
         waMessageId,
         stage,
         totalKurus: total,

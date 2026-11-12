@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import { notifyOrderStatus } from "./order-messages";
 import { newRatingToken } from "./ratings";
-import type { WhatsappCloudClient } from "./whatsapp-cloud";
+import type { Messenger } from "./messenger";
 
 /**
  * POS'tan sipariş durumu takibi.
@@ -48,7 +48,7 @@ async function loadFull(db: PrismaClient, id: number) {
   return db.order.findUnique({ where: { id }, include: { brand: true, customer: true } });
 }
 
-async function setStatus(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null, orderId: number, status: "PREPARING" | PosEvent, why: string, notify: boolean): Promise<boolean> {
+async function setStatus(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, orderId: number, status: "PREPARING" | PosEvent, why: string, notify: boolean): Promise<boolean> {
   const order = await loadFull(db, orderId);
   if (!order || (RANK[order.status] ?? 0) >= RANK[status] || order.status === "CANCELLED" || order.status === "DELIVERED") return false;
   const updated = await db.order.update({
@@ -70,7 +70,7 @@ async function setStatus(db: PrismaClient, cloud: WhatsappCloudClient | null, pu
 }
 
 /** Eklenti siparişi POS'ta oluşturdu: "Hazırlanıyor" + müşteriye anında "alındı" mesajı. */
-export async function markPosEntered(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null, orderId: number): Promise<void> {
+export async function markPosEntered(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, orderId: number): Promise<void> {
   await setStatus(db, cloud, publicBaseUrl, orderId, "PREPARING", "POS'a girildi: müşteriye 'siparişiniz alındı' bildirildi", true);
 }
 
@@ -86,7 +86,7 @@ export async function trackingList(db: PrismaClient): Promise<{ id: number; posR
 }
 
 /** Eklentinin POS'ta gördüğü durum değişiklikleri (yalnız ileri yönde işlenir). */
-export async function applyPosEvents(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null, updates: { id: number; event: PosEvent }[]): Promise<number> {
+export async function applyPosEvents(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, updates: { id: number; event: PosEvent }[]): Promise<number> {
   let n = 0;
   for (const u of updates) {
     const why = u.event === "ON_THE_WAY" ? "POS: kuryeye verildi, müşteriye 'yola çıktı' bildirildi" : u.event === "DELIVERED" ? "POS: teslim edildi, müşteriye afiyet olsun + değerlendirme gönderildi" : "POS'ta iptal edildi";
@@ -96,14 +96,14 @@ export async function applyPosEvents(db: PrismaClient, cloud: WhatsappCloudClien
 }
 
 /** Yola çıkalı 1 saati geçen ve POS'ta teslimi görülmeyen siparişler teslim sayılır (afiyet olsun + değerlendirme). */
-export async function runDeliveryFallback(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null, now = new Date()): Promise<number> {
+export async function runDeliveryFallback(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, now = new Date()): Promise<number> {
   const due = await db.order.findMany({ where: { status: "ON_THE_WAY", posRef: { not: null }, onTheWayAt: { lte: new Date(now.getTime() - DELIVERY_FALLBACK_MS) } }, select: { id: true }, take: 50 });
   let n = 0;
   for (const o of due) if (await setStatus(db, cloud, publicBaseUrl, o.id, "DELIVERED", "Yola çıkalı 1 saat oldu: teslim sayıldı, müşteriye afiyet olsun + değerlendirme gönderildi", true)) n++;
   return n;
 }
 
-export function startDeliveryFallback(db: PrismaClient, cloud: WhatsappCloudClient | null, publicBaseUrl: string | null, everyMs = 60_000): () => void {
+export function startDeliveryFallback(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, everyMs = 60_000): () => void {
   let running = false;
   const timer = setInterval(() => {
     if (running) return;
