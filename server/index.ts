@@ -32,6 +32,7 @@ import { businessRouter } from "./routes/business";
 import { hoursRouter } from "./routes/hours";
 import { backupsRouter } from "./routes/backups";
 import { optionsRouter } from "./routes/options";
+import { paketRaporPageRouter, paketRaporUploadRouter } from "./routes/paketrapor";
 import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
@@ -128,6 +129,9 @@ async function main() {
   // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
   let posPriceChange: (brandId: number) => void = () => undefined;
   app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl));
+  // Paket servis raporu: yerel betik hazır HTML'i jetonla yükler (auth'tan ÖNCE); kalıcı diskte, uploads'ın yanında (üretimde /data/paketrapor)
+  const paketRaporDir = process.env.PAKETRAPOR_DIR?.trim() || path.join(path.dirname(path.resolve(env.uploadDir)), "paketrapor");
+  app.use("/api/paketrapor", paketRaporUploadRouter(paketRaporDir, process.env.PAKETRAPOR_TOKEN?.trim()));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -140,6 +144,7 @@ async function main() {
     }),
   );
   app.use("/api/auth", authRouter(env, db));
+  app.use("/paketrapor", paketRaporPageRouter(paketRaporDir));
   app.use("/api/staff", staffRouter(db, env));
   app.use("/api/catalog-thumbnail", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), catalogThumbRouter(db));
   app.use("/api/reports", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), reportsRouter(db));

@@ -24,3 +24,5 @@ Thumbs.db
 *.tsbuildinfo
 .tmp-inspect/
 backups/
+# Yüklenen paket servis raporu (kalıcı volume'de tutulur)
+paketrapor/
