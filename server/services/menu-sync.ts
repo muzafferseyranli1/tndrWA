@@ -66,6 +66,13 @@ class DryRunRollback extends Error {
 }
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLocaleLowerCase("tr");
+
+/**
+ * Menü eşitlemesinde HER ZAMAN pasif tutulan porsiyonlar (satışta olmayan seçenekler). Kasada açık görünseler bile
+ * eşitleme bunları yeniden aktifleştirmez; yeni gelenler de pasif oluşturulur.
+ */
+export const ALWAYS_PASSIVE_LABELS = ["1,5 porsiyon"];
+const isPassiveLabel = (label: string | null | undefined) => ALWAYS_PASSIVE_LABELS.includes(norm(label));
 const tl = (k: number) => (k / 100).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function validateSpec(spec: MenuSpec): string | null {
@@ -180,7 +187,7 @@ async function apply(tx: Prisma.TransactionClient, brandId: number, spec: MenuSp
         const display = v.label ? `${p.name} (${v.label})` : p.name;
         if (!match) {
           const created = await tx.product.create({
-            data: { brandId, retailerId: uniqueRetailer(slugify(v.label ? `${p.name} ${v.label}` : p.name)), name: p.name, variantLabel: v.label, groupKey, priceKurus: v.priceKurus, categoryId, status: "ACTIVE", sortOrder, sourceKey: key, metaSyncState: "PENDING" },
+            data: { brandId, retailerId: uniqueRetailer(slugify(v.label ? `${p.name} ${v.label}` : p.name)), name: p.name, variantLabel: v.label, groupKey, priceKurus: v.priceKurus, categoryId, status: isPassiveLabel(v.label) ? "PASSIVE" : "ACTIVE", sortOrder, sourceKey: key, metaSyncState: "PENDING" },
           });
           used.add(created.id);
           createdIds.push(created.id);
@@ -195,11 +202,12 @@ async function apply(tx: Prisma.TransactionClient, brandId: number, spec: MenuSp
         if ((match.variantLabel ?? null) !== v.label) changes.push(`porsiyon: ${match.variantLabel ?? "-"} → ${v.label ?? "-"}`);
         if (match.priceKurus !== v.priceKurus) changes.push(`fiyat: ${tl(match.priceKurus)} → ${tl(v.priceKurus)}`);
         if (match.categoryId !== categoryId) changes.push(`kategori: ${match.category.name} → ${c.name}`);
-        if (match.status !== "ACTIVE") changes.push("aktifleştirildi");
+        const wantStatus = isPassiveLabel(v.label) ? "PASSIVE" : "ACTIVE";
+        if (match.status !== wantStatus) changes.push(wantStatus === "ACTIVE" ? "aktifleştirildi" : "pasife alındı");
         const catalogChange = changes.length > 0 || (match.groupKey ?? null) !== groupKey;
         await tx.product.update({
           where: { id: match.id },
-          data: { name: p.name, variantLabel: v.label, groupKey, priceKurus: v.priceKurus, categoryId, status: "ACTIVE", sortOrder, sourceKey: key, ...(catalogChange ? { metaSyncState: "PENDING" } : {}) },
+          data: { name: p.name, variantLabel: v.label, groupKey, priceKurus: v.priceKurus, categoryId, status: wantStatus, sortOrder, sourceKey: key, ...(catalogChange ? { metaSyncState: "PENDING" } : {}) },
         });
         const links = await tx.productOptionGroup.findMany({ where: { productId: match.id } });
         const want = new Set(p.optionGroups.map((k) => groupIds.get(k)!));

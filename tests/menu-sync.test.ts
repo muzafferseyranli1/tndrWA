@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateSpec, type MenuSpec } from "../server/services/menu-sync";
+import { ALWAYS_PASSIVE_LABELS, validateSpec, type MenuSpec } from "../server/services/menu-sync";
 
 const base = (): MenuSpec => ({
   optionGroups: [{ key: "E", name: "Ekstra Malzeme", required: false, maxSelect: 5, choices: [{ name: "Domates", priceKurus: 4500 }] }],
@@ -35,4 +35,9 @@ test("menü eşitleme: hatalı menüler açık mesajla reddedilir", () => {
   const longChoice = base();
   longChoice.optionGroups[0].choices[0].name = "x".repeat(25);
   assert.match(validateSpec(longChoice) ?? "", /24 karakter/);
+});
+
+test("menü eşitleme: 1,5 porsiyon her zaman pasif listesinde", () => {
+  assert.ok(ALWAYS_PASSIVE_LABELS.includes("1,5 porsiyon"));
+  assert.ok(!ALWAYS_PASSIVE_LABELS.includes("1 porsiyon"));
 });
