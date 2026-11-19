@@ -85,15 +85,43 @@ async function menuFailure(page, dir, message) {
   throw new Error(`${message}. Sayfa: ${info.url}, ${info.mode}${info.closed ? ", 'kapalı' uyarısı var" : ""}, görünen düğmeler: [${info.buttons.join(" | ")}], ekran görüntüsü: ${shot}`);
 }
 
+/**
+ * RMS giriş sonrası önce yeni sürümü indirip sayfayı yeniliyor, sonra ~20 sn daha hazırlanıyor:
+ * yenileme gelirse beklenir, ardından uygulamanın oturması için süre tanınır. Sağ alttaki "yeni sürüm" bildirimi tıklamaları kapattığı için gizlenir.
+ */
+async function settle(page) {
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  await page.waitForTimeout(6_000);
+  if (await page.locator(".update-toast").isVisible().catch(() => false)) {
+    log("RMS güncelleme yenilemesi bekleniyor");
+    await page.waitForEvent("load", { timeout: 45_000 }).catch(() => undefined);
+  }
+  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+  await page.waitForTimeout(20_000);
+  await page.addStyleTag({ content: ".Toastify{display:none !important}" }).catch(() => undefined);
+}
+
 async function downloadExcel(page, dir) {
+  // Güncelleme yenilemesi sırasında öğeler kaybolabiliyor: tümünü baştan en fazla 3 kez dene
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await settle(page);
+      await openCustomers(page, dir);
+      return await exportExcel(page, dir);
+    } catch (e) {
+      if (attempt >= 3) throw e;
+      log(`Deneme ${attempt} başarısız (${e.message.split("\n")[0]}), yeniden deneniyor`);
+      await page.goto(RMS_URL, { waitUntil: "domcontentloaded" }).catch(() => undefined);
+    }
+  }
+}
+
+async function openCustomers(page, dir) {
   // Doğrudan adres ana sayfaya atıyor: menüden gidilir
   // Menü öğeleri gerçek <button> değil (role=button): metne göre aranır; yalnız görünür olan alınır
   const sadakat = page.locator('text="Sadakat Yönetimi" >> visible=true').first();
   const customers = page.locator('text="Müşteriler" >> visible=true').first();
-  // Uygulama açılırken tıklamalar boşa gidebiliyor: ağ sakinleşip menü oturana kadar bekle
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
   await sadakat.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
-  await page.waitForTimeout(2_000);
   // Önce menü arama kutusu: "müşteriler" yazınca "Müşteriler (Satış Yönetimi / Sadakat Yönetimi)" sonucu çıkar
   const search = page.getByPlaceholder("Menüde ara...");
   if (await search.count()) {
@@ -113,9 +141,13 @@ async function downloadExcel(page, dir) {
   } catch {
     await menuFailure(page, dir, "Müşteriler sayfası açılmadı (yetki ya da modül kapalı olabilir)");
   }
+}
+
+async function exportExcel(page, dir) {
   // "Excel'e Aktar": kapsamdaki TÜM müşteriler (ekrandaki limitli listeden bağımsız). "Excelden Aktar" ayrı düğme, karışmasın
   const exportBtn = page.getByRole("button", { name: /Excel'e Aktar|Kapsamdaki TÜM/ }).first();
-  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: EXPORT_TIMEOUT_MS }), exportBtn.click()]);
+  await exportBtn.waitFor({ state: "visible", timeout: 30_000 });
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: EXPORT_TIMEOUT_MS }), exportBtn.click({ timeout: 15_000 })]);
   const file = path.join(dir, "musteri.xlsx");
   await dl.saveAs(file);
   return file;
