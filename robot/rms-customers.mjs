@@ -94,7 +94,13 @@ async function downloadExcel(page, dir) {
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
   await sadakat.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
   await page.waitForTimeout(2_000);
-  // Alt menü zaten açık olabilir (tekrar tıklamak kapatır): görünür değilse aç, olmadıysa tekrar dene
+  // Önce menü arama kutusu: "müşteriler" yazınca "Müşteriler (Satış Yönetimi / Sadakat Yönetimi)" sonucu çıkar
+  const search = page.getByPlaceholder("Menüde ara...");
+  if (await search.count()) {
+    await search.first().fill("müşteriler");
+    await customers.waitFor({ state: "visible", timeout: 8_000 }).catch(() => undefined);
+  }
+  // Arama çalışmadıysa yedek: alt menü zaten açık olabilir (tekrar tıklamak kapatır), görünür değilse aç, olmadıysa tekrar dene
   for (let i = 0; i < 4 && !(await customers.isVisible()); i++) {
     await sadakat.scrollIntoViewIfNeeded().catch(() => undefined);
     await sadakat.click({ timeout: 10_000 }).catch(() => undefined);
