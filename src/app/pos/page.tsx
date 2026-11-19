@@ -21,6 +21,7 @@ interface PosStatus {
   alerts?: Partial<Record<"ui" | "auto" | "api", { text: string; at: string }>>;
   writeMode?: "api" | "extension";
   testOrders?: boolean;
+  evaluatePayment?: boolean;
   suitable?: { configured: boolean; source: "env" | "panel" | null; baseUrl: string; keyHint: string | null; priceMode: "platform" | "server" | "auto"; store: string | null; webhookSecretSet: boolean; webhookUrl: string | null };
 }
 
@@ -123,6 +124,18 @@ export default function PosPage() {
       await api("/api/pos/suitable-config", { method: "PUT", json: { apiKey: cfgKey || undefined, baseUrl: cfgBase || undefined, priceMode: cfgMode || undefined } });
       setCfgKey("");
       setMsg("Suitable ayarları kaydedildi.");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function setEvalPayment(enabled: boolean) {
+    setBusy("evalpay");
+    try {
+      await api("/api/pos/suitable-config", { method: "PUT", json: { evaluatePayment: enabled } });
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -236,6 +249,14 @@ export default function PosPage() {
                     <option value="platform">Fiyatı biz hesaplarız</option>
                   </select>
                 </label>
+                {status.suitable?.configured && (
+                  <label className="mt-2 flex items-start gap-2 text-xs">
+                    <input type="checkbox" className="mt-0.5" disabled={busy === "evalpay"} checked={!!status.evaluatePayment} onChange={(e) => void setEvalPayment(e.target.checked)} />
+                    <span>
+                      Kampanya sorgusuna ödeme şeklini ekle <span className="text-slate-500">(kampanya yalnız nakit/kapıda kart gibi ödeme şekline bağlıysa ve Suitable bunu destekliyorsa açın; desteklenmiyorsa sorgu hata verebilir)</span>
+                    </span>
+                  </label>
+                )}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button disabled={busy === "cfg" || (!cfgKey && !cfgBase && !cfgMode)} onClick={() => void saveConfig()} className="rounded bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50">
                     Kaydet

@@ -3,9 +3,10 @@ import type { PriceMode, SuitableEnv } from "../lib/env";
 import { logger } from "../lib/logger";
 import type { Messenger } from "./messenger";
 import { applyPosEvents, markPosEntered, setPosAlert, type PosEvent } from "./pos-tracking";
-import { apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
+import { apiPayment, apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
 import type { DiscountResult } from "../../shared/campaigns";
 import { storeSnapshot, syncPricesFromPos } from "./pos-bridge";
+import { notifyOrderStatus } from "./order-messages";
 
 /**
  * Siparişleri POS'a Suitable Dış Kaynak API'siyle yazar (eklenti yerine), durumlarını webhook ve yoklamayla izler.
@@ -18,7 +19,7 @@ export const TEST_ORDERS_KEY = "suitable.testOrders";
 export type WriteMode = "api" | "extension";
 
 /** Panelden girilen Suitable ayarları (env varsa env öncelikli). Anahtar ve webhook gizlisi gizli bilgidir: yalnız sunucuda tutulur, panele geri verilmez. */
-export const CFG_KEYS = { baseUrl: "suitable.baseUrl", apiKey: "suitable.apiKey", webhookSecret: "suitable.webhookSecret", priceMode: "suitable.priceMode" } as const;
+export const CFG_KEYS = { baseUrl: "suitable.baseUrl", apiKey: "suitable.apiKey", webhookSecret: "suitable.webhookSecret", priceMode: "suitable.priceMode", evaluatePayment: "suitable.evaluatePayment" } as const;
 export const DEFAULT_BASE_URL = "https://api-suitable-live.web.app/v1";
 
 export async function resolveSuitableCfg(db: PrismaClient, env: SuitableEnv | null): Promise<(SuitableEnv & { source: "env" | "panel" }) | null> {
@@ -122,8 +123,13 @@ export class SuitableSync {
     return this.cfg ? storeIdOf(this.cfg, brand) : null;
   }
 
+  async evaluatePaymentOn(): Promise<boolean> {
+    return (await this.db.setting.findUnique({ where: { key: CFG_KEYS.evaluatePayment } }))?.value === "1";
+  }
+
   /** Panelden bağlantı ayarı: anahtar boş bırakılırsa değişmez. */
-  async saveConfig(p: { baseUrl?: string; apiKey?: string; priceMode?: PriceMode }): Promise<void> {
+  async saveConfig(p: { baseUrl?: string; apiKey?: string; priceMode?: PriceMode; evaluatePayment?: boolean }): Promise<void> {
+    if (p.evaluatePayment !== undefined) await putSetting(this.db, CFG_KEYS.evaluatePayment, p.evaluatePayment ? "1" : "0");
     if (p.baseUrl !== undefined) await putSetting(this.db, CFG_KEYS.baseUrl, p.baseUrl.trim());
     if (p.apiKey) await putSetting(this.db, CFG_KEYS.apiKey, p.apiKey.trim());
     if (p.priceMode) await putSetting(this.db, CFG_KEYS.priceMode, p.priceMode);
@@ -223,8 +229,10 @@ export class SuitableSync {
   }
 
   /** POS kampanya değerlendirmesi (hiçbir şey yazılmaz). Hata fırlatır; çağıran karar verir. */
-  private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number): Promise<ApiEvaluateResult> {
-    const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines });
+  private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number, paymentLabel = ""): Promise<ApiEvaluateResult> {
+    // Ödeme şekline bağlı kampanyalar için (nakit/kapıda kart): yalnız Suitable evaluate'te ödeme alanını destekliyorsa ve panelde açıldıysa gönderilir
+    const payment = paymentLabel && (await this.evaluatePaymentOn()) ? apiPayment(paymentLabel).payment : undefined;
+    const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines, ...(payment ? { payment } : {}) });
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, rej) => {
       timer = setTimeout(() => rej(new SuitableApiError(0, "network", "Kampanya sorgusu zaman aşımına uğradı")), timeoutMs);
@@ -251,7 +259,7 @@ export class SuitableSync {
       const snap = menuToSnapshot(await this.menuOf(store), store);
       const built = await buildApiLines(this.db, order, snap);
       if (!built.ok) return null;
-      const ev = await this.evaluateLines(store, phone, built.lines, timeoutMs);
+      const ev = await this.evaluateLines(store, phone, built.lines, timeoutMs, order.paymentLabel);
       const kurus = Math.min(built.subtotalKurus, Math.max(0, Math.round(ev.campaignDiscount * 100)));
       return { discountKurus: kurus, note: kurus > 0 ? ev.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) : "" };
     } catch (err) {
@@ -292,7 +300,7 @@ export class SuitableSync {
       let campaignNote = "";
       if (mode !== "server") {
         try {
-          evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", lines.lines, 8000);
+          evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", lines.lines, 8000, order.paymentLabel);
         } catch (err) {
           const e = err as SuitableApiError;
           if (e instanceof SuitableApiError && e.code === "product_unavailable") {
@@ -329,7 +337,13 @@ export class SuitableSync {
       await this.db.order.update({ where: { id: order.id }, data: { suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null, discountKurus: campaignKurus, discountNote: campaignName } });
       const warn = [...driftNotes, ...built.warnings];
       await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${campaignName ? ` · kampanya: ${campaignName} (-${(campaignKurus / 100).toFixed(2)} TL)` : ""}${campaignNote}${warn.length ? ` · uyarı: ${warn.join("; ")}`.slice(0, 400) : ""}`.slice(0, 600) } });
+      const shownKurus = order.discountKurus;
       await markPosEntered(this.db, this.cloud, this.publicBaseUrl, order.id).catch((err: Error) => logger.warn({ orderId: order.id, err: err.message }, "POS girişi bildirilemedi"));
+      // POS'un uyguladığı kampanya müşterinin gördüğünden farklıysa (ör. ödeme şekline bağlı kampanya) müşteriye bildirilir
+      if (campaignKurus > 0 && campaignKurus !== shownKurus) {
+        const fresh = await this.db.order.findUnique({ where: { id: order.id }, include: { brand: true, customer: true } });
+        if (fresh) await notifyOrderStatus(this.db, this.cloud, fresh, "CAMPAIGN_APPLIED", this.publicBaseUrl).catch(() => undefined);
+      }
       logger.info({ orderId: order.id, suitableId: res.orderId, receiptNo: res.receiptNo, brand: brand.code }, "Sipariş Suitable'a yazıldı");
       return true;
     } catch (err) {

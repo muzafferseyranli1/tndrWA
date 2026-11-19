@@ -183,7 +183,7 @@ export function posAdminRouter(db: PrismaClient, sync: SuitableSync | null = nul
     const brand = await resolveBrand(db, req.query.brandId);
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     const customers = (await db.setting.findUnique({ where: { key: customersKey(brand.code) } }))?.value;
-    res.json({ writeMode: await getWriteMode(db, sync?.cfg ?? null), testOrders: await testOrdersOn(db), suitable: suitableInfo(brand), tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
+    res.json({ writeMode: await getWriteMode(db, sync?.cfg ?? null), testOrders: await testOrdersOn(db), evaluatePayment: (await sync?.evaluatePaymentOn()) ?? false, suitable: suitableInfo(brand), tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
   });
 
   router.delete("/alerts/:kind", async (req, res) => {
@@ -231,6 +231,7 @@ export function posAdminRouter(db: PrismaClient, sync: SuitableSync | null = nul
         baseUrl: z.string().trim().max(200).optional(),
         apiKey: z.string().trim().max(300).optional(),
         priceMode: z.enum(["platform", "server", "auto"]).optional(),
+        evaluatePayment: z.boolean().optional(),
       })
       .safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: "Geçersiz ayar." });
@@ -238,7 +239,7 @@ export function posAdminRouter(db: PrismaClient, sync: SuitableSync | null = nul
     if (!sync) return res.status(409).json({ error: "Suitable API bu sunucuda kullanılamıyor." });
     if (apiKey && !/^swk_[A-Za-z0-9_-]{6,}$/.test(apiKey)) return res.status(400).json({ error: "Anahtar swk_ ile başlamalı (POS'ta Ayarlar > Entegrasyonlar > Dış Kaynak API'den üretilir)." });
     if (baseUrl && !/^https?:\/\/[^\s/]+/.test(baseUrl)) return res.status(400).json({ error: "Adres https:// ile başlamalı." });
-    await sync.saveConfig({ baseUrl: baseUrl || undefined, apiKey: apiKey || undefined, priceMode: parsed.data.priceMode });
+    await sync.saveConfig({ baseUrl: baseUrl || undefined, apiKey: apiKey || undefined, priceMode: parsed.data.priceMode, evaluatePayment: parsed.data.evaluatePayment });
     res.json({ ok: true });
   });
 

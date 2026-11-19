@@ -206,7 +206,7 @@ export class SuitableClient {
   testWebhook(): Promise<{ ok: boolean; statusCode: number | null; error: string | null }> {
     return this.request("POST", "/webhook/test", {});
   }
-  evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: { campaignIds: string[] } }): Promise<ApiEvaluateResult> {
+  evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: { campaignIds: string[] }; payment?: ApiOrderBody["payment"] }): Promise<ApiEvaluateResult> {
     return this.request("POST", "/orders/evaluate", body);
   }
 }

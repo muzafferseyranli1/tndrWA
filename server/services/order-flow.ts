@@ -534,7 +534,8 @@ export async function handleOrderReply(db: PrismaClient, cloud: Messenger | null
 async function choosePayment(db: PrismaClient, cloud: Messenger | null, order: FullOrder, paymentTypeId: number): Promise<void> {
   const type = await db.paymentType.findFirst({ where: { id: paymentTypeId, brandId: order.brandId, enabled: true } });
   if (!type) return;
+  await db.order.update({ where: { id: order.id }, data: { paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent } });
   const { discountKurus, note } = await orderDiscount(db, order.id, type.discountPercent);
-  await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_ADDRESS", paymentTypeId: type.id, paymentLabel: type.name, discountPercent: type.discountPercent, discountKurus, discountNote: note } });
+  await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_ADDRESS", discountKurus, discountNote: note } });
   await askAddress(db, cloud, (await load(db, order.id))!);
 }

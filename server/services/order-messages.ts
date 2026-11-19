@@ -4,8 +4,8 @@ import type { OrderStatus } from "./orders";
 import { recordOutbound } from "./outbound";
 import { addrOf, type Messenger } from "./messenger";
 
-export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET" | "ORDER_REMINDER" | "ORDER_TIMEOUT" | "KVKK_NOTICE" | "MERGE_ASK" | "MERGE_DONE" | "MERGE_REMINDER" | "MERGE_TIMEOUT";
-export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "KVKK_NOTICE", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_REMINDER", "ORDER_TIMEOUT", "MERGE_ASK", "MERGE_DONE", "MERGE_REMINDER", "MERGE_TIMEOUT", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
+export type MessageKey = OrderStatus | "WELCOME" | "ASK_ADDRESS" | "CONFIRM_ADDRESS" | "CHOOSE_ADDRESS" | "CONFIRMED" | "ORDER_UPDATED" | "CLOSED" | "PREORDER" | "MIN_BASKET" | "ORDER_REMINDER" | "ORDER_TIMEOUT" | "KVKK_NOTICE" | "MERGE_ASK" | "MERGE_DONE" | "MERGE_REMINDER" | "MERGE_TIMEOUT" | "CAMPAIGN_APPLIED";
+export const MESSAGE_KEYS: MessageKey[] = ["WELCOME", "KVKK_NOTICE", "CLOSED", "PREORDER", "MIN_BASKET", "NEW", "ASK_ADDRESS", "CONFIRM_ADDRESS", "CHOOSE_ADDRESS", "CONFIRMED", "ORDER_REMINDER", "ORDER_TIMEOUT", "MERGE_ASK", "MERGE_DONE", "MERGE_REMINDER", "MERGE_TIMEOUT", "CAMPAIGN_APPLIED", "ORDER_UPDATED", "PREPARING", "ON_THE_WAY", "DELIVERED", "CANCELLED"];
 
 /** Müşteriye giden varsayılan metinler. Ayarlar tablosunda marka başına `tpl.<marka>.<ANAHTAR>` ile değiştirilebilir. */
 export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
@@ -26,6 +26,7 @@ export const DEFAULT_TEMPLATES: Record<MessageKey, string> = {
   MERGE_REMINDER: "⏳ Ürünleri siparişinize (No: {no}) ekleyebilmemiz için yukarıdaki soruyu yanıtlamanız gerekiyor. 5 dakika içinde yanıt alamazsak bu ürünler eklenmez; siparişiniz aynen devam eder.",
   MERGE_TIMEOUT: "Yanıt alamadığımız için gönderdiğiniz ürünler siparişinize eklenmedi. Siparişiniz (No: {no}) aynen devam ediyor. Yine de eklemek isterseniz aşağıdaki menüden sepetinizi yeniden gönderebilirsiniz.",
   ORDER_UPDATED: "Siparişiniz güncellendi (No: {no}).\n\n{urunler}\n\nToplam: {toplam}\nİndirim: {indirim}\nÖdenecek tutar: {tutar}\nAdres: {adres}",
+  CAMPAIGN_APPLIED: "Siparişinize (No: {no}) kampanya uygulandı.\nİndirim: {indirim}\nÖdenecek tutar: {tutar}",
   PREPARING: "Siparişiniz alındı, hazırlanıyor (No: {no}).",
   ON_THE_WAY: "Siparişiniz yola çıktı (No: {no}). Afiyet olsun!",
   DELIVERED: "Siparişiniz teslim edildi (No: {no}). Afiyet olsun!\n\nBizi değerlendirirseniz çok seviniriz: {degerlendirme}\n\nAynı siparişi tekrar vermek için bize *1* yazmanız yeterli.",
@@ -104,7 +105,7 @@ export async function notifyOrderStatus(
   db: PrismaClient,
   cloud: Messenger | null,
   order: Order & { brand: Brand; customer: Customer },
-  status: OrderStatus,
+  status: OrderStatus | "CAMPAIGN_APPLIED",
   publicBaseUrl: string | null = null,
 ): Promise<NotifyResult> {
   if (!cloud) return { sent: false, error: "Mesaj gönderim kanalı tanımlı değil." };

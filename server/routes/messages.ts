@@ -24,6 +24,7 @@ const LABELS: Record<MessageKey, { label: string; hint: string }> = {
   MERGE_DONE: { label: "Ürünler siparişe eklendi", hint: "Müşteri \"Siparişime ekle\" deyince (varsa seçenekler sorulduktan sonra) gider. {urunler} siparişin güncel ürün listesidir. " + ALL },
   MERGE_REMINDER: { label: "Ekleme sorusu hatırlatması", hint: "Müşteri açık siparişe ekleme sorusuna (ya da eklenecek ürünün seçeneğine) 5 dakika yanıt vermezse soru yeniden gönderilir, ardından bu mesaj gider. {no} açık siparişin numarası." },
   MERGE_TIMEOUT: { label: "Ekleme sorusu yanıtsız kaldı", hint: "Hatırlatmadan sonra 5 dakika daha yanıt gelmezse menüyle birlikte gider; eklenecek ürünler iptal edilir, açık sipariş aynen devam eder. {no} açık siparişin numarası." },
+  CAMPAIGN_APPLIED: { label: "Kampanya uygulandı (POS kampanyası)", hint: "Sipariş POS'a yazılınca POS'un uyguladığı kampanya müşterinin gördüğünden farklıysa gider (ör. nakit/kapıda kart kampanyası ödeme seçildikten sonra uygulanır). " + ALL },
   ORDER_UPDATED: { label: "Sipariş güncellendi", hint: "Personel siparişi düzenleyip \"Müşteriye güncel özeti gönder\"e basınca gider. {urunler} güncel ürün listesidir. " + ALL },
   PREPARING: { label: "Hazırlanıyor", hint: "Durum Hazırlanıyor olunca gider. " + ALL },
   ON_THE_WAY: { label: "Yola çıktı", hint: "Durum Yola çıktı olunca gider. " + ALL },
