@@ -164,7 +164,7 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
     }
     const deliveryId = req.header("x-delivery-id");
     if (deliveryId && seenDeliveries.has(deliveryId)) return res.json({ ok: true, duplicate: true });
-    let body: { event?: string; orderId?: string; externalId?: string; status?: string; cancelReason?: string | null };
+    let body: { event?: string; orderId?: string; externalId?: string; status?: string; cancelReason?: string | null; cancelledBy?: string | null };
     try {
       body = JSON.parse(raw.toString("utf8"));
     } catch {
@@ -177,7 +177,7 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
     // Hızlı yanıt: 10 sn içinde 2xx beklenir
     try {
       if (body.event === "order.status" && body.status) {
-        const changed = await sync.applyStatus({ orderId: body.orderId, externalId: body.externalId }, body.status, body.cancelReason ?? null);
+        const changed = await sync.applyStatus({ orderId: body.orderId, externalId: body.externalId }, body.status, body.cancelReason ?? null, body.cancelledBy ?? null);
         logger.info({ status: body.status, externalId: body.externalId, changed }, "Suitable sipariş durumu alındı");
       }
     } catch (err) {

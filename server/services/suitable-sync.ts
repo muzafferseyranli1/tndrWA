@@ -11,17 +11,27 @@ import { buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type A
  */
 
 export const WRITE_MODE_KEY = "pos.writeMode";
+/** "1" iken siparişler test:true ile gönderilir (puan, ziyaret, kampanya sayaçları ve stok etkilenmez; fiş ve satış raporunda görünür, denemeden sonra iptal edilmeli) */
+export const TEST_ORDERS_KEY = "suitable.testOrders";
 export type WriteMode = "api" | "extension";
 
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const MAX_TRIES = 8;
 const BACKOFF_SEC = [20, 60, 120, 300, 600, 900, 1800];
-const MENU_TTL_MS = 30_000;
+const MENU_TTL_MS = Number(process.env.SUITABLE_MENU_TTL_MS) || 30_000;
 
 export async function getWriteMode(db: PrismaClient, suitable: SuitableEnv | null): Promise<WriteMode> {
   if (!suitable) return "extension";
   const row = await db.setting.findUnique({ where: { key: WRITE_MODE_KEY } });
   return row?.value === "api" ? "api" : "extension";
+}
+
+export async function testOrdersOn(db: PrismaClient): Promise<boolean> {
+  return (await db.setting.findUnique({ where: { key: TEST_ORDERS_KEY } }))?.value === "1";
+}
+
+export async function setTestOrders(db: PrismaClient, on: boolean): Promise<void> {
+  await db.setting.upsert({ where: { key: TEST_ORDERS_KEY }, create: { key: TEST_ORDERS_KEY, value: on ? "1" : "0" }, update: { value: on ? "1" : "0" } });
 }
 
 export async function setWriteMode(db: PrismaClient, mode: WriteMode): Promise<void> {
@@ -37,7 +47,7 @@ const backoffMs = (tries: number) => (BACKOFF_SEC[Math.min(tries - 1, BACKOFF_SE
 
 export class SuitableSync {
   readonly client: SuitableClient;
-  private readonly menus = new Map<string, { at: number; menu: ApiMenu }>();
+  private readonly menus = new Map<string, { at: number; menu: ApiMenu; etag: string | null }>();
 
   constructor(
     private readonly db: PrismaClient,
@@ -52,9 +62,15 @@ export class SuitableSync {
   async menuOf(store: string, now = Date.now()): Promise<ApiMenu> {
     const hit = this.menus.get(store);
     if (hit && now - hit.at < MENU_TTL_MS) return hit.menu;
-    const menu = await this.client.getMenu(store);
-    this.menus.set(store, { at: now, menu });
-    return menu;
+    // Süre dolunca ETag ile sorulur: değişmediyse gövdesiz 304 (hız sınırını harcamaz)
+    const res = await this.client.getMenu(store, hit?.etag);
+    if (res.notModified && hit) {
+      this.menus.set(store, { ...hit, at: now });
+      return hit.menu;
+    }
+    if (!res.menu) throw new SuitableApiError(502, "empty_menu", "Suitable menüyü boş döndürdü");
+    this.menus.set(store, { at: now, menu: res.menu, etag: res.etag });
+    return res.menu;
   }
 
   /** Hazır ve henüz POS'a yazılmamış siparişleri API'ye gönderir. Dönen: kaç sipariş yazıldı. */
@@ -112,10 +128,11 @@ export class SuitableSync {
         await this.fail(order.id, new Error(built.error), tries, now, true);
         return false;
       }
-      const res = await this.client.createOrder(built.body);
+      const test = await testOrdersOn(this.db);
+      const res = await this.client.createOrder(test ? { ...built.body, test: true } : built.body);
       const ref = res.receiptNo ? `#${res.receiptNo}` : `API ${res.orderId.slice(-6)}`;
       await this.db.order.update({ where: { id: order.id }, data: { suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null } });
-      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${built.warnings.length ? ` · uyarı: ${built.warnings.join("; ")}`.slice(0, 400) : ""}` } });
+      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: fiş ve satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${built.warnings.length ? ` · uyarı: ${built.warnings.join("; ")}`.slice(0, 400) : ""}` } });
       await markPosEntered(this.db, this.cloud, this.publicBaseUrl, order.id).catch((err: Error) => logger.warn({ orderId: order.id, err: err.message }, "POS girişi bildirilemedi"));
       logger.info({ orderId: order.id, suitableId: res.orderId, receiptNo: res.receiptNo, brand: brand.code }, "Sipariş Suitable'a yazıldı");
       return true;
@@ -128,7 +145,7 @@ export class SuitableSync {
   }
 
   /** Webhook ya da yoklama: API durumunu siparişe uygular (yalnız ileri yönde). */
-  async applyStatus(ref: { orderId?: string; externalId?: string }, status: string, cancelReason?: string | null): Promise<boolean> {
+  async applyStatus(ref: { orderId?: string; externalId?: string }, status: string, cancelReason?: string | null, cancelledBy?: string | null): Promise<boolean> {
     const idFromExternal = ref.externalId?.startsWith("yrndwa-") ? Number(ref.externalId.slice(7)) : NaN;
     const order = await this.db.order.findFirst({
       where: { OR: [...(ref.orderId ? [{ suitableId: ref.orderId }] : []), ...(Number.isInteger(idFromExternal) ? [{ id: idFromExternal, suitableId: { not: null } }] : [])] },
@@ -139,28 +156,57 @@ export class SuitableSync {
     let changed = false;
     if (event) changed = (await applyPosEvents(this.db, this.cloud, this.publicBaseUrl, [{ id: order.id, event }])) > 0;
     if (status === "cancelled" && cancelReason) {
-      const text = `Suitable iptal nedeni: ${cancelReason.slice(0, 200)}`;
+      const text = `Suitable iptal nedeni${cancelledBy === "client" ? " (bizim iptalimiz)" : ""}: ${cancelReason.slice(0, 200)}`;
       const seen = await this.db.orderChange.findFirst({ where: { orderId: order.id, text } });
       if (!seen) await this.db.orderChange.create({ data: { orderId: order.id, text } });
     }
     return changed;
   }
 
-  /** Açık siparişlerin durumunu API'den sorgular (webhook kaçırılırsa ve vazgeçilen teslimatlar için). */
+  /**
+   * Açık siparişlerin durumunu API'den uzlaştırır (webhook kaçırılırsa ve vazgeçilen teslimatlar için). İşletme başına tek liste isteği
+   * (`GET /v1/orders?store=&since=`, sayfalı); listede görünmeyenler tek tek sorgulanır.
+   */
   async pollOpen(): Promise<number> {
     const open = await this.db.order.findMany({
       where: { suitableId: { not: null }, status: { in: ["NEW", "PREPARING", "ON_THE_WAY"] }, posAt: { gte: new Date(Date.now() - ORDER_WINDOW_MS) } },
-      select: { id: true, suitableId: true },
+      select: { id: true, suitableId: true, posAt: true, brand: { select: { code: true, posCafeId: true } } },
       orderBy: { posAt: "asc" },
-      take: 30,
+      take: 60,
     });
-    let n = 0;
+    if (!open.length) return 0;
+    const byStore = new Map<string, typeof open>();
     for (const o of open) {
+      const store = storeIdOf(this.cfg, o.brand);
+      if (store) (byStore.get(store) ?? byStore.set(store, []).get(store)!).push(o);
+    }
+    let n = 0;
+    for (const [store, orders] of byStore) {
+      const seen = new Map<string, string>();
       try {
-        const s = await this.client.getOrder(o.suitableId!);
-        if (await this.applyStatus({ orderId: o.suitableId! }, s.status)) n++;
+        const since = new Date((orders[0].posAt?.getTime() ?? Date.now()) - 60_000).toISOString();
+        let cursor: string | undefined;
+        // "orders" boş gelse bile nextCursor doluysa devam edilir
+        for (let page = 0; page < 8; page++) {
+          const res = await this.client.listOrders(store, { since, limit: 100, cursor });
+          for (const x of res.orders) seen.set(x.orderId, x.status);
+          if (!res.nextCursor) break;
+          cursor = res.nextCursor;
+        }
       } catch (err) {
-        logger.warn({ orderId: o.id, err: (err as Error).message }, "Suitable sipariş durumu sorgulanamadı");
+        logger.warn({ store, err: (err as Error).message }, "Suitable sipariş listesi alınamadı, tek tek sorgulanacak");
+      }
+      for (const o of orders) {
+        let status = seen.get(o.suitableId!);
+        if (!status) {
+          try {
+            status = (await this.client.getOrder(o.suitableId!)).status;
+          } catch (err) {
+            logger.warn({ orderId: o.id, err: (err as Error).message }, "Suitable sipariş durumu sorgulanamadı");
+            continue;
+          }
+        }
+        if (await this.applyStatus({ orderId: o.suitableId! }, status)) n++;
       }
     }
     return n;

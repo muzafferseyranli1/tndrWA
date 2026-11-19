@@ -8,7 +8,7 @@ import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../s
 import { applyPosEvents, markPosEntered, readPosAlerts, setPosAlert, trackingList } from "../services/pos-tracking";
 import type { Messenger } from "../services/messenger";
 import type { SuitableEnv } from "../lib/env";
-import { getWriteMode, setWriteMode, storeIdOf, type SuitableSync } from "../services/suitable-sync";
+import { getWriteMode, setTestOrders, setWriteMode, storeIdOf, testOrdersOn, type SuitableSync } from "../services/suitable-sync";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -177,7 +177,7 @@ export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = 
     const brand = await resolveBrand(db, req.query.brandId);
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     const customers = (await db.setting.findUnique({ where: { key: customersKey(brand.code) } }))?.value;
-    res.json({ writeMode: await getWriteMode(db, suitable), suitable: suitable ? { configured: true, store: storeIdOf(suitable, brand), webhookSecretSet: !!suitable.webhookSecret } : { configured: false, store: null, webhookSecretSet: false }, tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
+    res.json({ writeMode: await getWriteMode(db, suitable), testOrders: await testOrdersOn(db), suitable: suitable ? { configured: true, store: storeIdOf(suitable, brand), webhookSecretSet: !!suitable.webhookSecret } : { configured: false, store: null, webhookSecretSet: false }, tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
   });
 
   router.delete("/alerts/:kind", async (req, res) => {
@@ -194,6 +194,28 @@ export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = 
     if (parsed.data.mode === "api" && !suitable) return res.status(409).json({ error: "Suitable API ayarları (SUITABLE_API_BASE, SUITABLE_API_KEY) sunucuda tanımlı değil." });
     await setWriteMode(db, parsed.data.mode);
     res.json({ writeMode: parsed.data.mode });
+  });
+
+  // Test siparişi: açıkken siparişler test:true ile gönderilir (sayaçlar etkilenmez; fiş ve satış raporunda görünür, iptal edilmeli)
+  router.put("/suitable-test", async (req, res) => {
+    const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Geçersiz istek." });
+    await setTestOrders(db, parsed.data.enabled);
+    res.json({ testOrders: parsed.data.enabled });
+  });
+
+  // Suitable işletme durumu (anahtarın kanalında teslimat/gel-al açık mı, kapalıysa nedeni)
+  router.get("/suitable-status", async (_req, res) => {
+    if (!sync || !suitable) return res.status(409).json({ error: "Suitable API kullanılmıyor." });
+    try {
+      const { stores } = await sync.client.listStores();
+      const brands = await db.brand.findMany({ orderBy: { sortOrder: "asc" } });
+      res.json({
+        stores: stores.map((s) => ({ id: s.id, name: s.name, brand: brands.find((b) => storeIdOf(suitable, b) === s.id)?.name ?? null, delivery: s.availability?.delivery ?? null, pickup: s.availability?.pickup ?? null })),
+      });
+    } catch (err) {
+      res.status(502).json({ error: `Suitable'a ulaşılamadı: ${(err as Error).message}` });
+    }
   });
 
   // Suitable'a yazılamayan siparişi yeniden dene (sayaçlar sıfırlanır)

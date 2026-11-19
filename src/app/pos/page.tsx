@@ -20,6 +20,7 @@ interface PosStatus {
   report: { snapshotAt: string | null; cafeName: string; posProducts: number; checked: number; ok: number; issues: Issue[] };
   alerts?: Partial<Record<"ui" | "auto" | "api", { text: string; at: string }>>;
   writeMode?: "api" | "extension";
+  testOrders?: boolean;
   suitable?: { configured: boolean; store: string | null; webhookSecretSet: boolean };
 }
 
@@ -42,6 +43,7 @@ export default function PosPage() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  const [stores, setStores] = useState<{ id: string; name: string | null; brand: string | null; delivery: { open?: boolean; reason?: string | null } | null; pickup: { open?: boolean; reason?: string | null } | null }[] | null>(null);
 
   const load = useCallback(async () => {
     if (brandId === undefined) return;
@@ -77,6 +79,30 @@ export default function PosPage() {
     try {
       await api("/api/pos/mode", { method: "PUT", json: { mode } });
       await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function setTest(enabled: boolean) {
+    setBusy("test");
+    try {
+      await api("/api/pos/suitable-test", { method: "PUT", json: { enabled } });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function checkStores() {
+    setBusy("stores");
+    setStores(null);
+    try {
+      setStores((await api<{ stores: { id: string; name: string | null; brand: string | null; delivery: { open?: boolean; reason?: string | null } | null; pickup: { open?: boolean; reason?: string | null } | null }[] }>("/api/pos/suitable-status")).stores);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -155,6 +181,32 @@ export default function PosPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-slate-500">API yönteminde sipariş hazır olunca sunucu POS&apos;a yazar, durumlar otomatik gelir. Eklenti yalnız menü ve müşteri bilgisi için kalır.</p>
+              {status.suitable?.configured && (
+                <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm">
+                  <label className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-1" disabled={busy === "test"} checked={!!status.testOrders} onChange={(e) => void setTest(e.target.checked)} />
+                    <span>
+                      <b>Siparişleri test olarak gönder</b>
+                      <span className="block text-xs text-slate-500">Puan, ziyaret, kampanya sayaçları ve stok etkilenmez. Fiş basılır ve satış raporunda görünür: denemeden sonra POS&apos;ta ya da panelden iptal edin. Canlıya geçerken kapatın.</span>
+                    </span>
+                  </label>
+                  <div>
+                    <button disabled={busy === "stores"} onClick={() => void checkStores()} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+                      Suitable işletme durumunu sorgula
+                    </button>
+                    {stores && (
+                      <ul className="mt-2 space-y-1 text-xs">
+                        {stores.map((s) => (
+                          <li key={s.id}>
+                            <b>{s.brand ?? s.name ?? s.id}</b>: teslimat {s.delivery?.open ? <span className="text-green-700">açık</span> : <span className="text-red-700">kapalı{s.delivery?.reason ? ` (${s.delivery.reason})` : ""}</span>}, gel-al {s.pickup?.open ? <span className="text-green-700">açık</span> : <span className="text-slate-500">kapalı{s.pickup?.reason ? ` (${s.pickup.reason})` : ""}</span>}
+                          </li>
+                        ))}
+                        {!stores.length && <li className="text-slate-500">Anahtara tanımlı işletme yok.</li>}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="font-medium">Eklenti</h2>

@@ -51,6 +51,9 @@ export interface ApiOrderLine {
   unitPrice: number;
   options?: { itemId: string; price: number; count?: number }[];
   note?: string;
+  /** Kampanya hediyesi (yalnız platform modu): unitPrice 0, seçenek yok, pricing.subtotal hesabına girmez */
+  gift?: boolean;
+  campaignId?: string;
 }
 
 export interface ApiOrderBody {
@@ -86,6 +89,17 @@ export interface ApiOrderStatus {
   total?: number;
 }
 
+export interface ApiStoreInfo {
+  id: string;
+  name: string | null;
+  availability?: { delivery?: { open?: boolean; reason?: string | null }; pickup?: { open?: boolean; reason?: string | null } };
+}
+
+export interface ApiOrderList {
+  orders: ApiOrderStatus[];
+  nextCursor: string | null;
+}
+
 export interface ApiEvaluateResult {
   subtotal: number;
   campaignDiscount: number;
@@ -103,7 +117,7 @@ export class SuitableClient {
     private readonly timeoutMs = 15_000,
   ) {}
 
-  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  private async requestFull<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ status: number; json: T | null; headers: Headers }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -119,6 +133,7 @@ export class SuitableClient {
     } finally {
       clearTimeout(timer);
     }
+    if (res.status === 304) return { status: 304, json: null, headers: res.headers };
     const text = await res.text();
     let json: unknown = null;
     try {
@@ -131,11 +146,29 @@ export class SuitableClient {
       const retry = Number(res.headers.get("retry-after"));
       throw new SuitableApiError(res.status, e?.code ?? `http_${res.status}`, e?.message ?? `Suitable ${res.status} döndü`, e?.details ?? {}, Number.isFinite(retry) && retry > 0 ? retry : null);
     }
-    return json as T;
+    return { status: res.status, json: json as T, headers: res.headers };
   }
 
-  getMenu(store: string): Promise<ApiMenu> {
-    return this.request("GET", `/menu?store=${encodeURIComponent(store)}`);
+  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+    return (await this.requestFull<T>(method, path, body)).json as T;
+  }
+
+  /** Menü; önceki ETag verilirse (ifNoneMatch sorgu parametresiyle) değişmediyse gövdesiz 304: notModified true. */
+  async getMenu(store: string, etag?: string | null): Promise<{ menu: ApiMenu | null; etag: string | null; notModified: boolean }> {
+    const q = `/menu?store=${encodeURIComponent(store)}${etag ? `&ifNoneMatch=${encodeURIComponent(etag)}` : ""}`;
+    const res = await this.requestFull<ApiMenu>("GET", q);
+    return { menu: res.json, etag: res.headers.get("etag") ?? etag ?? null, notModified: res.status === 304 };
+  }
+  listStores(): Promise<{ stores: ApiStoreInfo[] }> {
+    return this.request("GET", "/stores");
+  }
+  listOrders(store: string, o: { since?: string; status?: string; limit?: number; cursor?: string } = {}): Promise<ApiOrderList> {
+    const q = new URLSearchParams({ store });
+    if (o.since) q.set("since", o.since);
+    if (o.status) q.set("status", o.status);
+    if (o.limit) q.set("limit", String(o.limit));
+    if (o.cursor) q.set("cursor", o.cursor);
+    return this.request("GET", `/orders?${q.toString()}`);
   }
   createOrder(body: ApiOrderBody): Promise<ApiOrderResult> {
     return this.request("POST", "/orders", body);
