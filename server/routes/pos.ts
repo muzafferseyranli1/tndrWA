@@ -7,6 +7,8 @@ import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingP
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
 import { applyPosEvents, markPosEntered, readPosAlerts, setPosAlert, trackingList } from "../services/pos-tracking";
 import type { Messenger } from "../services/messenger";
+import type { SuitableEnv } from "../lib/env";
+import { getWriteMode, setWriteMode, storeIdOf, type SuitableSync } from "../services/suitable-sync";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -16,7 +18,7 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  * Eklenti uçları (/api/pos-ext): oturum çerezi yok, "X-Pos-Token" başlığındaki anahtarla doğrulanır.
  * POS şubesi (cafeId) bir markaya bağlanır; menü, müşteri ve siparişler o marka için işlenir.
  */
-export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: Messenger | null = null, publicBaseUrl: string | null = null): Router {
+export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: Messenger | null = null, publicBaseUrl: string | null = null, suitable: SuitableEnv | null = null): Router {
   const router = Router();
   // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
   router.use((req: Request, res: Response, next: NextFunction) => {
@@ -94,6 +96,8 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
   // Aynı POS şubesinde birden çok işletme (ör. Yerinde Pide, Yerinde Tandır) olabildiği için POS'a bağlı TÜM markaların siparişleri,
   // yazılacakları işletmeyle (POS şube kimliği + adı) birlikte döner; eklenti doğru işletmenin sipariş ekranını açar.
   router.get("/orders", async (_req, res) => {
+    // API yazma yönteminde siparişleri sunucu kendisi Suitable'a yazar; eklentiye sipariş verilmez (çift kayıt olmasın)
+    if ((await getWriteMode(db, suitable)) === "api") return void res.json({ brands: [], orders: [], lookups: await pendingPosLookups(db), writeMode: "api" });
     const brands = await db.brand.findMany({ where: { posCafeId: { not: null } }, orderBy: { sortOrder: "asc" } });
     const out = [];
     for (const brand of brands) {
@@ -165,7 +169,7 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
 }
 
 /** Panel (yönetici): eklenti anahtarı, şube bağlantısı, eşleşme raporu, eksik zorunlu seçeneği WhatsApp'a ekleme. */
-export function posAdminRouter(db: PrismaClient): Router {
+export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = null, sync: SuitableSync | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 
@@ -173,13 +177,30 @@ export function posAdminRouter(db: PrismaClient): Router {
     const brand = await resolveBrand(db, req.query.brandId);
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     const customers = (await db.setting.findUnique({ where: { key: customersKey(brand.code) } }))?.value;
-    res.json({ tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
+    res.json({ writeMode: await getWriteMode(db, suitable), suitable: suitable ? { configured: true, store: storeIdOf(suitable, brand), webhookSecretSet: !!suitable.webhookSecret } : { configured: false, store: null, webhookSecretSet: false }, tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
   });
 
   router.delete("/alerts/:kind", async (req, res) => {
     const kind = req.params.kind;
-    if (kind !== "ui" && kind !== "auto") return res.status(400).json({ error: "Geçersiz uyarı türü." });
+    if (kind !== "ui" && kind !== "auto" && kind !== "api") return res.status(400).json({ error: "Geçersiz uyarı türü." });
     await setPosAlert(db, kind, null);
+    res.json({ ok: true });
+  });
+
+  // POS'a yazma yöntemi: "api" (Suitable Dış Kaynak API'si) ya da "extension" (Chrome eklentisi)
+  router.put("/mode", async (req, res) => {
+    const parsed = z.object({ mode: z.enum(["api", "extension"]) }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Geçersiz yöntem." });
+    if (parsed.data.mode === "api" && !suitable) return res.status(409).json({ error: "Suitable API ayarları (SUITABLE_API_BASE, SUITABLE_API_KEY) sunucuda tanımlı değil." });
+    await setWriteMode(db, parsed.data.mode);
+    res.json({ writeMode: parsed.data.mode });
+  });
+
+  // Suitable'a yazılamayan siparişi yeniden dene (sayaçlar sıfırlanır)
+  router.post("/orders/:id/retry", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!sync || !Number.isInteger(id)) return res.status(409).json({ error: "Suitable API kullanılmıyor." });
+    if (!(await sync.retry(id))) return res.status(409).json({ error: "Sipariş yeniden denenemez (zaten POS'a yazılmış ya da bulunamadı)." });
     res.json({ ok: true });
   });
 

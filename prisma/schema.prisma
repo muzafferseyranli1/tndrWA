@@ -178,6 +178,12 @@ model Order {
   posAt          DateTime?
   /// POS takibinde "yola çıktı" görüldüğü an (1 saat içinde teslim görülmezse afiyet olsun + değerlendirme gider)
   onTheWayAt     DateTime?
+  /// Suitable Dış Kaynak API'sinde açılan siparişin kimliği (API yazma yönteminde); doluysa sipariş API ile izlenir
+  suitableId     String?
+  /// API'ye yazma denemesi sayısı, sonraki deneme zamanı ve son hata (kalıcı hatada personel elle girer)
+  suitableTries  Int       @default(0)
+  suitableNextAt DateTime?
+  suitableError  String?
   // Müşteriye son soru (seçenek/ödeme/adres) ne zaman gitti; 5 dk yanıt yoksa soru tekrarlanır, 5 dk daha yoksa sipariş iptal edilir
   promptedAt     DateTime?
   reminderSentAt DateTime?

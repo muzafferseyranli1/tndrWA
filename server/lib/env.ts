@@ -18,6 +18,17 @@ export interface WahaEnv {
   hmacKey: string;
 }
 
+export interface SuitableEnv {
+  /** Suitable Dış Kaynak API taban adresi (örn. https://api-suitable-live.web.app/v1); sonunda / olmaz */
+  baseUrl: string;
+  /** Bearer anahtarı (swk_...) */
+  apiKey: string;
+  /** Webhook imza gizlisi (whsec_...); yoksa webhook kabul edilmez */
+  webhookSecret: string | null;
+  /** Marka kodu -> Suitable işletme (store) kimliği; yoksa markanın POS şube kimliği kullanılır. SUITABLE_STORE_<KOD> */
+  stores: Record<string, string>;
+}
+
 export interface TelegramEnv {
   /** Marka kodu (küçük harf, örn. "pide") -> BotFather jetonu. Jeton TELEGRAM_BOT_TOKEN_<KOD> ortam değişkeninden okunur. */
   bots: Record<string, string>;
@@ -59,6 +70,8 @@ export interface Env {
   whatsappCloud: WhatsappCloudEnv | null;
   /** Telegram botları (marka başına jeton); hiç jeton yoksa null: webhook kabul edilmez. */
   telegram: TelegramEnv | null;
+  /** Suitable Dış Kaynak API; SUITABLE_API_BASE ve SUITABLE_API_KEY yoksa null (POS'a eklentiyle yazılır). */
+  suitable: SuitableEnv | null;
 }
 
 export class EnvError extends Error {
@@ -165,6 +178,23 @@ export function loadEnv(source: Source = process.env): Env {
     ? { bots: tgBots, apiBase: (source.TELEGRAM_API_BASE?.trim() || "https://api.telegram.org").replace(/\/+$/, ""), configureOnStart: source.TELEGRAM_SET_WEBHOOK?.trim() === "1" }
     : null;
 
+  // Suitable Dış Kaynak API (taban adres + anahtar birlikte verilmeli)
+  const suitBase = source.SUITABLE_API_BASE?.trim();
+  const suitKey = source.SUITABLE_API_KEY?.trim();
+  let suitable: SuitableEnv | null = null;
+  if (suitBase || suitKey) {
+    if (!suitBase || !suitKey) problems.push("Suitable API ayarları yarım: SUITABLE_API_BASE ve SUITABLE_API_KEY birlikte verilmeli");
+    else if (!/^https?:\/\/[^\s/]+/.test(suitBase)) problems.push("SUITABLE_API_BASE http(s):// ile başlamalı");
+    else {
+      const stores: Record<string, string> = {};
+      for (const [key, value] of Object.entries(source)) {
+        const m = /^SUITABLE_STORE_([A-Z0-9_]+)$/.exec(key);
+        if (m && value?.trim()) stores[m[1].toLowerCase()] = value.trim();
+      }
+      suitable = { baseUrl: suitBase.replace(/\/+$/, ""), apiKey: suitKey, webhookSecret: source.SUITABLE_WEBHOOK_SECRET?.trim() || null, stores };
+    }
+  }
+
   const publicRaw = source.PUBLIC_BASE_URL?.trim();
   let publicBaseUrl: string | null = null;
   if (publicRaw) {
@@ -191,5 +221,6 @@ export function loadEnv(source: Source = process.env): Env {
     waha,
     whatsappCloud,
     telegram,
+    suitable,
   };
 }

@@ -24,14 +24,15 @@ export const posSnapshotSchema = z.object({
         sku: z.string().trim().max(100).nullable().default(null),
         active: z.boolean().default(true),
         price: price.default(0),
-        variants: z.array(z.object({ name: z.string().trim().max(100), price: price.default(0) })).max(50).default([]),
+        variants: z.array(z.object({ name: z.string().trim().max(100), price: price.default(0), id: z.string().trim().max(120).optional() })).max(50).default([]),
         options: z
           .array(
             z.object({
               name,
+              id: z.string().trim().max(120).optional(),
               min: z.number().int().min(0).max(99).default(0),
               max: z.number().int().min(0).max(99).default(1),
-              items: z.array(z.object({ name, price: price.default(0) })).max(200).default([]),
+              items: z.array(z.object({ name, price: price.default(0), id: z.string().trim().max(120).optional() })).max(200).default([]),
             }),
           )
           .max(50)
@@ -222,7 +223,7 @@ export function posPayment(label: string): PosOrderPayload["payment"] {
   return { label, button: "Diğer", sub: null };
 }
 
-type OrderWithItems = {
+export type OrderWithItems = {
   id: number;
   createdAt: Date;
   note: string;

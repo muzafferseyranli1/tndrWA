@@ -1,3 +1,4 @@
+import type { SuitableSync } from "../services/suitable-sync";
 import express, { Router } from "express";
 import { z } from "zod";
 import type { Brand, Customer, Order, OrderChange, OrderItem, OrderItemOption, PrismaClient } from "@prisma/client";
@@ -50,7 +51,7 @@ export function toOrderDto(o: OrderRow): OrderDto {
 
 const ACTIVE: OrderStatus[] = ["NEW", "PREPARING", "ON_THE_WAY"];
 
-export function ordersRouter(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null = null): Router {
+export function ordersRouter(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null = null, suitable: SuitableSync | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
 
@@ -116,6 +117,8 @@ export function ordersRouter(db: PrismaClient, cloud: Messenger | null, publicBa
       include: { ...INCLUDE, brand: true },
     });
     const notice = notify ? await notifyOrderStatus(db, cloud, updated as OrderRow & { brand: Brand }, status, publicBaseUrl) : { sent: false };
+    // Suitable API ile açılmış sipariş panelden iptal edilirse Suitable'ta da iptal edilir (kuryeye çıkmışsa mümkün değildir, siparişe not düşer)
+    if (status === "CANCELLED" && existing.suitableId && suitable) void suitable.cancelOrder(id, "Panelden iptal edildi");
     res.json({ order: toOrderDto(updated), notice });
   });
 

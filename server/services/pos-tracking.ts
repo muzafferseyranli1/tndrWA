@@ -14,8 +14,8 @@ import type { Messenger } from "./messenger";
 export const DELIVERY_FALLBACK_MS = 60 * 60 * 1000;
 const TRACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-/** Eklentinin panele bıraktığı uyarılar: "ui" = POS arayüzünde beklenen parça yok, "auto" = otomatik mod art arda hata verip kendini kapattı. */
-export type PosAlertKind = "ui" | "auto";
+/** Panele bırakılan uyarılar: "ui" = POS arayüzünde beklenen parça yok, "auto" = otomatik mod art arda hata verip kendini kapattı (eklenti); "api" = sipariş Suitable API'sine yazılamadı. */
+export type PosAlertKind = "ui" | "auto" | "api";
 export type PosAlerts = Partial<Record<PosAlertKind, { text: string; at: string }>>;
 const ALERT_KEY = "pos.alerts";
 
@@ -77,7 +77,7 @@ export async function markPosEntered(db: PrismaClient, cloud: Messenger | null, 
 /** Eklentinin izleyeceği siparişler: POS'a girilmiş, bitmemiş, son 24 saat. */
 export async function trackingList(db: PrismaClient): Promise<{ id: number; posRef: string; posCafeId: string; posAt: string; status: string }[]> {
   const rows = await db.order.findMany({
-    where: { posRef: { not: null }, status: { in: ["NEW", "PREPARING", "ON_THE_WAY"] }, posAt: { gte: new Date(Date.now() - TRACK_WINDOW_MS) }, brand: { posCafeId: { not: null } } },
+    where: { posRef: { not: null }, suitableId: null, status: { in: ["NEW", "PREPARING", "ON_THE_WAY"] }, posAt: { gte: new Date(Date.now() - TRACK_WINDOW_MS) }, brand: { posCafeId: { not: null } } },
     include: { brand: { select: { posCafeId: true } } },
     orderBy: { posAt: "asc" },
     take: 100,

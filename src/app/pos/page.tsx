@@ -18,7 +18,9 @@ interface PosStatus {
   posCafeId: string | null;
   customers: { read: number; noPhone: number; created: number; existing: number; namesFilled: number; addressesAdded: number; at: string; batch: number; of: number } | null;
   report: { snapshotAt: string | null; cafeName: string; posProducts: number; checked: number; ok: number; issues: Issue[] };
-  alerts?: Partial<Record<"ui" | "auto", { text: string; at: string }>>;
+  alerts?: Partial<Record<"ui" | "auto" | "api", { text: string; at: string }>>;
+  writeMode?: "api" | "extension";
+  suitable?: { configured: boolean; store: string | null; webhookSecretSet: boolean };
 }
 
 const KINDS: { kind: Issue["kind"]; title: string; hint: string; tone: string }[] = [
@@ -69,7 +71,20 @@ export default function PosPage() {
     }
   }
 
-  async function dismissAlert(kind: "ui" | "auto") {
+  async function setMode(mode: "api" | "extension") {
+    if (mode === "api" && !confirm("Siparişler bundan sonra POS'a sunucu tarafından Suitable API ile yazılacak; eklenti sipariş yazmayacak. Devam edilsin mi?")) return;
+    setBusy("mode");
+    try {
+      await api("/api/pos/mode", { method: "PUT", json: { mode } });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function dismissAlert(kind: "ui" | "auto" | "api") {
     await api(`/api/pos/alerts/${kind}`, { method: "DELETE" });
     await load();
   }
@@ -104,12 +119,12 @@ export default function PosPage() {
         <p className="mb-6 text-sm text-slate-500">Suitable POS eklentisi POS&apos;tan menüyü ve müşterileri okur, WhatsApp siparişlerini POS&apos;un Paket ekranına doldurur; &quot;Sipariş Oluştur&quot;a personel basar.</p>
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {!status && !error && <p className="text-slate-500">Yükleniyor…</p>}
-        {(["ui", "auto"] as const).map((k) => {
+        {(["api", "ui", "auto"] as const).map((k) => {
           const a = status?.alerts?.[k];
           return a ? (
             <div key={k} role="alert" className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
               <p className="min-w-0 flex-1">
-                <b>{k === "ui" ? "POS arayüzü değişmiş olabilir." : "Otomatik mod kapandı."}</b> {a.text} <span className="text-red-600">({when(a.at)})</span>
+                <b>{k === "ui" ? "POS arayüzü değişmiş olabilir." : k === "api" ? "Sipariş Suitable'a yazılamadı." : "Otomatik mod kapandı."}</b> {a.text} <span className="text-red-600">({when(a.at)})</span>
               </p>
               <button onClick={() => void dismissAlert(k)} className="rounded border border-red-300 bg-white px-2 py-1 text-xs hover:bg-red-100">
                 Tamam, ilgilendim
@@ -119,6 +134,28 @@ export default function PosPage() {
         })}
         {status && (
           <div className="space-y-6">
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-medium">POS&apos;a yazma yöntemi</h2>
+              <p className="mb-3 text-sm text-slate-500">
+                {status.suitable?.configured
+                  ? <>Suitable API tanımlı. İşletme kimliği: <code>{status.suitable.store ?? "yok"}</code>. Durum bildirimi (webhook): {status.suitable.webhookSecretSet ? <b className="text-green-700">açık</b> : <b className="text-amber-700">gizli anahtar yok, yoklamayla izlenir</b>}.</>
+                  : "Suitable API ayarları (SUITABLE_API_BASE, SUITABLE_API_KEY) sunucuda tanımlı değil; siparişler eklentiyle yazılır."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(["extension", "api"] as const).map((m) => (
+                  <button
+                    key={m}
+                    disabled={busy === "mode" || (m === "api" && !status.suitable?.configured)}
+                    onClick={() => status.writeMode !== m && void setMode(m)}
+                    className={`rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${status.writeMode === m ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300 bg-white hover:bg-slate-50"}`}
+                  >
+                    {m === "api" ? "Suitable API" : "Chrome eklentisi"}
+                    {status.writeMode === m ? " (kullanımda)" : ""}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">API yönteminde sipariş hazır olunca sunucu POS&apos;a yazar, durumlar otomatik gelir. Eklenti yalnız menü ve müşteri bilgisi için kalır.</p>
+            </section>
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="font-medium">Eklenti</h2>
               <p className="mb-3 text-sm text-slate-500">

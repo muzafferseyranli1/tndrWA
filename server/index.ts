@@ -12,6 +12,7 @@ import { catalogThumbRouter } from "./routes/catalog-thumb";
 import { reportsRouter } from "./routes/reports";
 import { menuSyncRouter } from "./routes/menu-sync";
 import { posAdminRouter, posExtRouter } from "./routes/pos";
+import { SuitableSync } from "./services/suitable-sync";
 import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
@@ -103,10 +104,13 @@ async function main() {
   const telegramClients = Object.fromEntries(Object.entries(env.telegram?.bots ?? {}).map(([code, token]) => [code, new TelegramClient(token, env.telegram!.apiBase)]));
   const gateway = new Gateway(whatsappClient, telegramClients);
   const cloudForAck = gateway;
+  // Suitable Dış Kaynak API (env tanımlıysa): yazma yöntemi "api" iken siparişleri POS'a sunucu yazar
+  const suitableSync = env.suitable ? new SuitableSync(db, env.suitable, cloudForAck, env.publicBaseUrl) : null;
   app.use(
     "/api/webhooks",
     webhooksRouter(db, env, {
       gateway,
+      suitable: suitableSync ?? undefined,
       // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
       onOrderCreated: (orderId) =>
         void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => offerMergeOrStart(db, cloudForAck, orderId)),
@@ -127,7 +131,7 @@ async function main() {
   // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
   let posPriceChange: (brandId: number) => void = () => undefined;
-  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl));
+  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl, env.suitable));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -143,7 +147,7 @@ async function main() {
   app.use("/api/staff", staffRouter(db, env));
   app.use("/api/catalog-thumbnail", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), catalogThumbRouter(db));
   app.use("/api/reports", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), reportsRouter(db));
-  app.use("/api/pos", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), posAdminRouter(db));
+  app.use("/api/pos", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), posAdminRouter(db, env.suitable, suitableSync));
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);
@@ -169,7 +173,7 @@ async function main() {
   app.use("/api/menu-sync", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), menuSyncRouter(db, onChange));
   app.use("/api/meta", metaRouter(db, coordinator));
   app.use("/api/whatsapp", whatsappRouter(db, env, env.waha ? new WahaClient(env.waha) : null, whatsappClient));
-  app.use("/api/orders", ordersRouter(db, gateway, env.publicBaseUrl));
+  app.use("/api/orders", ordersRouter(db, gateway, env.publicBaseUrl, suitableSync));
   app.use("/api/sound", soundRouter(db, env.uploadDir));
   app.use("/api/messages", messagesRouter(db));
   app.use("/api/chat", chatRouter(db, gateway));
@@ -184,6 +188,7 @@ async function main() {
   // Yanıt vermeyen müşteri: 5 dk sonra soru tekrarı + hatırlatma, 5 dk daha yanıt yoksa otomatik iptal
   startOrderTimeouts(db, cloudForAck, Number(process.env.ORDER_TIMEOUT_TICK_MS) || 20_000);
   startDeliveryFallback(db, cloudForAck, env.publicBaseUrl);
+  suitableSync?.start(Number(process.env.SUITABLE_TICK_MS) || 5_000, Number(process.env.SUITABLE_POLL_MS) || 60_000);
   // Telegram: yalnız canlıda (TELEGRAM_SET_WEBHOOK=1) webhook ve bot açıklaması yazılır; arka planda, açılışı geciktirmez
   if (env.telegram?.configureOnStart && env.publicBaseUrl?.startsWith("https://")) {
     void configureTelegramBots(db, telegramClients, env.publicBaseUrl);

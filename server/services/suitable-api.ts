@@ -1,0 +1,308 @@
+import type { PrismaClient } from "@prisma/client";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { findPosProduct, groupMatches, matchChoice, optNorm, posPayment, type OrderWithItems, type PosSnapshotData } from "./pos-map";
+
+/**
+ * Suitable Dış Kaynak API (v1) istemcisi ve sipariş çevirisi.
+ * Fiyatı biz hesaplarız (platform modu): satırların birim fiyatı, seçenek fiyatları, indirim ve toplam olduğu gibi kaydedilir;
+ * pricing.subtotal satırların toplamına, pricing.total = subtotal - discount (+ campaignDiscount/loyaltyDiscount çıkarılır) eşit olmalıdır.
+ */
+
+export class SuitableApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly details: Record<string, unknown> = {},
+    readonly retryAfterSec: number | null = null,
+  ) {
+    super(message);
+  }
+  /** Yeniden denenebilir mi: ağ hatası, sunucu hatası, hız sınırı, işletme şimdilik kapalı. Diğer 4xx hatalar kalıcıdır (personel elle girer). */
+  get retryable(): boolean {
+    return this.status === 0 || this.status >= 500 || this.status === 429 || this.code === "store_closed";
+  }
+}
+
+export interface ApiMenuOptionItem { id: string; name: string; price: number }
+export interface ApiMenuOptionGroup { id: string; name: string; min?: number | null; max?: number | null; items: ApiMenuOptionItem[] }
+export interface ApiMenuProduct {
+  id: string;
+  name: string;
+  description?: string;
+  image?: string | null;
+  active?: boolean;
+  inStock?: boolean;
+  price?: number;
+  variants?: { id: string; name: string; price: number }[];
+  optionGroups?: ApiMenuOptionGroup[];
+}
+export interface ApiMenu {
+  store?: { id?: string; name?: string; availability?: { delivery?: { open?: boolean; reason?: string }; pickup?: { open?: boolean; reason?: string } } };
+  categories?: { id: string; name: string; active?: boolean; products?: ApiMenuProduct[] }[];
+  combos?: unknown[];
+  generatedAt?: string;
+}
+
+export interface ApiOrderLine {
+  productId: string;
+  variantId?: string;
+  quantity: number;
+  unitPrice: number;
+  options?: { itemId: string; price: number; count?: number }[];
+  note?: string;
+}
+
+export interface ApiOrderBody {
+  externalId: string;
+  store: string;
+  channel?: string;
+  test?: boolean;
+  customer: { name: string; phone: string };
+  delivery: { type: "delivery" | "pickup"; address?: { text: string; lat?: number; lng?: number } };
+  lines: ApiOrderLine[];
+  payment: { method: "cash" | "card_on_delivery" | "meal_card"; provider?: string };
+  pricing: { subtotal: number; discount?: { amount: number; label?: string }; campaignDiscount?: number; loyaltyDiscount?: number; deliveryFee?: number; total: number };
+  campaignIds?: string[];
+  loyalty?: { couponCode?: string; pointsRedeemed?: number; giftCampaign?: string };
+  note?: string;
+}
+
+export interface ApiOrderResult {
+  orderId: string;
+  externalId?: string;
+  receiptNo: string | null;
+  status: string;
+  total?: number;
+  duplicate?: boolean;
+}
+
+export interface ApiOrderStatus {
+  orderId: string;
+  externalId?: string;
+  receiptNo?: string | null;
+  status: string;
+  statusCode?: number;
+  total?: number;
+}
+
+export interface ApiEvaluateResult {
+  subtotal: number;
+  campaignDiscount: number;
+  appliedCampaigns: { id: string; name: string; discount: number }[];
+  optionalCampaigns: { id: string; name: string; description?: string; blocked?: boolean; previewDiscount?: number; gifts?: unknown[] }[];
+  gifts: { productId: string; name: string; count: number; campaignId?: string }[];
+  discountedSubtotal: number;
+  warnings: string[];
+}
+
+export class SuitableClient {
+  constructor(
+    private readonly cfg: { baseUrl: string; apiKey: string },
+    private readonly fetchFn: typeof fetch = fetch,
+    private readonly timeoutMs = 15_000,
+  ) {}
+
+  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    let res: Response;
+    try {
+      res = await this.fetchFn(`${this.cfg.baseUrl}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${this.cfg.apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (err) {
+      throw new SuitableApiError(0, "network", ctrl.signal.aborted ? "Suitable yanıt vermedi (zaman aşımı)" : `Suitable'a ulaşılamadı: ${(err as Error).message}`);
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      /* gövde JSON değil */
+    }
+    if (!res.ok) {
+      const e = (json as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null)?.error;
+      const retry = Number(res.headers.get("retry-after"));
+      throw new SuitableApiError(res.status, e?.code ?? `http_${res.status}`, e?.message ?? `Suitable ${res.status} döndü`, e?.details ?? {}, Number.isFinite(retry) && retry > 0 ? retry : null);
+    }
+    return json as T;
+  }
+
+  getMenu(store: string): Promise<ApiMenu> {
+    return this.request("GET", `/menu?store=${encodeURIComponent(store)}`);
+  }
+  createOrder(body: ApiOrderBody): Promise<ApiOrderResult> {
+    return this.request("POST", "/orders", body);
+  }
+  getOrder(orderId: string): Promise<ApiOrderStatus> {
+    return this.request("GET", `/orders/${encodeURIComponent(orderId)}`);
+  }
+  cancelOrder(orderId: string, reason?: string): Promise<ApiOrderStatus> {
+    return this.request("POST", `/orders/${encodeURIComponent(orderId)}/cancel`, reason ? { reason: reason.slice(0, 200) } : {});
+  }
+  evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: { campaignIds: string[] } }): Promise<ApiEvaluateResult> {
+    return this.request("POST", "/orders/evaluate", body);
+  }
+}
+
+/** API menüsünü POS anlık görüntüsü biçimine çevirir (adla eşleştirme mantığı aynı kalır; kimlikler sipariş yazarken kullanılır). Kombolar atlanır. */
+export function menuToSnapshot(menu: ApiMenu, storeId: string): PosSnapshotData {
+  const products: PosSnapshotData["products"] = [];
+  for (const c of menu.categories ?? []) {
+    for (const p of c.products ?? []) {
+      const variants = (p.variants ?? []).map((v) => ({ id: v.id, name: v.name, price: v.price }));
+      products.push({
+        id: p.id,
+        name: p.name,
+        category: c.name,
+        sku: null,
+        active: p.active !== false && p.inStock !== false && c.active !== false,
+        price: p.price ?? variants[0]?.price ?? 0,
+        variants,
+        options: (p.optionGroups ?? []).map((g) => ({
+          id: g.id,
+          name: g.name,
+          min: Math.max(0, g.min ?? 0),
+          max: g.max == null ? 99 : Math.max(0, g.max),
+          items: (g.items ?? []).map((i) => ({ id: i.id, name: i.name, price: i.price })),
+        })),
+      });
+    }
+  }
+  return { cafeId: storeId, cafeName: menu.store?.name ?? "", products };
+}
+
+const PROVIDERS: [RegExp, string][] = [
+  [/edenred|ticket/, "edenred"],
+  [/multinet/, "multinet"],
+  [/pluxee|sodexo/, "pluxee"],
+  [/setcard/, "setcard"],
+  [/metropol/, "metropol"],
+];
+
+/** Panel ödeme şeklini API ödeme yöntemine çevirir. Tanınmayan şekil kapıda kart sayılır (uyarı döner). */
+export function apiPayment(label: string): { payment: ApiOrderBody["payment"]; warning: string | null } {
+  // Yemek kartı: sağlayıcı adı ya da "yemek" geçiyorsa (örn. "Yemek kartı", "Yemek çeki (Multinet)")
+  const lower = label.toLocaleLowerCase("tr");
+  const provider0 = PROVIDERS.find(([re]) => re.test(lower))?.[1];
+  if (provider0 || /yemek/.test(lower)) return { payment: provider0 ? { method: "meal_card", provider: provider0 } : { method: "meal_card" }, warning: null };
+  const p = posPayment(label);
+  if (p.button === "Nakit") return { payment: { method: "cash" }, warning: null };
+  if (p.button === "Kredi Kartı") return { payment: { method: "card_on_delivery" }, warning: null };
+  if (p.button === "Yemek Çeki") {
+    const l = `${p.sub ?? ""} ${label}`.toLocaleLowerCase("tr");
+    const provider = PROVIDERS.find(([re]) => re.test(l))?.[1];
+    return { payment: provider ? { method: "meal_card", provider } : { method: "meal_card" }, warning: null };
+  }
+  return { payment: { method: "card_on_delivery" }, warning: `Ödeme şekli "${label}" API'de karşılığı yok, kapıda kart olarak yazıldı` };
+}
+
+/** +90... biçimine: 905551234567 -> +905551234567 */
+export function apiPhone(waId: string | null | undefined): string | null {
+  const digits = (waId ?? "").replace(/\D/g, "");
+  return digits.length >= 10 ? `+${digits}` : null;
+}
+
+const tl = (kurus: number) => Math.round(kurus) / 100;
+
+export type BuildResult = { ok: true; body: ApiOrderBody; warnings: string[] } | { ok: false; error: string };
+
+/**
+ * Siparişi API gövdesine çevirir. POS menüsünde karşılığı olmayan ürün/porsiyon sipariş yazılmasını engeller (hata döner);
+ * karşılığı olmayan seçenekler birim fiyata eklenir ve satır notuna yazılır, böylece toplam bozulmaz.
+ */
+export async function buildApiOrder(db: PrismaClient, order: OrderWithItems & { channel?: string }, snap: PosSnapshotData, storeId: string): Promise<BuildResult> {
+  const warnings: string[] = [];
+  const phone = apiPhone(order.customer.waId);
+  if (!phone) return { ok: false, error: "Müşterinin telefon numarası yok (API için zorunlu)" };
+  if (!order.address.trim()) return { ok: false, error: "Teslimat adresi yok" };
+
+  const productIds = order.items.map((i) => i.productId).filter((x): x is number => x !== null);
+  const products = productIds.length ? await db.product.findMany({ where: { id: { in: productIds } }, include: { optionGroups: { include: { group: { include: { choices: true } } } } } }) : [];
+  const byId = new Map(products.map((p) => [p.id, p]));
+
+  const lines: ApiOrderLine[] = [];
+  for (const item of order.items) {
+    const p = item.productId !== null ? byId.get(item.productId) : undefined;
+    if (!p) return { ok: false, error: `"${item.name}" panelde artık yok, POS ürünü bulunamadı` };
+    const found = findPosProduct(snap.products, p);
+    if ("error" in found) return { ok: false, error: found.error === "noProduct" ? `"${item.name}" POS menüsünde bulunamadı` : `"${item.name}" için POS'ta porsiyon bulunamadı (${p.variantLabel ?? "-"})` };
+    const pos = found.product;
+    const variant = pos.variants.length ? pos.variants.find((v) => v.name === found.variant) ?? null : null;
+    if (pos.variants.length && !variant?.id) return { ok: false, error: `"${item.name}" için POS porsiyon kimliği alınamadı` };
+
+    const options: NonNullable<ApiOrderLine["options"]> = [];
+    const notes: string[] = [];
+    let matchedKurus = 0;
+    for (const a of item.options.filter((o) => o.choiceName)) {
+      const panelGroup = p.optionGroups.map((l) => l.group).find((g) => (a.groupId !== null ? g.id === a.groupId : g.name === a.groupName));
+      const pg = pos.options.find((o) => (panelGroup ? groupMatches(panelGroup, o) : optNorm(o.name) === optNorm(a.groupName)));
+      const picked = a.choiceName.split(" + ").map((x) => x.trim()).filter(Boolean);
+      for (const choice of picked) {
+        const panelChoice = panelGroup?.choices.find((c) => c.name === choice);
+        const hit = pg ? matchChoice(panelChoice ?? { name: choice, posName: null }, pg.items) : undefined;
+        const price = picked.length === 1 ? (a as { extraKurus?: number }).extraKurus ?? panelChoice?.extraKurus ?? 0 : panelChoice?.extraKurus ?? 0;
+        const hitItem = hit ? pg!.items.find((i) => i.name === hit.name) : undefined;
+        if (hitItem?.id) {
+          options.push({ itemId: hitItem.id, price: tl(price) });
+          matchedKurus += price;
+        } else {
+          notes.push(`${a.groupName}: ${choice}`);
+          warnings.push(`"${item.name}": "${a.groupName}: ${choice}" POS'ta bulunamadı, nota yazıldı`);
+        }
+      }
+    }
+    // Karşılığı bulunamayan seçeneklerin ücreti birim fiyatta kalır: satır toplamı bizim hesapla aynı olur
+    const unitKurus = Math.max(0, item.unitKurus + item.extraKurus - matchedKurus);
+    lines.push({
+      productId: pos.id,
+      ...(variant?.id ? { variantId: variant.id } : {}),
+      quantity: item.quantity,
+      unitPrice: tl(unitKurus),
+      ...(options.length ? { options } : {}),
+      ...(notes.length ? { note: notes.join(", ").slice(0, 200) } : {}),
+    });
+  }
+
+  const subtotalKurus = order.items.reduce((n, i) => n + i.quantity * (i.unitKurus + i.extraKurus), 0);
+  if (subtotalKurus !== order.totalKurus) warnings.push(`Satır toplamı (${tl(subtotalKurus)}) sipariş toplamından (${tl(order.totalKurus)}) farklı, satır toplamı gönderildi`);
+  const discountKurus = Math.min(order.discountKurus, subtotalKurus);
+  const pay = apiPayment(order.paymentLabel);
+  if (pay.warning) warnings.push(pay.warning);
+  const note = [`WA#${order.id}`, order.paymentLabel, order.note].filter((x) => x && x.trim()).join(" · ").slice(0, 500);
+
+  const body: ApiOrderBody = {
+    externalId: `yrndwa-${order.id}`,
+    store: storeId,
+    channel: order.channel === "telegram" ? "telegram" : "whatsapp",
+    customer: { name: (order.customer.name ?? "").trim() || "Müşteri", phone },
+    delivery: { type: "delivery", address: { text: order.address.slice(0, 500), ...(order.lat !== null && order.lng !== null ? { lat: order.lat, lng: order.lng } : {}) } },
+    lines,
+    payment: pay.payment,
+    pricing: {
+      subtotal: tl(subtotalKurus),
+      ...(discountKurus > 0 ? { discount: { amount: tl(discountKurus), label: (order.discountNote || (order.discountPercent > 0 ? `%${order.discountPercent} ${order.paymentLabel}` : order.paymentLabel)).slice(0, 80) } } : {}),
+      total: tl(subtotalKurus - discountKurus),
+    },
+    ...(note ? { note } : {}),
+  };
+  return { ok: true, body, warnings };
+}
+
+/** Webhook imzası: "sha256=" + HMAC_SHA256(gizli, timestamp + "." + hamGövde). Zaman damgası 5 dakikadan eskiyse reddedilir. */
+export function verifySuitableSignature(secret: string, timestamp: string | undefined, rawBody: string | Buffer, header: string | undefined, nowSec = Math.floor(Date.now() / 1000)): "ok" | "bad_signature" | "stale" {
+  if (!timestamp || !header) return "bad_signature";
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) return "bad_signature";
+  const expected = `sha256=${createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest("hex")}`;
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return "bad_signature";
+  return Math.abs(nowSec - ts) > 300 ? "stale" : "ok";
+}

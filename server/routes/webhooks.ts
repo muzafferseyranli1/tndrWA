@@ -10,6 +10,8 @@ import { recordInbound, recordStatus, type InboundRecord } from "../services/cha
 import { TelegramClient, webhookSecret } from "../services/telegram";
 import type { Gateway } from "../services/messenger";
 import { handleTelegramUpdate, type TgUpdate } from "../services/telegram-bot";
+import type { SuitableSync } from "../services/suitable-sync";
+import { verifySuitableSignature } from "../services/suitable-api";
 
 /** WAHA motorlarına göre mesaj türü farklı yerde durur; ham gövde her zaman saklandığı için en iyi tahmin yeterli. */
 export function detectMessageType(payload: unknown): string | null {
@@ -60,6 +62,8 @@ export function isDiscoveryEvent(event: string, messageType: string | null, rawT
 export interface WebhookHooks {
   /** Müşteriye mesaj gönderen geçit (Telegram güncellemeleri sohbet akışına bununla bağlanır) */
   gateway?: Gateway;
+  /** Suitable Dış Kaynak API: sipariş durumu webhook'u (imza gizlisi tanımlıysa kabul edilir) */
+  suitable?: SuitableSync;
   /** Yeni sipariş kaydedildi (müşteriye "aldık" mesajı vb. için) */
   onOrderCreated?: (orderId: number) => void;
   /** Sepet reddedildi (kapalı ya da minimum sepet altında): sipariş açılmadı, müşteriye bilgi verilir */
@@ -143,6 +147,45 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
     }
     logger.warn({ ip: req.ip }, "Meta webhook doğrulaması reddedildi");
     return res.status(403).send("Doğrulama başarısız.");
+  });
+
+  // Suitable sipariş durumu: X-Signature = sha256=HMAC(gizli, X-Timestamp + "." + hamGövde); aynı X-Delivery-Id tekrar gelirse yok sayılır
+  const seenDeliveries = new Set<string>();
+  router.post("/suitable", express.raw({ type: () => true, limit: "100kb" }), async (req, res) => {
+    const secret = env.suitable?.webhookSecret;
+    const sync = hooks.suitable;
+    if (!secret || !sync) return res.status(503).json({ error: "Suitable webhook ayarları tanımlı değil." });
+    const raw = req.body;
+    if (!Buffer.isBuffer(raw) || raw.length === 0) return res.status(400).json({ error: "Boş gövde." });
+    const check = verifySuitableSignature(secret, req.header("x-timestamp"), raw, req.header("x-signature"));
+    if (check !== "ok") {
+      logger.warn({ ip: req.ip, check }, "Suitable webhook: imza reddedildi");
+      return res.status(check === "stale" ? 400 : 401).json({ error: check === "stale" ? "Zaman damgası çok eski." : "İmza geçersiz." });
+    }
+    const deliveryId = req.header("x-delivery-id");
+    if (deliveryId && seenDeliveries.has(deliveryId)) return res.json({ ok: true, duplicate: true });
+    let body: { event?: string; orderId?: string; externalId?: string; status?: string; cancelReason?: string | null };
+    try {
+      body = JSON.parse(raw.toString("utf8"));
+    } catch {
+      return res.status(400).json({ error: "Geçersiz JSON." });
+    }
+    if (deliveryId) {
+      seenDeliveries.add(deliveryId);
+      if (seenDeliveries.size > 1000) seenDeliveries.delete(seenDeliveries.values().next().value as string);
+    }
+    // Hızlı yanıt: 10 sn içinde 2xx beklenir
+    try {
+      if (body.event === "order.status" && body.status) {
+        const changed = await sync.applyStatus({ orderId: body.orderId, externalId: body.externalId }, body.status, body.cancelReason ?? null);
+        logger.info({ status: body.status, externalId: body.externalId, changed }, "Suitable sipariş durumu alındı");
+      }
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, "Suitable durum işlenemedi");
+      if (deliveryId) seenDeliveries.delete(deliveryId);
+      return res.status(500).json({ error: "İşlenemedi." }); // Suitable yeniden dener
+    }
+    res.json({ ok: true });
   });
 
   router.post("/meta", express.raw({ type: () => true, limit: "5mb" }), async (req, res) => {
