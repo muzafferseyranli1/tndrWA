@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { PriceMode } from "../lib/env";
 import { findPosProduct, groupMatches, matchChoice, optNorm, posPayment, type OrderWithItems, type PosSnapshotData } from "./pos-map";
 
 /**
@@ -65,7 +66,7 @@ export interface ApiOrderBody {
   delivery: { type: "delivery" | "pickup"; address?: { text: string; lat?: number; lng?: number } };
   lines: ApiOrderLine[];
   payment: { method: "cash" | "card_on_delivery" | "meal_card"; provider?: string };
-  pricing: { subtotal: number; discount?: { amount: number; label?: string }; campaignDiscount?: number; loyaltyDiscount?: number; deliveryFee?: number; total: number };
+  pricing?: { subtotal: number; discount?: { amount: number; label?: string }; campaignDiscount?: number; loyaltyDiscount?: number; deliveryFee?: number; total: number };
   campaignIds?: string[];
   loyalty?: { couponCode?: string; pointsRedeemed?: number; giftCampaign?: string };
   note?: string;
@@ -77,6 +78,7 @@ export interface ApiOrderResult {
   receiptNo: string | null;
   status: string;
   total?: number;
+  campaignDiscount?: number;
   duplicate?: boolean;
 }
 
@@ -100,10 +102,22 @@ export interface ApiOrderList {
   nextCursor: string | null;
 }
 
+export interface ApiWebhookConfig {
+  url: string | null;
+  configured: boolean;
+  lastAttemptAt?: number | null;
+  lastDeliveredAt?: number | null;
+  lastStatusCode?: number | null;
+  lastError?: string | null;
+  lastTest?: { at: number; ok: boolean; statusCode?: number | null; error?: string | null } | null;
+}
+
 export interface ApiEvaluateResult {
   subtotal: number;
   campaignDiscount: number;
   appliedCampaigns: { id: string; name: string; discount: number }[];
+  /** true ise aynı sonuç sipariş açılırken Suitable tarafından uygulanır (kampanyayı sunucunun uyguladığı anahtar): kampanya alanları gönderilmez */
+  appliedByServer?: boolean;
   optionalCampaigns: { id: string; name: string; description?: string; blocked?: boolean; previewDiscount?: number; gifts?: unknown[] }[];
   gifts: { productId: string; name: string; count: number; campaignId?: string }[];
   discountedSubtotal: number;
@@ -117,7 +131,7 @@ export class SuitableClient {
     private readonly timeoutMs = 15_000,
   ) {}
 
-  private async requestFull<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ status: number; json: T | null; headers: Headers }> {
+  private async requestFull<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<{ status: number; json: T | null; headers: Headers }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -149,7 +163,7 @@ export class SuitableClient {
     return { status: res.status, json: json as T, headers: res.headers };
   }
 
-  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
     return (await this.requestFull<T>(method, path, body)).json as T;
   }
 
@@ -178,6 +192,19 @@ export class SuitableClient {
   }
   cancelOrder(orderId: string, reason?: string): Promise<ApiOrderStatus> {
     return this.request("POST", `/orders/${encodeURIComponent(orderId)}/cancel`, reason ? { reason: reason.slice(0, 200) } : {});
+  }
+  getWebhook(): Promise<ApiWebhookConfig> {
+    return this.request("GET", "/webhook");
+  }
+  /** Gizli anahtar yoksa ya da rotateSecret true ise yenisi üretilir ve yalnız bu yanıtta secret olarak döner */
+  putWebhook(url: string, rotateSecret: boolean): Promise<{ url: string; secret?: string; secretRotated?: boolean }> {
+    return this.request("PUT", "/webhook", { url, rotateSecret });
+  }
+  deleteWebhook(): Promise<{ url: string | null }> {
+    return this.request("DELETE", "/webhook");
+  }
+  testWebhook(): Promise<{ ok: boolean; statusCode: number | null; error: string | null }> {
+    return this.request("POST", "/webhook/test", {});
   }
   evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: { campaignIds: string[] } }): Promise<ApiEvaluateResult> {
     return this.request("POST", "/orders/evaluate", body);
@@ -244,18 +271,16 @@ export function apiPhone(waId: string | null | undefined): string | null {
 
 const tl = (kurus: number) => Math.round(kurus) / 100;
 
+export type OrderLike = OrderWithItems & { channel?: string };
+export type LinesResult = { ok: true; lines: ApiOrderLine[]; warnings: string[]; subtotalKurus: number } | { ok: false; error: string };
 export type BuildResult = { ok: true; body: ApiOrderBody; warnings: string[] } | { ok: false; error: string };
 
 /**
- * Siparişi API gövdesine çevirir. POS menüsünde karşılığı olmayan ürün/porsiyon sipariş yazılmasını engeller (hata döner);
- * karşılığı olmayan seçenekler birim fiyata eklenir ve satır notuna yazılır, böylece toplam bozulmaz.
+ * Sipariş satırlarını API satırlarına çevirir (ürün/porsiyon/seçenek kimlikleri POS menüsünden). POS menüsünde karşılığı olmayan
+ * ürün/porsiyon hata döner; karşılığı olmayan seçenekler birim fiyata eklenir ve satır notuna yazılır, böylece toplam bozulmaz.
  */
-export async function buildApiOrder(db: PrismaClient, order: OrderWithItems & { channel?: string }, snap: PosSnapshotData, storeId: string): Promise<BuildResult> {
+export async function buildApiLines(db: PrismaClient, order: OrderLike, snap: PosSnapshotData): Promise<LinesResult> {
   const warnings: string[] = [];
-  const phone = apiPhone(order.customer.waId);
-  if (!phone) return { ok: false, error: "Müşterinin telefon numarası yok (API için zorunlu)" };
-  if (!order.address.trim()) return { ok: false, error: "Teslimat adresi yok" };
-
   const productIds = order.items.map((i) => i.productId).filter((x): x is number => x !== null);
   const products = productIds.length ? await db.product.findMany({ where: { id: { in: productIds } }, include: { optionGroups: { include: { group: { include: { choices: true } } } } } }) : [];
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -302,10 +327,40 @@ export async function buildApiOrder(db: PrismaClient, order: OrderWithItems & { 
       ...(notes.length ? { note: notes.join(", ").slice(0, 200) } : {}),
     });
   }
-
   const subtotalKurus = order.items.reduce((n, i) => n + i.quantity * (i.unitKurus + i.extraKurus), 0);
   if (subtotalKurus !== order.totalKurus) warnings.push(`Satır toplamı (${tl(subtotalKurus)}) sipariş toplamından (${tl(order.totalKurus)}) farklı, satır toplamı gönderildi`);
-  const discountKurus = Math.min(order.discountKurus, subtotalKurus);
+  return { ok: true, lines, warnings, subtotalKurus };
+}
+
+/**
+ * Siparişi API gövdesine çevirir. İndirim ve kampanya POS'tan gelir: `evaluation` (POS kampanya değerlendirmesi) verilirse
+ * campaignDiscount, campaignIds ve hediye satırları bundan yazılır; verilmezse indirimsiz gönderilir. Panelde tanımlı ödeme
+ * şekli indirimi API yönteminde kullanılmaz (kampanyalar POS'ta tanımlıdır).
+ */
+export async function buildApiOrder(db: PrismaClient, order: OrderLike, snap: PosSnapshotData, storeId: string, evaluation: ApiEvaluateResult | null = null, mode: PriceMode = "platform"): Promise<BuildResult> {
+  const phone = apiPhone(order.customer.waId);
+  if (!phone) return { ok: false, error: "Müşterinin telefon numarası yok (API için zorunlu)" };
+  if (!order.address.trim()) return { ok: false, error: "Teslimat adresi yok" };
+  const built = await buildApiLines(db, order, snap);
+  if (!built.ok) return built;
+  const warnings = [...built.warnings];
+  const lines = [...built.lines];
+
+  // Yalnız platform modunda kampanya alanları ve hediye satırları biz göndeririz; server/auto modlarında fiyat ve kampanyayı Suitable hesaplar
+  const platform = mode === "platform";
+  const campaignKurus = evaluation && platform ? Math.min(built.subtotalKurus, Math.max(0, Math.round(evaluation.campaignDiscount * 100))) : 0;
+  const campaignIds = evaluation && platform ? evaluation.appliedCampaigns.map((c) => c.id).slice(0, 20) : [];
+  // Hediye ürünler fiyatsız satır olarak eklenir; porsiyonluysa ilk porsiyon seçilir
+  for (const g of platform ? evaluation?.gifts ?? [] : []) {
+    const pos = snap.products.find((x) => x.id === g.productId);
+    if (!pos) {
+      warnings.push(`Hediye ürün "${g.name}" POS menüsünde bulunamadı, siparişe eklenmedi`);
+      continue;
+    }
+    const v = pos.variants[0];
+    lines.push({ productId: pos.id, ...(v?.id ? { variantId: v.id } : {}), quantity: Math.max(1, g.count), gift: true, unitPrice: 0, ...(g.campaignId ? { campaignId: g.campaignId } : {}) });
+  }
+
   const pay = apiPayment(order.paymentLabel);
   if (pay.warning) warnings.push(pay.warning);
   const note = [`WA#${order.id}`, order.paymentLabel, order.note].filter((x) => x && x.trim()).join(" · ").slice(0, 500);
@@ -318,11 +373,16 @@ export async function buildApiOrder(db: PrismaClient, order: OrderWithItems & { 
     delivery: { type: "delivery", address: { text: order.address.slice(0, 500), ...(order.lat !== null && order.lng !== null ? { lat: order.lat, lng: order.lng } : {}) } },
     lines,
     payment: pay.payment,
-    pricing: {
-      subtotal: tl(subtotalKurus),
-      ...(discountKurus > 0 ? { discount: { amount: tl(discountKurus), label: (order.discountNote || (order.discountPercent > 0 ? `%${order.discountPercent} ${order.paymentLabel}` : order.paymentLabel)).slice(0, 80) } } : {}),
-      total: tl(subtotalKurus - discountKurus),
-    },
+    ...(platform
+      ? {
+          pricing: {
+            subtotal: tl(built.subtotalKurus),
+            ...(campaignKurus > 0 ? { campaignDiscount: tl(campaignKurus) } : {}),
+            total: tl(built.subtotalKurus - campaignKurus),
+          },
+        }
+      : {}),
+    ...(campaignKurus > 0 && campaignIds.length ? { campaignIds } : {}),
     ...(note ? { note } : {}),
   };
   return { ok: true, body, warnings };

@@ -6,7 +6,7 @@ import { rememberAddress } from "./addresses";
 import { applyAnswer, applyGate, needsOptions, nextQuestion, parseChoiceText, type Question } from "./options";
 import { orderVars, renderTemplate, templateFor, type MessageKey, type TemplateVars } from "./order-messages";
 import { recordFailedOutbound, recordOutbound } from "./outbound";
-import { orderCampaignAvailable, orderDiscount } from "./discount";
+import { apiDiscountsActive, orderCampaignAvailable, orderDiscount } from "./discount";
 import { ET_TANDIR_CAMPAIGN } from "../../shared/campaigns";
 import { getMinBasket, sendMinBasketNotice } from "./hours";
 import { itemLines } from "./order-edit";
@@ -117,6 +117,7 @@ export async function startOrderConversation(db: PrismaClient, cloud: Messenger 
     await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_PAYMENT" } });
     if (!canSend(cloud, order)) return;
     const kvkk = await noticeLine(db, order.customer); // ilk temasta aydınlatma metni bağlantısı
+    const apiOn = await apiDiscountsActive(db); // POS kampanyaları kullanılırken ödeme şekline bağlı indirim yazılmaz
     const base = await render(db, order, "NEW", { kvkk });
     // Kampanya bu sepete uygunsa ödeme sorusunda söylenir (nakit/kart seçilirse uygulanır)
     const body = (await orderCampaignAvailable(db, order.id)) ? `${base}
@@ -125,7 +126,7 @@ export async function startOrderConversation(db: PrismaClient, cloud: Messenger 
     const id = await cloud.sendList(...addr(order), {
       body,
       buttonText: "Ödeme şekli seç",
-      rows: types.map((t) => ({ id: payId(order.id, t.id), title: t.name, description: t.discountPercent > 0 ? `%${t.discountPercent} indirimli` : undefined })),
+      rows: types.map((t) => ({ id: payId(order.id, t.id), title: t.name, description: t.discountPercent > 0 && !apiOn ? `%${t.discountPercent} indirimli` : undefined })),
     });
     await log(db, order, "text", body, id);
     if (kvkk) await markNoticeSent(db, order.customerId);

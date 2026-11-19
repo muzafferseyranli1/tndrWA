@@ -3,6 +3,20 @@ import { computeDiscount, etTandirCampaignApplies, type DiscountInput, type Disc
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
+/**
+ * Suitable API yazma yönteminde kampanya ve indirimi POS belirler: panelde tanımlı ödeme şekli oranları ve kodlu kampanyalar uygulanmaz,
+ * yerine POS'un kampanya değerlendirmesi (evaluate) sonucu kullanılır. Sağlayıcı sunucu açılışında bağlanır; yöntem Ayar "pos.writeMode".
+ */
+export type ApiDiscountProvider = (orderId: number) => Promise<DiscountResult | null>;
+let apiProvider: ApiDiscountProvider | null = null;
+export function setApiDiscountProvider(p: ApiDiscountProvider | null): void {
+  apiProvider = p;
+}
+/** POS kampanyaları mı kullanılıyor (Suitable API yöntemi açık ve bağlı)? */
+export async function apiDiscountsActive(db: Db): Promise<boolean> {
+  return !!apiProvider && (await db.setting.findUnique({ where: { key: "pos.writeMode" } }))?.value === "api";
+}
+
 async function discountInput(db: Db, orderId: number, paymentPercent: number): Promise<DiscountInput> {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { brand: true, items: true } });
   const ids = order.items.map((i) => i.productId).filter((id): id is number => id !== null);
@@ -18,10 +32,12 @@ async function discountInput(db: Db, orderId: number, paymentPercent: number): P
 
 /** Siparişin indirimini (ödeme şekli oranı + kodda tanımlı kampanyalar) hesaplar; kaydetmez. */
 export async function orderDiscount(db: Db, orderId: number, paymentPercent: number): Promise<DiscountResult> {
+  if (await apiDiscountsActive(db)) return (await apiProvider!(orderId)) ?? { discountKurus: 0, note: "" };
   return computeDiscount(await discountInput(db, orderId, paymentPercent));
 }
 
 /** Ödeme şekli seçilmeden önce: indirimli ödemeyle kampanya bu siparişe uygulanır mı (müşteriye haber vermek için). */
 export async function orderCampaignAvailable(db: Db, orderId: number): Promise<boolean> {
+  if (await apiDiscountsActive(db)) return false;
   return etTandirCampaignApplies(await discountInput(db, orderId, 0));
 }

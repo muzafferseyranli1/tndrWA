@@ -13,6 +13,7 @@ import { reportsRouter } from "./routes/reports";
 import { menuSyncRouter } from "./routes/menu-sync";
 import { posAdminRouter, posExtRouter } from "./routes/pos";
 import { SuitableSync } from "./services/suitable-sync";
+import { setApiDiscountProvider } from "./services/discount";
 import { staffRouter } from "./routes/staff";
 import { categoriesRouter, productsRouter } from "./routes/products";
 import { imagesRouter } from "./routes/images";
@@ -105,7 +106,11 @@ async function main() {
   const gateway = new Gateway(whatsappClient, telegramClients);
   const cloudForAck = gateway;
   // Suitable Dış Kaynak API (env tanımlıysa): yazma yöntemi "api" iken siparişleri POS'a sunucu yazar
-  const suitableSync = env.suitable ? new SuitableSync(db, env.suitable, cloudForAck, env.publicBaseUrl) : null;
+  const suitableSync = new SuitableSync(db, env.suitable, cloudForAck, env.publicBaseUrl);
+  // API yönteminde kampanya/indirimi POS belirler (evaluate); yöntem eklentiyken sağlayıcı kullanılmaz
+  setApiDiscountProvider((orderId) => suitableSync.evaluateOrder(orderId));
+  suitableSync.onPriceChange = (brandId) => posPriceChange(brandId);
+  await suitableSync.reload();
   app.use(
     "/api/webhooks",
     webhooksRouter(db, env, {
@@ -131,7 +136,7 @@ async function main() {
   // POS eklentisi: oturum çerezi yok, kendi anahtarıyla doğrulanır (auth'tan ÖNCE bağlanmalı)
   // Katalog eşitleyici aşağıda kurulur; POS menüsünden gelen fiyat değişiklikleri ona sonradan bağlanır
   let posPriceChange: (brandId: number) => void = () => undefined;
-  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl, env.suitable));
+  app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl, suitableSync));
 
   app.use(
     requireAuth(env.sessionSecret, {
@@ -147,7 +152,7 @@ async function main() {
   app.use("/api/staff", staffRouter(db, env));
   app.use("/api/catalog-thumbnail", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), catalogThumbRouter(db));
   app.use("/api/reports", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), reportsRouter(db));
-  app.use("/api/pos", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), posAdminRouter(db, env.suitable, suitableSync));
+  app.use("/api/pos", (req, res, next) => (res.locals.role === "ADMIN" ? next() : void res.status(403).json({ error: "Bu işlem için yönetici olmalısınız." })), posAdminRouter(db, suitableSync));
 
   await bootstrapBrands(db, env);
   await ensureDefaultChannels(db);
@@ -188,7 +193,7 @@ async function main() {
   // Yanıt vermeyen müşteri: 5 dk sonra soru tekrarı + hatırlatma, 5 dk daha yanıt yoksa otomatik iptal
   startOrderTimeouts(db, cloudForAck, Number(process.env.ORDER_TIMEOUT_TICK_MS) || 20_000);
   startDeliveryFallback(db, cloudForAck, env.publicBaseUrl);
-  suitableSync?.start(Number(process.env.SUITABLE_TICK_MS) || 5_000, Number(process.env.SUITABLE_POLL_MS) || 60_000);
+  suitableSync.start(Number(process.env.SUITABLE_TICK_MS) || 5_000, Number(process.env.SUITABLE_POLL_MS) || 60_000);
   // Telegram: yalnız canlıda (TELEGRAM_SET_WEBHOOK=1) webhook ve bot açıklaması yazılır; arka planda, açılışı geciktirmez
   if (env.telegram?.configureOnStart && env.publicBaseUrl?.startsWith("https://")) {
     void configureTelegramBots(db, telegramClients, env.publicBaseUrl);

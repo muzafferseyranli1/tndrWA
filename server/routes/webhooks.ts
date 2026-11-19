@@ -152,8 +152,8 @@ export function webhooksRouter(db: PrismaClient, env: Env, hooks: WebhookHooks =
   // Suitable sipariş durumu: X-Signature = sha256=HMAC(gizli, X-Timestamp + "." + hamGövde); aynı X-Delivery-Id tekrar gelirse yok sayılır
   const seenDeliveries = new Set<string>();
   router.post("/suitable", express.raw({ type: () => true, limit: "100kb" }), async (req, res) => {
-    const secret = env.suitable?.webhookSecret;
     const sync = hooks.suitable;
+    const secret = sync?.cfg?.webhookSecret;
     if (!secret || !sync) return res.status(503).json({ error: "Suitable webhook ayarları tanımlı değil." });
     const raw = req.body;
     if (!Buffer.isBuffer(raw) || raw.length === 0) return res.status(400).json({ error: "Boş gövde." });

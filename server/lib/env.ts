@@ -27,7 +27,11 @@ export interface SuitableEnv {
   webhookSecret: string | null;
   /** Marka kodu -> Suitable işletme (store) kimliği; yoksa markanın POS şube kimliği kullanılır. SUITABLE_STORE_<KOD> */
   stores: Record<string, string>;
+  /** Anahtarın fiyat modu: platform (fiyatı biz hesaplarız), server (Suitable hesaplar, kampanya yok), auto (Suitable hesaplar ve kampanyaları uygular, önerilen). Verilmezse panel ayarı, o da yoksa auto. */
+  priceMode?: PriceMode;
 }
+
+export type PriceMode = "platform" | "server" | "auto";
 
 export interface TelegramEnv {
   /** Marka kodu (küçük harf, örn. "pide") -> BotFather jetonu. Jeton TELEGRAM_BOT_TOKEN_<KOD> ortam değişkeninden okunur. */
@@ -191,7 +195,15 @@ export function loadEnv(source: Source = process.env): Env {
         const m = /^SUITABLE_STORE_([A-Z0-9_]+)$/.exec(key);
         if (m && value?.trim()) stores[m[1].toLowerCase()] = value.trim();
       }
-      suitable = { baseUrl: suitBase.replace(/\/+$/, ""), apiKey: suitKey, webhookSecret: source.SUITABLE_WEBHOOK_SECRET?.trim() || null, stores };
+      const pm = source.SUITABLE_PRICE_MODE?.trim().toLowerCase();
+      if (pm && pm !== "platform" && pm !== "server" && pm !== "auto") problems.push("SUITABLE_PRICE_MODE platform, server ya da auto olmalı");
+      suitable = {
+        baseUrl: suitBase.replace(/\/+$/, ""),
+        apiKey: suitKey,
+        webhookSecret: source.SUITABLE_WEBHOOK_SECRET?.trim() || null,
+        stores,
+        ...(pm === "platform" || pm === "server" || pm === "auto" ? { priceMode: pm } : {}),
+      };
     }
   }
 

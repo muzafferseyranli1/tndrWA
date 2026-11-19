@@ -7,8 +7,7 @@ import { applyPosGroup, importPosCustomers, newPosToken, PosApplyError, pendingP
 import { latestSnapshot, mapReport, orderPayload, posSnapshotSchema } from "../services/pos-map";
 import { applyPosEvents, markPosEntered, readPosAlerts, setPosAlert, trackingList } from "../services/pos-tracking";
 import type { Messenger } from "../services/messenger";
-import type { SuitableEnv } from "../lib/env";
-import { getWriteMode, setTestOrders, setWriteMode, storeIdOf, testOrdersOn, type SuitableSync } from "../services/suitable-sync";
+import { DEFAULT_BASE_URL, getWriteMode, setTestOrders, setWriteMode, storeIdOf, testOrdersOn, type SuitableSync } from "../services/suitable-sync";
 
 /** POS siparişi sayılan pencere: bundan eski HAZIR sipariş eklentiye verilmez (personel elle girmiştir). */
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -18,7 +17,7 @@ const customersKey = (brandCode: string) => `pos.customers.${brandCode}`;
  * Eklenti uçları (/api/pos-ext): oturum çerezi yok, "X-Pos-Token" başlığındaki anahtarla doğrulanır.
  * POS şubesi (cafeId) bir markaya bağlanır; menü, müşteri ve siparişler o marka için işlenir.
  */
-export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: Messenger | null = null, publicBaseUrl: string | null = null, suitable: SuitableEnv | null = null): Router {
+export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => void = () => undefined, cloud: Messenger | null = null, publicBaseUrl: string | null = null, sync: SuitableSync | null = null): Router {
   const router = Router();
   // Chrome eklentisinden gelen istekler (chrome-extension:// kökeni): CORS izni; doğrulama yine anahtarla
   router.use((req: Request, res: Response, next: NextFunction) => {
@@ -97,7 +96,7 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
   // yazılacakları işletmeyle (POS şube kimliği + adı) birlikte döner; eklenti doğru işletmenin sipariş ekranını açar.
   router.get("/orders", async (_req, res) => {
     // API yazma yönteminde siparişleri sunucu kendisi Suitable'a yazar; eklentiye sipariş verilmez (çift kayıt olmasın)
-    if ((await getWriteMode(db, suitable)) === "api") return void res.json({ brands: [], orders: [], lookups: await pendingPosLookups(db), writeMode: "api" });
+    if ((await getWriteMode(db, sync?.cfg ?? null)) === "api") return void res.json({ brands: [], orders: [], lookups: await pendingPosLookups(db), writeMode: "api" });
     const brands = await db.brand.findMany({ where: { posCafeId: { not: null } }, orderBy: { sortOrder: "asc" } });
     const out = [];
     for (const brand of brands) {
@@ -169,15 +168,22 @@ export function posExtRouter(db: PrismaClient, onChange: (brandId: number) => vo
 }
 
 /** Panel (yönetici): eklenti anahtarı, şube bağlantısı, eşleşme raporu, eksik zorunlu seçeneği WhatsApp'a ekleme. */
-export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = null, sync: SuitableSync | null = null): Router {
+export function posAdminRouter(db: PrismaClient, sync: SuitableSync | null = null): Router {
   const router = Router();
   router.use(express.json({ limit: "5kb" }));
+
+  const suitableInfo = (brand: { code: string; posCafeId: string | null }) => {
+    const c = sync?.cfg ?? null;
+    return c
+      ? { configured: true, source: c.source, baseUrl: c.baseUrl, keyHint: c.apiKey.length > 8 ? c.apiKey.slice(0, 4) + "…" + c.apiKey.slice(-4) : "…", priceMode: sync!.priceMode(), store: storeIdOf(c, brand), webhookSecretSet: !!c.webhookSecret, webhookUrl: sync?.webhookUrl() ?? null }
+      : { configured: false, source: null, baseUrl: DEFAULT_BASE_URL, keyHint: null, priceMode: "auto", store: null, webhookSecretSet: false, webhookUrl: sync?.webhookUrl() ?? null };
+  };
 
   router.get("/", async (req, res) => {
     const brand = await resolveBrand(db, req.query.brandId);
     if (!brand) return res.status(404).json({ error: "Marka bulunamadı." });
     const customers = (await db.setting.findUnique({ where: { key: customersKey(brand.code) } }))?.value;
-    res.json({ writeMode: await getWriteMode(db, suitable), testOrders: await testOrdersOn(db), suitable: suitable ? { configured: true, store: storeIdOf(suitable, brand), webhookSecretSet: !!suitable.webhookSecret } : { configured: false, store: null, webhookSecretSet: false }, tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
+    res.json({ writeMode: await getWriteMode(db, sync?.cfg ?? null), testOrders: await testOrdersOn(db), suitable: suitableInfo(brand), tokenSet: await posTokenSet(db), posCafeId: brand.posCafeId, customers: customers ? JSON.parse(customers) : null, report: await mapReport(db, brand.id), alerts: await readPosAlerts(db) });
   });
 
   router.delete("/alerts/:kind", async (req, res) => {
@@ -191,7 +197,7 @@ export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = 
   router.put("/mode", async (req, res) => {
     const parsed = z.object({ mode: z.enum(["api", "extension"]) }).safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: "Geçersiz yöntem." });
-    if (parsed.data.mode === "api" && !suitable) return res.status(409).json({ error: "Suitable API ayarları (SUITABLE_API_BASE, SUITABLE_API_KEY) sunucuda tanımlı değil." });
+    if (parsed.data.mode === "api" && !sync?.configured()) return res.status(409).json({ error: "Önce Suitable API anahtarını girin." });
     await setWriteMode(db, parsed.data.mode);
     res.json({ writeMode: parsed.data.mode });
   });
@@ -206,16 +212,54 @@ export function posAdminRouter(db: PrismaClient, suitable: SuitableEnv | null = 
 
   // Suitable işletme durumu (anahtarın kanalında teslimat/gel-al açık mı, kapalıysa nedeni)
   router.get("/suitable-status", async (_req, res) => {
-    if (!sync || !suitable) return res.status(409).json({ error: "Suitable API kullanılmıyor." });
+    if (!sync?.configured()) return res.status(409).json({ error: "Suitable API anahtarı tanımlı değil." });
     try {
-      const { stores } = await sync.client.listStores();
+      const { stores } = await sync.http.listStores();
       const brands = await db.brand.findMany({ orderBy: { sortOrder: "asc" } });
       res.json({
-        stores: stores.map((s) => ({ id: s.id, name: s.name, brand: brands.find((b) => storeIdOf(suitable, b) === s.id)?.name ?? null, delivery: s.availability?.delivery ?? null, pickup: s.availability?.pickup ?? null })),
+        stores: stores.map((s) => ({ id: s.id, name: s.name, brand: brands.find((b) => sync.cfg && storeIdOf(sync.cfg, b) === s.id)?.name ?? null, delivery: s.availability?.delivery ?? null, pickup: s.availability?.pickup ?? null })),
       });
     } catch (err) {
       res.status(502).json({ error: `Suitable'a ulaşılamadı: ${(err as Error).message}` });
     }
+  });
+
+  // Bağlantı ayarı: anahtar (işletme POS'tan üretir: Ayarlar > Entegrasyonlar > Dış Kaynak API), adres, fiyat modu. Anahtar boşsa değişmez; geri gösterilmez.
+  router.put("/suitable-config", async (req, res) => {
+    const parsed = z
+      .object({
+        baseUrl: z.string().trim().max(200).optional(),
+        apiKey: z.string().trim().max(300).optional(),
+        priceMode: z.enum(["platform", "server", "auto"]).optional(),
+      })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Geçersiz ayar." });
+    const { baseUrl, apiKey } = parsed.data;
+    if (!sync) return res.status(409).json({ error: "Suitable API bu sunucuda kullanılamıyor." });
+    if (apiKey && !/^swk_[A-Za-z0-9_-]{6,}$/.test(apiKey)) return res.status(400).json({ error: "Anahtar swk_ ile başlamalı (POS'ta Ayarlar > Entegrasyonlar > Dış Kaynak API'den üretilir)." });
+    if (baseUrl && !/^https?:\/\/[^\s/]+/.test(baseUrl)) return res.status(400).json({ error: "Adres https:// ile başlamalı." });
+    await sync.saveConfig({ baseUrl: baseUrl || undefined, apiKey: apiKey || undefined, priceMode: parsed.data.priceMode });
+    res.json({ ok: true });
+  });
+
+  // Webhook: kur (bizim adresimize, gizli anahtar kaydedilir), dene (ping), kaldır, durumu oku
+  router.post("/suitable-webhook", async (req, res) => {
+    const parsed = z.object({ action: z.enum(["setup", "test", "remove", "status"]) }).safeParse(req.body ?? {});
+    if (!parsed.success || !sync?.configured()) return res.status(409).json({ error: "Önce Suitable API anahtarını girin." });
+    try {
+      if (parsed.data.action === "setup") return res.json(await sync.setupWebhook());
+      if (parsed.data.action === "remove") return res.json((await sync.removeWebhook(), { ok: true }));
+      if (parsed.data.action === "test") return res.json(await sync.http.testWebhook());
+      res.json(await sync.http.getWebhook());
+    } catch (err) {
+      res.status(502).json({ error: err instanceof Error ? err.message : "Suitable isteği başarısız." });
+    }
+  });
+
+  // Menü ve fiyatları Suitable'dan şimdi eşitle (panel fiyatları POS'un Dış Kaynak kanal fiyatına çekilir)
+  router.post("/suitable-sync", async (_req, res) => {
+    if (!sync) return res.status(409).json({ error: "Suitable API kullanılmıyor." });
+    res.json({ changed: await sync.syncMenus() });
   });
 
   // Suitable'a yazılamayan siparişi yeniden dene (sayaçlar sıfırlanır)

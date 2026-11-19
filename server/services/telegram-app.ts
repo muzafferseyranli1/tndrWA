@@ -1,3 +1,4 @@
+import { apiDiscountsActive } from "./discount";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Brand, Customer, Order, PrismaClient } from "@prisma/client";
 import { availabilityOf, type ProductStatus } from "../../shared/availability";
@@ -138,7 +139,7 @@ export async function buildMenu(db: PrismaClient, brand: Brand, now = new Date()
     state,
     stateText: state === "closed" ? `Şu an kapalıyız (${hoursSummary(cfg)}). Bir sonraki açılış: ${nextOpeningText(cfg, now)}.` : state === "pre" ? `Henüz açılmadık; siparişiniz açılışta (${nextOpeningText(cfg, now)}) hazırlanır.` : null,
     minBasketKurus,
-    discounts: payments.map((p) => ({ name: p.name, percent: p.discountPercent })),
+    discounts: (await apiDiscountsActive(db)) ? [] : payments.map((p) => ({ name: p.name, percent: p.discountPercent })),
     groups,
     categories: out,
   };

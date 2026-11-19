@@ -21,7 +21,7 @@ interface PosStatus {
   alerts?: Partial<Record<"ui" | "auto" | "api", { text: string; at: string }>>;
   writeMode?: "api" | "extension";
   testOrders?: boolean;
-  suitable?: { configured: boolean; store: string | null; webhookSecretSet: boolean };
+  suitable?: { configured: boolean; source: "env" | "panel" | null; baseUrl: string; keyHint: string | null; priceMode: "platform" | "server" | "auto"; store: string | null; webhookSecretSet: boolean; webhookUrl: string | null };
 }
 
 const KINDS: { kind: Issue["kind"]; title: string; hint: string; tone: string }[] = [
@@ -43,6 +43,10 @@ export default function PosPage() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  const [cfgKey, setCfgKey] = useState("");
+  const [cfgBase, setCfgBase] = useState("");
+  const [cfgMode, setCfgMode] = useState<"platform" | "server" | "auto" | "">("");
+  const [hookMsg, setHookMsg] = useState("");
   const [stores, setStores] = useState<{ id: string; name: string | null; brand: string | null; delivery: { open?: boolean; reason?: string | null } | null; pickup: { open?: boolean; reason?: string | null } | null }[] | null>(null);
 
   const load = useCallback(async () => {
@@ -93,6 +97,52 @@ export default function PosPage() {
       await load();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function syncPrices() {
+    setBusy("prices");
+    setMsg("");
+    try {
+      const r = await api<{ changed: number }>("/api/pos/suitable-sync", { method: "POST", json: {} });
+      setMsg(r.changed ? `Suitable menüsünden ${r.changed} fiyat güncellendi.` : "Fiyatlar zaten Suitable ile aynı.");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveConfig() {
+    setBusy("cfg");
+    setError("");
+    try {
+      await api("/api/pos/suitable-config", { method: "PUT", json: { apiKey: cfgKey || undefined, baseUrl: cfgBase || undefined, priceMode: cfgMode || undefined } });
+      setCfgKey("");
+      setMsg("Suitable ayarları kaydedildi.");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function hookAction(action: "setup" | "test" | "remove" | "status") {
+    setBusy("hook");
+    setHookMsg("");
+    try {
+      const r = await api<Record<string, unknown>>("/api/pos/suitable-webhook", { method: "POST", json: { action } });
+      if (action === "setup") setHookMsg(r.secretStored ? "Webhook kuruldu, gizli anahtar kaydedildi." : "Webhook adresi güncellendi (gizli anahtar zaten kayıtlıydı).");
+      else if (action === "test") setHookMsg(r.ok ? "Deneme olayı gönderildi, adresimiz 2xx döndü." : `Deneme başarısız: ${String(r.error ?? r.statusCode ?? "")}`);
+      else if (action === "remove") setHookMsg("Webhook kaldırıldı; durumlar yoklamayla izlenir.");
+      else setHookMsg(r.configured ? `Adres: ${String(r.url)}${r.lastError ? ` · son hata: ${String(r.lastError)}` : ""}` : "Webhook tanımlı değil.");
+      await load();
+    } catch (e) {
+      setHookMsg((e as Error).message);
     } finally {
       setBusy("");
     }
@@ -162,11 +212,60 @@ export default function PosPage() {
           <div className="space-y-6">
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="font-medium">POS&apos;a yazma yöntemi</h2>
-              <p className="mb-3 text-sm text-slate-500">
-                {status.suitable?.configured
-                  ? <>Suitable API tanımlı. İşletme kimliği: <code>{status.suitable.store ?? "yok"}</code>. Durum bildirimi (webhook): {status.suitable.webhookSecretSet ? <b className="text-green-700">açık</b> : <b className="text-amber-700">gizli anahtar yok, yoklamayla izlenir</b>}.</>
-                  : "Suitable API ayarları (SUITABLE_API_BASE, SUITABLE_API_KEY) sunucuda tanımlı değil; siparişler eklentiyle yazılır."}
-              </p>
+              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <h3 className="mb-1 font-medium">Suitable bağlantısı</h3>
+                <p className="mb-2 text-xs text-slate-500">
+                  Anahtarı işletme POS&apos;ta <b>Ayarlar &rsaquo; Entegrasyonlar &rsaquo; Dış Kaynak API</b> bölümünden üretir (bir kez gösterilir). Burada girilen anahtar yalnız sunucuda saklanır, bir daha gösterilmez.
+                </p>
+                {status.suitable?.configured ? (
+                  <p className="mb-2 text-xs">
+                    Anahtar: <code>{status.suitable.keyHint}</code> ({status.suitable.source === "env" ? "sunucu ayarından" : "panelden"}) · adres: <code>{status.suitable.baseUrl}</code> · işletme kimliği: <code>{status.suitable.store ?? "yok"}</code>
+                  </p>
+                ) : (
+                  <p className="mb-2 text-xs text-amber-700">Henüz anahtar girilmedi; siparişler eklentiyle yazılır.</p>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input type="password" autoComplete="off" value={cfgKey} onChange={(e) => setCfgKey(e.target.value)} placeholder={status.suitable?.configured ? "Yeni anahtar (boş bırakırsanız değişmez)" : "API anahtarı (swk_...)"} className="rounded border border-slate-300 px-2 py-1.5 text-xs" />
+                  <input value={cfgBase} onChange={(e) => setCfgBase(e.target.value)} placeholder={`Adres (şimdiki: ${status.suitable?.baseUrl ?? "varsayılan"})`} className="rounded border border-slate-300 px-2 py-1.5 text-xs" />
+                </div>
+                <label className="mt-2 block text-xs">
+                  Fiyat modu (anahtar üretilirken seçilen mod ile aynı olmalı):{" "}
+                  <select value={cfgMode || status.suitable?.priceMode || "auto"} onChange={(e) => setCfgMode(e.target.value as "platform" | "server" | "auto")} className="rounded border border-slate-300 px-1 py-1">
+                    <option value="auto">Suitable fiyatı ve kampanyayı hesaplar (önerilen)</option>
+                    <option value="server">Suitable fiyatı hesaplar, kampanya yok</option>
+                    <option value="platform">Fiyatı biz hesaplarız</option>
+                  </select>
+                </label>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button disabled={busy === "cfg" || (!cfgKey && !cfgBase && !cfgMode)} onClick={() => void saveConfig()} className="rounded bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50">
+                    Kaydet
+                  </button>
+                  {status.suitable?.configured && (
+                    <>
+                      <button disabled={busy === "hook"} onClick={() => void hookAction("setup")} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+                        Webhook&apos;u kur
+                      </button>
+                      <button disabled={busy === "hook"} onClick={() => void hookAction("test")} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+                        Webhook&apos;u dene
+                      </button>
+                      <button disabled={busy === "hook"} onClick={() => void hookAction("status")} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+                        Webhook durumu
+                      </button>
+                      {status.suitable.webhookSecretSet && (
+                        <button disabled={busy === "hook"} onClick={() => confirm("Webhook kaldırılsın mı? Durumlar yalnız yoklamayla (dakikada bir) izlenir.") && void hookAction("remove")} className="rounded border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50">
+                          Webhook&apos;u kaldır
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+                {status.suitable?.configured && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Durum bildirimi (webhook): {status.suitable.webhookSecretSet ? <b className="text-green-700">gizli anahtar kayıtlı</b> : <b className="text-amber-700">kurulmadı (yoklamayla izlenir)</b>}. Adresimiz: <code>{status.suitable.webhookUrl ?? "herkese açık https adresi tanımlı değil"}</code>
+                  </p>
+                )}
+                {hookMsg && <p className="mt-1 text-xs text-slate-700">{hookMsg}</p>}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {(["extension", "api"] as const).map((m) => (
                   <button
@@ -187,10 +286,13 @@ export default function PosPage() {
                     <input type="checkbox" className="mt-1" disabled={busy === "test"} checked={!!status.testOrders} onChange={(e) => void setTest(e.target.checked)} />
                     <span>
                       <b>Siparişleri test olarak gönder</b>
-                      <span className="block text-xs text-slate-500">Puan, ziyaret, kampanya sayaçları ve stok etkilenmez. Fiş basılır ve satış raporunda görünür: denemeden sonra POS&apos;ta ya da panelden iptal edin. Canlıya geçerken kapatın.</span>
+                      <span className="block text-xs text-slate-500">Puan, ziyaret, kampanya sayaçları ve stok etkilenmez; POS fişi otomatik basmaz. Satış raporunda görünür: denemeden sonra POS&apos;ta ya da panelden iptal edin. Canlıya geçerken kapatın.</span>
                     </span>
                   </label>
                   <div>
+                    <button disabled={busy === "prices"} onClick={() => void syncPrices()} className="mr-2 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
+                      Menü ve fiyatları Suitable&apos;dan eşitle
+                    </button>
                     <button disabled={busy === "stores"} onClick={() => void checkStores()} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50">
                       Suitable işletme durumunu sorgula
                     </button>

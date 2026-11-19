@@ -1,9 +1,11 @@
 import type { Brand, PrismaClient } from "@prisma/client";
-import type { SuitableEnv } from "../lib/env";
+import type { PriceMode, SuitableEnv } from "../lib/env";
 import { logger } from "../lib/logger";
 import type { Messenger } from "./messenger";
 import { applyPosEvents, markPosEntered, setPosAlert, type PosEvent } from "./pos-tracking";
-import { buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiMenu } from "./suitable-api";
+import { apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
+import type { DiscountResult } from "../../shared/campaigns";
+import { storeSnapshot, syncPricesFromPos } from "./pos-bridge";
 
 /**
  * Siparişleri POS'a Suitable Dış Kaynak API'siyle yazar (eklenti yerine), durumlarını webhook ve yoklamayla izler.
@@ -11,12 +13,38 @@ import { buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type A
  */
 
 export const WRITE_MODE_KEY = "pos.writeMode";
-/** "1" iken siparişler test:true ile gönderilir (puan, ziyaret, kampanya sayaçları ve stok etkilenmez; fiş ve satış raporunda görünür, denemeden sonra iptal edilmeli) */
+/** "1" iken siparişler test:true ile gönderilir (puan, ziyaret, kampanya sayaçları ve stok etkilenmez, POS otomatik basmaz; satış raporunda görünür, denemeden sonra iptal edilmeli) */
 export const TEST_ORDERS_KEY = "suitable.testOrders";
 export type WriteMode = "api" | "extension";
 
+/** Panelden girilen Suitable ayarları (env varsa env öncelikli). Anahtar ve webhook gizlisi gizli bilgidir: yalnız sunucuda tutulur, panele geri verilmez. */
+export const CFG_KEYS = { baseUrl: "suitable.baseUrl", apiKey: "suitable.apiKey", webhookSecret: "suitable.webhookSecret", priceMode: "suitable.priceMode" } as const;
+export const DEFAULT_BASE_URL = "https://api-suitable-live.web.app/v1";
+
+export async function resolveSuitableCfg(db: PrismaClient, env: SuitableEnv | null): Promise<(SuitableEnv & { source: "env" | "panel" }) | null> {
+  const rows = await db.setting.findMany({ where: { key: { in: Object.values(CFG_KEYS) } } });
+  const v = (k: string) => rows.find((x) => x.key === k)?.value?.trim() || undefined;
+  const apiKey = env?.apiKey ?? v(CFG_KEYS.apiKey);
+  if (!apiKey) return null;
+  const pm = v(CFG_KEYS.priceMode);
+  return {
+    baseUrl: (env?.baseUrl ?? v(CFG_KEYS.baseUrl) ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
+    apiKey,
+    webhookSecret: env?.webhookSecret ?? v(CFG_KEYS.webhookSecret) ?? null,
+    stores: env?.stores ?? {},
+    priceMode: env?.priceMode ?? (pm === "platform" || pm === "server" || pm === "auto" ? pm : "auto"),
+    source: env?.apiKey ? "env" : "panel",
+  };
+}
+
+async function putSetting(db: PrismaClient, key: string, value: string): Promise<void> {
+  await db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
+}
+
 const ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const MAX_TRIES = 8;
+/** Kampanya sorgusu geçici hatayla bu kadar denemeden sonra kampanyasız yazılır */
+const EVALUATE_TRIES = 3;
 const BACKOFF_SEC = [20, 60, 120, 300, 600, 900, 1800];
 const MENU_TTL_MS = Number(process.env.SUITABLE_MENU_TTL_MS) || 30_000;
 
@@ -46,24 +74,88 @@ export function storeIdOf(suitable: SuitableEnv, brand: Pick<Brand, "code" | "po
 const backoffMs = (tries: number) => (BACKOFF_SEC[Math.min(tries - 1, BACKOFF_SEC.length - 1)] ?? 1800) * 1000;
 
 export class SuitableSync {
-  readonly client: SuitableClient;
+  /** Geçerli ayarlar (env + panel); anahtar yoksa null: API kullanılamaz */
+  cfg: (SuitableEnv & { source: "env" | "panel" }) | null = null;
+  client: SuitableClient | null = null;
   private readonly menus = new Map<string, { at: number; menu: ApiMenu; etag: string | null }>();
+  /** Panel fiyatları POS'a göre değişince katalog eşitlemesini tetikler (sunucu açılışında bağlanır) */
+  onPriceChange: (brandId: number) => void = () => undefined;
 
   constructor(
     private readonly db: PrismaClient,
-    readonly cfg: SuitableEnv,
+    private readonly envCfg: SuitableEnv | null,
     private readonly cloud: Messenger | null,
     private readonly publicBaseUrl: string | null,
-    client?: SuitableClient,
-  ) {
-    this.client = client ?? new SuitableClient({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey });
+  ) {}
+
+  /** Ayarları (env + panel) yeniden okur ve istemciyi kurar; menü önbelleği sıfırlanır. */
+  async reload(): Promise<void> {
+    this.cfg = await resolveSuitableCfg(this.db, this.envCfg);
+    this.client = this.cfg ? new SuitableClient({ baseUrl: this.cfg.baseUrl, apiKey: this.cfg.apiKey }) : null;
+    this.menus.clear();
+  }
+
+  /** Suitable'ın durum bildirimini göndereceği adres (herkese açık https adresi gerekir) */
+  webhookUrl(): string | null {
+    return this.publicBaseUrl?.startsWith("https://") ? this.publicBaseUrl + "/api/webhooks/suitable" : null;
+  }
+
+  configured(): boolean {
+    return !!this.cfg;
+  }
+
+  private api(): SuitableClient {
+    if (!this.client) throw new SuitableApiError(0, "not_configured", "Suitable API anahtarı tanımlı değil");
+    return this.client;
+  }
+
+  /** Dışarıdan (panel) kullanım için */
+  get http(): SuitableClient {
+    return this.api();
+  }
+
+  priceMode(): PriceMode {
+    return this.cfg?.priceMode ?? "auto";
+  }
+
+  private storeOf(brand: Pick<Brand, "code" | "posCafeId">): string | null {
+    return this.cfg ? storeIdOf(this.cfg, brand) : null;
+  }
+
+  /** Panelden bağlantı ayarı: anahtar boş bırakılırsa değişmez. */
+  async saveConfig(p: { baseUrl?: string; apiKey?: string; priceMode?: PriceMode }): Promise<void> {
+    if (p.baseUrl !== undefined) await putSetting(this.db, CFG_KEYS.baseUrl, p.baseUrl.trim());
+    if (p.apiKey) await putSetting(this.db, CFG_KEYS.apiKey, p.apiKey.trim());
+    if (p.priceMode) await putSetting(this.db, CFG_KEYS.priceMode, p.priceMode);
+    await this.reload();
+  }
+
+  /**
+   * Webhook'u bizim adresimize kurar (PUT /v1/webhook). Gizli anahtar yalnız üretildiğinde bir kez döner: panel ayarına yazılır.
+   * Daha önce kurulmuş ve anahtarı bilinmiyorsa yenisi üretilir.
+   */
+  async setupWebhook(): Promise<{ url: string; secretStored: boolean }> {
+    if (!this.publicBaseUrl?.startsWith("https://")) throw new SuitableApiError(0, "no_public_url", "Herkese açık https adresi (PUBLIC_BASE_URL) tanımlı değil");
+    const url = this.publicBaseUrl + "/api/webhooks/suitable";
+    const res = await this.api().putWebhook(url, !this.cfg?.webhookSecret);
+    if (res.secret) {
+      await putSetting(this.db, CFG_KEYS.webhookSecret, res.secret);
+      await this.reload();
+    }
+    return { url: res.url ?? url, secretStored: !!res.secret };
+  }
+
+  async removeWebhook(): Promise<void> {
+    await this.api().deleteWebhook();
+    await this.db.setting.deleteMany({ where: { key: CFG_KEYS.webhookSecret } });
+    await this.reload();
   }
 
   async menuOf(store: string, now = Date.now()): Promise<ApiMenu> {
     const hit = this.menus.get(store);
     if (hit && now - hit.at < MENU_TTL_MS) return hit.menu;
     // Süre dolunca ETag ile sorulur: değişmediyse gövdesiz 304 (hız sınırını harcamaz)
-    const res = await this.client.getMenu(store, hit?.etag);
+    const res = await this.api().getMenu(store, hit?.etag);
     if (res.notModified && hit) {
       this.menus.set(store, { ...hit, at: now });
       return hit.menu;
@@ -73,13 +165,40 @@ export class SuitableSync {
     return res.menu;
   }
 
+  /**
+   * Suitable menüsünü (Dış Kaynak kanal fiyatlarıyla) alır: eşleşme raporu için kaydeder ve panel fiyatlarını POS'a eşitler (çelişkide POS esas).
+   * Dönen: değişen ürün sayısı.
+   */
+  async syncMenus(): Promise<number> {
+    const brands = await this.db.brand.findMany({ orderBy: { sortOrder: "asc" } });
+    let changed = 0;
+    for (const brand of brands) {
+      const store = this.storeOf(brand);
+      if (!store) continue;
+      try {
+        const snap = menuToSnapshot(await this.menuOf(store), store);
+        if (!snap.products.length) continue;
+        await storeSnapshot(this.db, brand.id, snap);
+        const prices = await syncPricesFromPos(this.db, brand.id, snap);
+        if (prices.products.length || prices.choices) {
+          this.onPriceChange(brand.id);
+          changed += prices.products.length + prices.choices;
+          logger.info({ brand: brand.code, products: prices.products.length, choices: prices.choices }, "Suitable menüsünden fiyatlar eşitlendi");
+        }
+      } catch (err) {
+        logger.warn({ brand: brand.code, err: (err as Error).message }, "Suitable menüsü alınamadı");
+      }
+    }
+    return changed;
+  }
+
   /** Hazır ve henüz POS'a yazılmamış siparişleri API'ye gönderir. Dönen: kaç sipariş yazıldı. */
   async sendPending(now = new Date()): Promise<number> {
     if ((await getWriteMode(this.db, this.cfg)) !== "api") return 0;
     const brands = await this.db.brand.findMany({ orderBy: { sortOrder: "asc" } });
     let sent = 0;
     for (const brand of brands) {
-      const store = storeIdOf(this.cfg, brand);
+      const store = this.storeOf(brand);
       if (!store) continue;
       const orders = await this.db.order.findMany({
         where: {
@@ -103,6 +222,44 @@ export class SuitableSync {
     return sent;
   }
 
+  /** POS kampanya değerlendirmesi (hiçbir şey yazılmaz). Hata fırlatır; çağıran karar verir. */
+  private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number): Promise<ApiEvaluateResult> {
+    const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines });
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, rej) => {
+      timer = setTimeout(() => rej(new SuitableApiError(0, "network", "Kampanya sorgusu zaman aşımına uğradı")), timeoutMs);
+    });
+    try {
+      return await Promise.race([call, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Siparişin POS kampanya indirimi (müşteriyle konuşurken: ödeme seçimi, düzenleme). Kısa zaman aşımı; hata ya da eşleşmeyen ürün olursa null
+   * (indirim uygulanmaz, sipariş yazılırken yeniden sorulur).
+   */
+  async evaluateOrder(orderId: number, timeoutMs = 4000): Promise<DiscountResult | null> {
+    try {
+      if (this.priceMode() === "server" || !this.cfg) return null; // server: kampanya uygulanmaz
+      const order = await this.db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true, items: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } } });
+      if (!order) return null;
+      const store = this.storeOf(order.brand);
+      const phone = apiPhone(order.customer.waId);
+      if (!store || !phone || !order.items.length) return null;
+      const snap = menuToSnapshot(await this.menuOf(store), store);
+      const built = await buildApiLines(this.db, order, snap);
+      if (!built.ok) return null;
+      const ev = await this.evaluateLines(store, phone, built.lines, timeoutMs);
+      const kurus = Math.min(built.subtotalKurus, Math.max(0, Math.round(ev.campaignDiscount * 100)));
+      return { discountKurus: kurus, note: kurus > 0 ? ev.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) : "" };
+    } catch (err) {
+      logger.warn({ orderId, err: (err as Error).message }, "Suitable kampanya sorgusu yapılamadı");
+      return null;
+    }
+  }
+
   private async fail(orderId: number, err: SuitableApiError | Error, tries: number, now: Date, permanent: boolean): Promise<void> {
     const text = err.message.slice(0, 300);
     await this.db.order.update({
@@ -122,17 +279,56 @@ export class SuitableSync {
     const tries = order.suitableTries + 1;
     try {
       const snap = menuToSnapshot(await this.menuOf(store, now.getTime()), store);
-      const built = await buildApiOrder(this.db, order, snap, store);
-      if (!built.ok) {
+      const lines = await buildApiLines(this.db, order, snap);
+      if (!lines.ok) {
         // Menüde karşılığı yok: bekleyince düzelmez, personel elle girer
+        await this.fail(order.id, new Error(lines.error), tries, now, true);
+        return false;
+      }
+      // Kampanya POS'ta belirlenir. platform: önce POS'a sorulur, sonuç siparişe yazılır; auto: Suitable sipariş açılırken uygular (sorgu yalnız kampanya adı içindir);
+      // server: kampanya yok. Geçici hatada yeniden denenir (kampanya kaybolmasın); birkaç denemeden sonra kampanyasız yazılır.
+      const mode = this.priceMode();
+      let evaluation: ApiEvaluateResult | null = null;
+      let campaignNote = "";
+      if (mode !== "server") {
+        try {
+          evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", lines.lines, 8000);
+        } catch (err) {
+          const e = err as SuitableApiError;
+          if (e instanceof SuitableApiError && e.code === "product_unavailable") {
+            await this.fail(order.id, e, tries, now, true);
+            return false;
+          }
+          if (e instanceof SuitableApiError && e.retryable && tries < EVALUATE_TRIES) {
+            await this.fail(order.id, e, tries, now, false);
+            return false;
+          }
+          campaignNote = ` · kampanya sorgulanamadı${mode === "platform" ? ", kampanyasız yazıldı" : ""} (${e.message.slice(0, 120)})`;
+        }
+      }
+      const built = await buildApiOrder(this.db, order, snap, store, evaluation, mode);
+      if (!built.ok) {
         await this.fail(order.id, new Error(built.error), tries, now, true);
         return false;
       }
       const test = await testOrdersOn(this.db);
-      const res = await this.client.createOrder(test ? { ...built.body, test: true } : built.body);
+      const res = await this.api().createOrder(test ? { ...built.body, test: true } : built.body);
       const ref = res.receiptNo ? `#${res.receiptNo}` : `API ${res.orderId.slice(-6)}`;
-      await this.db.order.update({ where: { id: order.id }, data: { suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null } });
-      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: fiş ve satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${built.warnings.length ? ` · uyarı: ${built.warnings.join("; ")}`.slice(0, 400) : ""}` } });
+      // İndirim POS'un kampanyasıdır: sipariş kaydı ve müşteriye giden mesajlar POS'un tutarıyla aynı olur
+      let campaignKurus: number;
+      const driftNotes: string[] = [];
+      if (mode === "platform") campaignKurus = Math.round((built.body.pricing?.campaignDiscount ?? 0) * 100);
+      else if (res.total != null) {
+        // Fiyatı ve kampanyayı Suitable hesapladı: ödenecek tutar POS'un toplamıdır
+        const posTotal = Math.round(res.total * 100);
+        campaignKurus = Math.max(0, Math.min(order.totalKurus, order.totalKurus - posTotal));
+        if (posTotal > order.totalKurus) driftNotes.push(`POS toplamı (${(posTotal / 100).toFixed(2)} TL) bizim hesaptan yüksek: fiyatları eşitleyin`);
+      } else campaignKurus = Math.round((res.campaignDiscount ?? 0) * 100);
+      const names = evaluation?.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) ?? "";
+      const campaignName = campaignKurus > 0 ? names || "POS kampanyası" : "";
+      await this.db.order.update({ where: { id: order.id }, data: { suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null, discountKurus: campaignKurus, discountNote: campaignName } });
+      const warn = [...driftNotes, ...built.warnings];
+      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${campaignName ? ` · kampanya: ${campaignName} (-${(campaignKurus / 100).toFixed(2)} TL)` : ""}${campaignNote}${warn.length ? ` · uyarı: ${warn.join("; ")}`.slice(0, 400) : ""}`.slice(0, 600) } });
       await markPosEntered(this.db, this.cloud, this.publicBaseUrl, order.id).catch((err: Error) => logger.warn({ orderId: order.id, err: err.message }, "POS girişi bildirilemedi"));
       logger.info({ orderId: order.id, suitableId: res.orderId, receiptNo: res.receiptNo, brand: brand.code }, "Sipariş Suitable'a yazıldı");
       return true;
@@ -177,7 +373,7 @@ export class SuitableSync {
     if (!open.length) return 0;
     const byStore = new Map<string, typeof open>();
     for (const o of open) {
-      const store = storeIdOf(this.cfg, o.brand);
+      const store = this.storeOf(o.brand);
       if (store) (byStore.get(store) ?? byStore.set(store, []).get(store)!).push(o);
     }
     let n = 0;
@@ -188,7 +384,7 @@ export class SuitableSync {
         let cursor: string | undefined;
         // "orders" boş gelse bile nextCursor doluysa devam edilir
         for (let page = 0; page < 8; page++) {
-          const res = await this.client.listOrders(store, { since, limit: 100, cursor });
+          const res = await this.api().listOrders(store, { since, limit: 100, cursor });
           for (const x of res.orders) seen.set(x.orderId, x.status);
           if (!res.nextCursor) break;
           cursor = res.nextCursor;
@@ -200,7 +396,7 @@ export class SuitableSync {
         let status = seen.get(o.suitableId!);
         if (!status) {
           try {
-            status = (await this.client.getOrder(o.suitableId!)).status;
+            status = (await this.api().getOrder(o.suitableId!)).status;
           } catch (err) {
             logger.warn({ orderId: o.id, err: (err as Error).message }, "Suitable sipariş durumu sorgulanamadı");
             continue;
@@ -217,7 +413,7 @@ export class SuitableSync {
     const order = await this.db.order.findUnique({ where: { id: orderId }, select: { suitableId: true } });
     if (!order?.suitableId) return "skipped";
     try {
-      await this.client.cancelOrder(order.suitableId, reason);
+      await this.api().cancelOrder(order.suitableId, reason);
       await this.db.orderChange.create({ data: { orderId, text: "Suitable'ta da iptal edildi" } });
       return "cancelled";
     } catch (err) {
@@ -262,11 +458,30 @@ export class SuitableSync {
           pollBusy = false;
         });
     }, pollMs);
+    // Menü ve fiyat eşitleme: açılıştan kısa süre sonra, sonra 10 dakikada bir (yalnız API yönteminde)
+    const menuMs = Number(process.env.SUITABLE_MENU_SYNC_MS) || 10 * 60_000;
+    let menuBusy = false;
+    const menuTick = () => {
+      if (menuBusy) return;
+      menuBusy = true;
+      getWriteMode(this.db, this.cfg)
+        .then((m) => (m === "api" ? this.syncMenus() : 0))
+        .catch((err: Error) => logger.warn({ err: err.message }, "Suitable menü eşitlemesi çalışmadı"))
+        .finally(() => {
+          menuBusy = false;
+        });
+    };
+    const t3 = setInterval(menuTick, menuMs);
+    const first = setTimeout(menuTick, Math.min(20_000, menuMs));
     t1.unref();
     t2.unref();
+    t3.unref();
+    first.unref();
     return () => {
       clearInterval(t1);
       clearInterval(t2);
+      clearInterval(t3);
+      clearTimeout(first);
     };
   }
 }
