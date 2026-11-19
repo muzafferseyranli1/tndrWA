@@ -67,13 +67,40 @@ async function ensureLoggedIn(page) {
   }
 }
 
+/** Hata anında sayfada ne görüldüğünü yazar (mod, ilgili menü düğmeleri) ve ekran görüntüsü kaydeder */
+async function menuFailure(page, dir, message) {
+  const info = await page
+    .evaluate(() => {
+      const text = document.body.innerText;
+      const mode = (text.match(/(Merkez|Şube) Modu/) || [])[0] || "mod bilinmiyor";
+      const closed = text.includes("kapalı");
+      const buttons = [...document.querySelectorAll("button")].map((b) => b.innerText.trim()).filter((t) => /Müşteri|Sadakat|Kampanya|Kupon/.test(t));
+      return { mode, closed, buttons: [...new Set(buttons)].slice(0, 12), url: location.pathname };
+    })
+    .catch(() => ({ mode: "?", closed: false, buttons: [], url: "?" }));
+  const shot = path.join(process.cwd(), "hata.png"); // geçici klasör iş bitince silindiği için kalıcı yere
+  await page.screenshot({ path: shot, fullPage: false }).catch(() => undefined);
+  throw new Error(`${message}. Sayfa: ${info.url}, ${info.mode}${info.closed ? ", 'kapalı' uyarısı var" : ""}, görünen düğmeler: [${info.buttons.join(" | ")}], ekran görüntüsü: ${shot}`);
+}
+
 async function downloadExcel(page, dir) {
   // Doğrudan adres ana sayfaya atıyor: menüden gidilir
-  await page.getByRole("button", { name: "Sadakat Yönetimi" }).click();
-  await page.getByRole("button", { name: "Müşteriler", exact: true }).click();
-  await page.getByText("Toplam Müşteri").waitFor({ timeout: 60_000 }).catch(() => {
-    throw new Error("Müşteriler sayfası açılmadı (yetki ya da modül kapalı olabilir)");
-  });
+  const sadakat = page.getByRole("button", { name: "Sadakat Yönetimi" });
+  const customers = page.getByRole("button", { name: "Müşteriler", exact: true });
+  await sadakat.waitFor({ state: "attached" });
+  // Alt menü zaten açık olabilir (tekrar tıklamak kapatır): görünür değilse aç, hâlâ yoksa bir kez daha dene
+  for (let i = 0; i < 2 && !(await customers.isVisible()); i++) {
+    await sadakat.scrollIntoViewIfNeeded().catch(() => undefined);
+    await sadakat.click();
+    await customers.waitFor({ state: "visible", timeout: 8_000 }).catch(() => undefined);
+  }
+  if (!(await customers.isVisible())) await menuFailure(page, dir, "Menüde 'Müşteriler' bulunamadı");
+  await customers.click();
+  try {
+    await page.getByText("Toplam Müşteri").waitFor({ timeout: 60_000 });
+  } catch {
+    await menuFailure(page, dir, "Müşteriler sayfası açılmadı (yetki ya da modül kapalı olabilir)");
+  }
   // "Excel'e Aktar": kapsamdaki TÜM müşteriler (ekrandaki limitli listeden bağımsız). "Excelden Aktar" ayrı düğme, karışmasın
   const exportBtn = page.getByRole("button", { name: /Excel'e Aktar|Kapsamdaki TÜM/ }).first();
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: EXPORT_TIMEOUT_MS }), exportBtn.click()]);
