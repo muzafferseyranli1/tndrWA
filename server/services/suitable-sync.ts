@@ -124,7 +124,7 @@ export class SuitableSync {
   }
 
   async evaluatePaymentOn(): Promise<boolean> {
-    return (await this.db.setting.findUnique({ where: { key: CFG_KEYS.evaluatePayment } }))?.value === "1";
+    return (await this.db.setting.findUnique({ where: { key: CFG_KEYS.evaluatePayment } }))?.value !== "0";
   }
 
   /** Panelden bağlantı ayarı: anahtar boş bırakılırsa değişmez. */
@@ -230,7 +230,7 @@ export class SuitableSync {
 
   /** POS kampanya değerlendirmesi (hiçbir şey yazılmaz). Hata fırlatır; çağıran karar verir. */
   private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number, paymentLabel = ""): Promise<ApiEvaluateResult> {
-    // Ödeme şekline bağlı kampanyalar için (nakit/kapıda kart): yalnız Suitable evaluate'te ödeme alanını destekliyorsa ve panelde açıldıysa gönderilir
+    // Ödeme şekline bağlı kampanyalar (ör. yalnız nakit ve kapıda kart) için ödeme şekli sorguya eklenir; gönderilmezse ödeme kısıtı değerlendirilmez ve kısıtlı kampanyalar da döner
     const payment = paymentLabel && (await this.evaluatePaymentOn()) ? apiPayment(paymentLabel).payment : undefined;
     const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines, ...(payment ? { payment } : {}) });
     let timer: NodeJS.Timeout | undefined;
@@ -269,7 +269,11 @@ export class SuitableSync {
   }
 
   private async fail(orderId: number, err: SuitableApiError | Error, tries: number, now: Date, permanent: boolean): Promise<void> {
-    const text = err.message.slice(0, 300);
+    let text = err.message.slice(0, 300);
+    // Fiyat/kampanya alanı hatası: çoğunlukla paneldeki fiyat modu ile POS'taki anahtarın modu uyuşmuyordur
+    if (err instanceof SuitableApiError && err.code === "validation" && /pricing|campaign|discount|gift|selection|total|subtotal/i.test(JSON.stringify(err.details) + err.message)) {
+      text = (text + " (Paneldeki fiyat modu POS'taki anahtarın moduyla aynı mı? Anahtar 'Fiyatı istemci hesaplar' ise panelde 'Fiyatı biz hesaplarız' seçin.)").slice(0, 400);
+    }
     await this.db.order.update({
       where: { id: orderId },
       data: permanent ? { suitableTries: MAX_TRIES, suitableError: text, suitableNextAt: null } : { suitableTries: tries, suitableError: text, suitableNextAt: new Date(now.getTime() + backoffMs(tries)) },

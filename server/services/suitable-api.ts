@@ -118,6 +118,8 @@ export interface ApiEvaluateResult {
   appliedCampaigns: { id: string; name: string; discount: number }[];
   /** true ise aynı sonuç sipariş açılırken Suitable tarafından uygulanır (kampanyayı sunucunun uyguladığı anahtar): kampanya alanları gönderilmez */
   appliedByServer?: boolean;
+  /** Karşılaştırılan POS ödeme anahtarı (cash, card, edenred...); payment verilmediyse null */
+  paymentKey?: string | null;
   optionalCampaigns: { id: string; name: string; description?: string; blocked?: boolean; previewDiscount?: number; gifts?: unknown[] }[];
   gifts: { productId: string; name: string; count: number; campaignId?: string }[];
   discountedSubtotal: number;

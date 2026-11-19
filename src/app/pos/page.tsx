@@ -253,7 +253,7 @@ export default function PosPage() {
                   <label className="mt-2 flex items-start gap-2 text-xs">
                     <input type="checkbox" className="mt-0.5" disabled={busy === "evalpay"} checked={!!status.evaluatePayment} onChange={(e) => void setEvalPayment(e.target.checked)} />
                     <span>
-                      Kampanya sorgusuna ödeme şeklini ekle <span className="text-slate-500">(kampanya yalnız nakit/kapıda kart gibi ödeme şekline bağlıysa ve Suitable bunu destekliyorsa açın; desteklenmiyorsa sorgu hata verebilir)</span>
+                      Kampanya sorgusuna ödeme şeklini ekle <span className="text-slate-500">(önerilen, açık kalsın: POS&apos;taki kampanya yalnız nakit/kapıda kart gibi ödeme şekline bağlıysa ödeme gönderilmezse yemek kartında da indirim görünür)</span>
                     </span>
                   </label>
                 )}
