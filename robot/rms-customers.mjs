@@ -74,7 +74,9 @@ async function menuFailure(page, dir, message) {
       const text = document.body.innerText;
       const mode = (text.match(/(Merkez|Şube) Modu/) || [])[0] || "mod bilinmiyor";
       const closed = text.includes("kapalı");
-      const buttons = [...document.querySelectorAll("button")].map((b) => b.innerText.trim()).filter((t) => /Müşteri|Sadakat|Kampanya|Kupon/.test(t));
+      const buttons = [...document.querySelectorAll("*")]
+        .filter((e) => e.children.length === 0 && /Müşteri|Sadakat|Kampanya|Kupon/.test(e.textContent || ""))
+        .map((e) => `${e.textContent.trim().slice(0, 30)}<${e.tagName.toLowerCase()}${e.getBoundingClientRect().height > 0 ? "" : ",gizli"}>`);
       return { mode, closed, buttons: [...new Set(buttons)].slice(0, 12), url: location.pathname };
     })
     .catch(() => ({ mode: "?", closed: false, buttons: [], url: "?" }));
@@ -85,14 +87,18 @@ async function menuFailure(page, dir, message) {
 
 async function downloadExcel(page, dir) {
   // Doğrudan adres ana sayfaya atıyor: menüden gidilir
-  const sadakat = page.getByRole("button", { name: "Sadakat Yönetimi" });
-  const customers = page.getByRole("button", { name: "Müşteriler", exact: true });
-  await sadakat.waitFor({ state: "attached" });
-  // Alt menü zaten açık olabilir (tekrar tıklamak kapatır): görünür değilse aç, hâlâ yoksa bir kez daha dene
-  for (let i = 0; i < 2 && !(await customers.isVisible()); i++) {
+  // Menü öğeleri gerçek <button> değil (role=button): metne göre aranır; yalnız görünür olan alınır
+  const sadakat = page.locator('text="Sadakat Yönetimi" >> visible=true').first();
+  const customers = page.locator('text="Müşteriler" >> visible=true').first();
+  // Uygulama açılırken tıklamalar boşa gidebiliyor: ağ sakinleşip menü oturana kadar bekle
+  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+  await sadakat.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
+  await page.waitForTimeout(2_000);
+  // Alt menü zaten açık olabilir (tekrar tıklamak kapatır): görünür değilse aç, olmadıysa tekrar dene
+  for (let i = 0; i < 4 && !(await customers.isVisible()); i++) {
     await sadakat.scrollIntoViewIfNeeded().catch(() => undefined);
-    await sadakat.click();
-    await customers.waitFor({ state: "visible", timeout: 8_000 }).catch(() => undefined);
+    await sadakat.click({ timeout: 10_000 }).catch(() => undefined);
+    await customers.waitFor({ state: "visible", timeout: 4_000 }).catch(() => undefined);
   }
   if (!(await customers.isVisible())) await menuFailure(page, dir, "Menüde 'Müşteriler' bulunamadı");
   await customers.click();
