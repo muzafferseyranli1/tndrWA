@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import { api } from "@/lib/api";
-import type { CustomerDto, CustomerImportJobDto } from "@shared/types";
+import type { CustomerDto, CustomerImportJobDto, CustomerRobotStatusDto } from "@shared/types";
 
 const PAGE = 50;
 
@@ -15,6 +15,11 @@ export default function CustomersPage() {
   const [job, setJob] = useState<CustomerImportJobDto | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [robot, setRobot] = useState<CustomerRobotStatusDto | null>(null);
+
+  useEffect(() => {
+    api<CustomerRobotStatusDto>("/api/customers/robot-status").then(setRobot).catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -75,6 +80,17 @@ export default function CustomersPage() {
           Müşteriler telefon numarasına göre kayıtlıdır ve tüm markalarda ortaktır. Kayıtlı adresi olan müşteriye sipariş sırasında adresi sorulur.
         </p>
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {robot?.configured && (
+          <p
+            role={robot.last && !robot.last.ok ? "alert" : undefined}
+            className={`mb-4 rounded-lg px-3 py-2 text-sm ${!robot.last || !robot.last.ok || Date.now() - new Date(robot.last.at).getTime() > 36 * 3600_000 ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}
+          >
+            Otomatik müşteri aktarımı (RMS):{" "}
+            {robot.last
+              ? `${new Date(robot.last.at).toLocaleString("tr-TR")} · ${robot.last.ok ? "başarılı" : "HATA"} · ${robot.last.message}${robot.last.ok && Date.now() - new Date(robot.last.at).getTime() > 36 * 3600_000 ? " (son çalışma 1,5 günden eski, robotu kontrol edin)" : ""}`
+              : "henüz çalışmadı"}
+          </p>
+        )}
 
         <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
           <h2 className="mb-1 font-medium">Excel&apos;den içe aktar</h2>

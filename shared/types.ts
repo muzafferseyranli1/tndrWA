@@ -263,6 +263,13 @@ export interface CustomerImportJobDto {
   error: string | null;
 }
 
+export interface CustomerRobotStatusDto {
+  /** Sunucuda IMPORT_TOKEN tanımlı mı (robot erişimi açık mı) */
+  configured: boolean;
+  /** Robotun son bildirimi (başarılı ya da hata) */
+  last: { at: string; ok: boolean; message: string } | null;
+}
+
 export interface BusinessInfoDto {
   legalName: string;
   address: string;

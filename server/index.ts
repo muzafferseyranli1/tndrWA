@@ -29,7 +29,7 @@ import { publicRouter } from "./routes/public";
 import { channelsRouter } from "./routes/channels";
 import { paymentsRouter } from "./routes/payments";
 import { ratingsRouter } from "./routes/ratings";
-import { customersRouter } from "./routes/customers";
+import { createImportRunner, customersRouter, robotRouter } from "./routes/customers";
 import { businessRouter } from "./routes/business";
 import { hoursRouter } from "./routes/hours";
 import { backupsRouter } from "./routes/backups";
@@ -138,6 +138,10 @@ async function main() {
   let posPriceChange: (brandId: number) => void = () => undefined;
   app.use("/api/pos-ext", posExtRouter(db, (brandId) => posPriceChange(brandId), cloudForAck, env.publicBaseUrl, suitableSync));
 
+  // VPS'teki müşteri robotu: oturum çerezi yok, X-Robot-Token ile doğrulanır (IMPORT_TOKEN yoksa kapalı)
+  const importRunner = createImportRunner(db);
+  app.use("/api/robot", robotRouter(db, importRunner, process.env.IMPORT_TOKEN));
+
   app.use(
     requireAuth(env.sessionSecret, {
       adminUsername: env.adminUsername,
@@ -186,7 +190,7 @@ async function main() {
   app.use("/api/payments", paymentsRouter(db));
   app.use("/api/options", optionsRouter(db));
   app.use("/api/ratings", ratingsRouter(db));
-  app.use("/api/customers", customersRouter(db));
+  app.use("/api/customers", customersRouter(db, importRunner));
   app.use("/api/hours", hoursRouter(db));
   app.use("/api/business", businessRouter(db, env.publicBaseUrl));
   // Yedekler kalıcı diskte (yükleme klasörünün yanında): üretimde /data/backups

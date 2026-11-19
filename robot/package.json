@@ -1,0 +1,14 @@
+{
+  "name": "yrndwa-robot",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "RMS müşteri listesini günlük indirip yrndWA paneline gönderen robot",
+  "scripts": {
+    "start": "node rms-customers.mjs",
+    "once": "node rms-customers.mjs --once"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}
