@@ -184,6 +184,8 @@ model Order {
   suitableTries  Int       @default(0)
   suitableNextAt DateTime?
   suitableError  String?
+  // Müşterinin seçtiği kupon/puan/hediye hakkı ve sunulan seçenekler (JSON); boşsa sadakat kullanımı yok
+  loyaltyJson    String?
   // Müşteriye son soru (seçenek/ödeme/adres) ne zaman gitti; 5 dk yanıt yoksa soru tekrarlanır, 5 dk daha yoksa sipariş iptal edilir
   promptedAt     DateTime?
   reminderSentAt DateTime?

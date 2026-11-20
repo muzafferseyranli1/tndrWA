@@ -69,6 +69,8 @@ export interface ApiOrderBody {
   pricing?: { subtotal: number; discount?: { amount: number; label?: string }; campaignDiscount?: number; loyaltyDiscount?: number; deliveryFee?: number; total: number };
   campaignIds?: string[];
   loyalty?: { couponCode?: string; pointsRedeemed?: number; giftCampaign?: string };
+  /** Kupon/puan/hediye hakkı harcaması (loyalty:redeem); sipariş açılırken aynı işlemde harcanır, iptalde iade edilir */
+  selection?: ApiSelection;
   note?: string;
 }
 
@@ -112,8 +114,20 @@ export interface ApiWebhookConfig {
   lastTest?: { at: number; ok: boolean; statusCode?: number | null; error?: string | null } | null;
 }
 
+/** Müşterinin sepete uyguladığı kupon / puan / hediye hakkı (loyalty:redeem kapsamı gerekir); evaluate'te önizlenir, siparişte aynen gönderilir. */
+export interface ApiSelection {
+  campaignIds?: string[];
+  couponId?: string;
+  pointsToRedeem?: number;
+  giftIds?: string[];
+  giftChoices?: Record<string, string>;
+}
+
 export interface ApiEvaluateResult {
   subtotal: number;
+  /** Kupon + puan indirimi (selection verildiyse); siparişteki pricing.loyaltyDiscount bununla aynı olmalıdır */
+  loyaltyDiscount?: number;
+  loyalty?: { couponDiscount?: number; pointsDiscount?: number; pointsUsed?: number } | null;
   campaignDiscount: number;
   appliedCampaigns: { id: string; name: string; discount: number }[];
   /** true ise aynı sonuç sipariş açılırken Suitable tarafından uygulanır (kampanyayı sunucunun uyguladığı anahtar): kampanya alanları gönderilmez */
@@ -236,7 +250,7 @@ export class SuitableClient {
   testWebhook(): Promise<{ ok: boolean; statusCode: number | null; error: string | null }> {
     return this.request("POST", "/webhook/test", {});
   }
-  evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: { campaignIds: string[] }; payment?: ApiOrderBody["payment"] }): Promise<ApiEvaluateResult> {
+  evaluate(body: { store: string; customer?: { phone: string }; delivery: { type: "delivery" | "pickup" }; lines: ApiOrderLine[]; selection?: ApiSelection; payment?: ApiOrderBody["payment"] }): Promise<ApiEvaluateResult> {
     return this.request("POST", "/orders/evaluate", body);
   }
 }
@@ -367,7 +381,7 @@ export async function buildApiLines(db: PrismaClient, order: OrderLike, snap: Po
  * campaignDiscount, campaignIds ve hediye satırları bundan yazılır; verilmezse indirimsiz gönderilir. Panelde tanımlı ödeme
  * şekli indirimi API yönteminde kullanılmaz (kampanyalar POS'ta tanımlıdır).
  */
-export async function buildApiOrder(db: PrismaClient, order: OrderLike, snap: PosSnapshotData, storeId: string, evaluation: ApiEvaluateResult | null = null, mode: PriceMode = "platform"): Promise<BuildResult> {
+export async function buildApiOrder(db: PrismaClient, order: OrderLike, snap: PosSnapshotData, storeId: string, evaluation: ApiEvaluateResult | null = null, mode: PriceMode = "platform", selection: ApiSelection | null = null): Promise<BuildResult> {
   const phone = apiPhone(order.customer.waId);
   if (!phone) return { ok: false, error: "Müşterinin telefon numarası yok (API için zorunlu)" };
   if (!order.address.trim()) return { ok: false, error: "Teslimat adresi yok" };
@@ -380,6 +394,9 @@ export async function buildApiOrder(db: PrismaClient, order: OrderLike, snap: Po
   const platform = mode === "platform";
   const campaignKurus = evaluation && platform ? Math.min(built.subtotalKurus, Math.max(0, Math.round(evaluation.campaignDiscount * 100))) : 0;
   const campaignIds = evaluation && platform ? evaluation.appliedCampaigns.map((c) => c.id).slice(0, 20) : [];
+  // Kupon/puan/hediye hakkı: yalnız platform modunda ve evaluate sonucu varsa; indirim evaluate'in loyaltyDiscount'uyla aynı olmalı (yoksa 409 price_mismatch)
+  const sel: ApiSelection | null = selection && platform && evaluation ? { ...(selection.couponId ? { couponId: selection.couponId } : {}), ...(selection.pointsToRedeem ? { pointsToRedeem: selection.pointsToRedeem } : {}), ...(selection.giftIds?.length ? { giftIds: selection.giftIds } : {}), ...(selection.giftChoices && Object.keys(selection.giftChoices).length ? { giftChoices: selection.giftChoices } : {}) } : null;
+  const loyaltyKurus = sel && evaluation ? Math.min(built.subtotalKurus - campaignKurus, Math.max(0, Math.round((evaluation.loyaltyDiscount ?? 0) * 100))) : 0;
   // Hediye ürünler fiyatsız satır olarak eklenir; porsiyonluysa ilk porsiyon seçilir
   for (const g of platform ? evaluation?.gifts ?? [] : []) {
     const pos = snap.products.find((x) => x.id === g.productId);
@@ -408,11 +425,13 @@ export async function buildApiOrder(db: PrismaClient, order: OrderLike, snap: Po
           pricing: {
             subtotal: tl(built.subtotalKurus),
             ...(campaignKurus > 0 ? { campaignDiscount: tl(campaignKurus) } : {}),
-            total: tl(built.subtotalKurus - campaignKurus),
+            ...(sel ? { loyaltyDiscount: tl(loyaltyKurus) } : {}),
+            total: tl(built.subtotalKurus - campaignKurus - loyaltyKurus),
           },
         }
       : {}),
     ...(campaignKurus > 0 && campaignIds.length ? { campaignIds } : {}),
+    ...(sel ? { selection: sel } : {}),
     ...(note ? { note } : {}),
   };
   return { ok: true, body, warnings };

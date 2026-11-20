@@ -70,7 +70,7 @@ export interface OrderDto {
   totalKurus: number;
   totalText: string;
   /** AWAITING_PAYMENT | AWAITING_ADDRESS: müşteriden bilgi bekleniyor; READY: personel işleyebilir */
-  stage: "AWAITING_MERGE" | "AWAITING_NOTICE" | "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "READY";
+  stage: "AWAITING_MERGE" | "AWAITING_NOTICE" | "AWAITING_OPTIONS" | "AWAITING_PAYMENT" | "AWAITING_ADDRESS" | "AWAITING_LOYALTY" | "READY";
   paymentLabel: string;
   discountPercent: number;
   discountText: string;

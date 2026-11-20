@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
-import { WAITING_STAGES, resendPendingQuestion } from "./order-flow";
+import { WAITING_STAGES, resendPendingQuestion, skipLoyalty } from "./order-flow";
 import { sendMenu } from "./menu-message";
 import { findMergeTarget } from "./order-merge";
 import { orderVars, renderTemplate, templateFor } from "./order-messages";
@@ -10,11 +10,15 @@ import { addrOf, type Messenger } from "./messenger";
 /** Müşteri soruya bu süre yanıt vermezse soru tekrarlanır; hatırlatmadan sonra yine bu süre yanıt yoksa sipariş iptal edilir. */
 export const REPLY_TIMEOUT_MS = Number(process.env.ORDER_REPLY_TIMEOUT_MS) || 5 * 60 * 1000;
 
-export type TimeoutAction = "remind" | "cancel" | null;
+export type TimeoutAction = "remind" | "cancel" | "skip-loyalty" | null;
 
-/** Yanıt bekleyen sipariş için yapılacak iş. Soru hiç gönderilmemişse (promptedAt yok) dokunulmaz. */
+/**
+ * Yanıt bekleyen sipariş için yapılacak iş. Soru hiç gönderilmemişse (promptedAt yok) dokunulmaz.
+ * Kupon/puan sorusu (AWAITING_LOYALTY) yanıtsız kalırsa sipariş iptal edilmez (ödeme ve adres tamam): süre dolunca indirimsiz tamamlanır.
+ */
 export function timeoutAction(order: { status: string; stage: string; promptedAt: Date | null; reminderSentAt: Date | null }, now: Date): TimeoutAction {
   if (order.status !== "NEW" || !WAITING_STAGES.includes(order.stage) || !order.promptedAt) return null;
+  if (order.stage === "AWAITING_LOYALTY") return now.getTime() - order.promptedAt.getTime() >= REPLY_TIMEOUT_MS ? "skip-loyalty" : null;
   if (order.reminderSentAt) return now.getTime() - order.reminderSentAt.getTime() >= REPLY_TIMEOUT_MS ? "cancel" : null;
   return now.getTime() - order.promptedAt.getTime() >= REPLY_TIMEOUT_MS ? "remind" : null;
 }
@@ -58,7 +62,10 @@ export async function runOrderTimeouts(db: PrismaClient, cloud: Messenger | null
           await recordFailedOutbound(db, { brandId: order.brandId, customerId: order.customerId, type: "text", body, waMessageId: null, orderId: order.id, channel: order.channel }, (err as Error).message);
         }
       };
-      if (action === "remind") {
+      if (action === "skip-loyalty") {
+        await skipLoyalty(db, cloud, order.id);
+        result.reminded++;
+      } else if (action === "remind") {
         await resendPendingQuestion(db, cloud, order.id);
         await send("ORDER_REMINDER", await addingTo()); // soru yeniden sorulurken açık sipariş yola çıktıysa ek sepet normal siparişe dönmüştür
         await db.order.update({ where: { id: order.id }, data: { reminderSentAt: new Date() } });

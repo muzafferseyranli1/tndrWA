@@ -3,8 +3,9 @@ import type { PriceMode, SuitableEnv } from "../lib/env";
 import { logger } from "../lib/logger";
 import type { Messenger } from "./messenger";
 import { applyPosEvents, markPosEntered, setPosAlert, type PosEvent } from "./pos-tracking";
-import { apiPayment, apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiCustomer, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
+import { apiPayment, apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiCustomer, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine, type ApiSelection } from "./suitable-api";
 import { addressKey } from "./addresses";
+import { emptyOffer, hasSelection, offerFromCustomer, offerIsEmpty, parseLoyalty, selectionSummary, serializeLoyalty, type LoyaltyOffer, type LoyaltyState } from "./loyalty";
 import { joinAddress } from "./customer-import";
 import type { DiscountResult } from "../../shared/campaigns";
 import { storeSnapshot, syncPricesFromPos } from "./pos-bridge";
@@ -231,10 +232,11 @@ export class SuitableSync {
   }
 
   /** POS kampanya değerlendirmesi (hiçbir şey yazılmaz). Hata fırlatır; çağıran karar verir. */
-  private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number, paymentLabel = ""): Promise<ApiEvaluateResult> {
+  private async evaluateLines(store: string, phone: string, lines: ApiOrderLine[], timeoutMs: number, paymentLabel = "", selection: ApiSelection | null = null): Promise<ApiEvaluateResult> {
     // Ödeme şekline bağlı kampanyalar (ör. yalnız nakit ve kapıda kart) için ödeme şekli sorguya eklenir; gönderilmezse ödeme kısıtı değerlendirilmez ve kısıtlı kampanyalar da döner
     const payment = paymentLabel && (await this.evaluatePaymentOn()) ? apiPayment(paymentLabel).payment : undefined;
-    const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines, ...(payment ? { payment } : {}) });
+    const sel = selection && hasSelection(selection) ? { ...(selection.couponId ? { couponId: selection.couponId } : {}), ...(selection.pointsToRedeem ? { pointsToRedeem: selection.pointsToRedeem } : {}), ...(selection.giftIds?.length ? { giftIds: selection.giftIds } : {}), ...(selection.giftChoices && Object.keys(selection.giftChoices).length ? { giftChoices: selection.giftChoices } : {}) } : null;
+    const call = this.api().evaluate({ store, customer: { phone }, delivery: { type: "delivery" }, lines, ...(payment ? { payment } : {}), ...(sel ? { selection: sel } : {}) });
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, rej) => {
       timer = setTimeout(() => rej(new SuitableApiError(0, "network", "Kampanya sorgusu zaman aşımına uğradı")), timeoutMs);
@@ -261,12 +263,81 @@ export class SuitableSync {
       const snap = menuToSnapshot(await this.menuOf(store), store);
       const built = await buildApiLines(this.db, order, snap);
       if (!built.ok) return null;
-      const ev = await this.evaluateLines(store, phone, built.lines, timeoutMs, order.paymentLabel);
-      const kurus = Math.min(built.subtotalKurus, Math.max(0, Math.round(ev.campaignDiscount * 100)));
-      return { discountKurus: kurus, note: kurus > 0 ? ev.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) : "" };
+      // Müşteri kupon/puan seçtiyse indirim onunla birlikte hesaplanır (platform modu); seçim artık geçersizse düşülür
+      const state = this.priceMode() === "platform" ? parseLoyalty(order.loyaltyJson) : null;
+      const sel = state && hasSelection(state.sel) ? state.sel : null;
+      let ev: ApiEvaluateResult;
+      try {
+        ev = await this.evaluateLines(store, phone, built.lines, timeoutMs, order.paymentLabel, sel);
+      } catch (err) {
+        if (sel && err instanceof SuitableApiError && err.code === "loyalty_invalid") {
+          await this.dropLoyalty(orderId, `Kupon/puan kullanımı geçersiz çıktı (${err.message.slice(0, 120)}), indirimsiz devam edildi`);
+          ev = await this.evaluateLines(store, phone, built.lines, timeoutMs, order.paymentLabel);
+        } else throw err;
+      }
+      const campaign = Math.min(built.subtotalKurus, Math.max(0, Math.round(ev.campaignDiscount * 100)));
+      const loyalty = sel ? Math.min(built.subtotalKurus - campaign, Math.max(0, Math.round((ev.loyaltyDiscount ?? 0) * 100))) : 0;
+      const names = campaign > 0 ? ev.appliedCampaigns.map((c) => c.name).join(" + ") : "";
+      const lnote = sel && state && loyalty > 0 ? selectionSummary({ ...state, pointsUsed: ev.loyalty?.pointsUsed ?? state.sel.pointsToRedeem }) : "";
+      return { discountKurus: campaign + loyalty, note: [names, lnote].filter(Boolean).join(" + ").slice(0, 120) };
     } catch (err) {
       logger.warn({ orderId, err: (err as Error).message }, "Suitable kampanya sorgusu yapılamadı");
       return null;
+    }
+  }
+
+  /** Kupon/puan seçimini siparişten kaldırır (geçersiz çıktığında) ve geçmişe not düşer. */
+  private async dropLoyalty(orderId: number, note: string): Promise<void> {
+    const o = await this.db.order.findUnique({ where: { id: orderId }, select: { loyaltyJson: true } });
+    const st = parseLoyalty(o?.loyaltyJson);
+    if (st) await this.db.order.update({ where: { id: orderId }, data: { loyaltyJson: serializeLoyalty({ ...st, sel: {}, discountKurus: 0, pointsUsed: 0 }) } });
+    await this.db.orderChange.create({ data: { orderId, text: note.slice(0, 300) } });
+  }
+
+  /**
+   * Müşterinin siparişte kullanabileceği kupon/puan/hediye hakları (sipariş akışı adres sonrası sorar). Yalnız API yöntemi + platform modu + customers:read;
+   * kullanılabilir bir şey yoksa ya da sorgu yapılamazsa null (müşteriye hiçbir şey sorulmaz). Sonuç saklanmaz: yalnız siparişin akışında tutulur.
+   */
+  async loyaltyOptions(orderId: number, timeoutMs = 4000): Promise<LoyaltyOffer | null> {
+    if (!this.cfg || this.priceMode() !== "platform" || Date.now() < this.customersBlockedUntil) return null;
+    try {
+      if ((await getWriteMode(this.db, this.cfg)) !== "api") return null;
+      const order = await this.db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true } });
+      const store = order ? this.storeOf(order.brand) : null;
+      const wa = order?.customer.waId;
+      if (!order || !store || !wa) return null;
+      const found = await Promise.race([this.api().getCustomer(store, wa), new Promise<null>((_, rej) => setTimeout(() => rej(new Error("zaman aşımı")), timeoutMs).unref?.())]);
+      const offer = offerFromCustomer(found);
+      return offerIsEmpty(offer) ? null : offer;
+    } catch (err) {
+      if (err instanceof SuitableApiError && (err.status === 403 || err.status === 401)) this.customersBlockedUntil = Date.now() + 10 * 60_000;
+      logger.warn({ orderId, err: (err as Error).message }, "Suitable sadakat seçenekleri alınamadı");
+      return null;
+    }
+  }
+
+  /**
+   * Seçimin indirimini Suitable'a sorar (hiçbir şey harcanmaz). Dönen: kampanya + kupon/puan indirimi (kuruş) ve kullanılacak puan;
+   * seçim geçersizse (kupon kullanılmış, puan yetersiz...) `ok:false` ve müşteriye söylenecek sebep.
+   */
+  async loyaltyPreview(orderId: number, sel: ApiSelection, timeoutMs = 6000): Promise<{ ok: true; campaignKurus: number; loyaltyKurus: number; pointsUsed: number } | { ok: false; reason: string }> {
+    try {
+      const order = await this.db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true, items: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } } });
+      const store = order ? this.storeOf(order.brand) : null;
+      const phone = order ? apiPhone(order.customer.waId) : null;
+      if (!order || !store || !phone || !order.items.length) return { ok: false, reason: "Şu an hesaplanamadı." };
+      const snap = menuToSnapshot(await this.menuOf(store), store);
+      const built = await buildApiLines(this.db, order, snap);
+      if (!built.ok) return { ok: false, reason: "Şu an hesaplanamadı." };
+      const ev = await this.evaluateLines(store, phone, built.lines, timeoutMs, order.paymentLabel, sel);
+      const campaignKurus = Math.min(built.subtotalKurus, Math.max(0, Math.round(ev.campaignDiscount * 100)));
+      const loyaltyKurus = Math.min(built.subtotalKurus - campaignKurus, Math.max(0, Math.round((ev.loyaltyDiscount ?? 0) * 100)));
+      return { ok: true, campaignKurus, loyaltyKurus, pointsUsed: ev.loyalty?.pointsUsed ?? sel.pointsToRedeem ?? 0 };
+    } catch (err) {
+      const e = err as Error;
+      logger.warn({ orderId, err: e.message }, "Suitable kupon/puan önizlemesi yapılamadı");
+      if (err instanceof SuitableApiError && err.code === "loyalty_invalid") return { ok: false, reason: "Bu kupon/puan şu an kullanılamıyor." };
+      return { ok: false, reason: "Şu an hesaplanamadı." };
     }
   }
 
@@ -360,11 +431,21 @@ export class SuitableSync {
       const mode = this.priceMode();
       let evaluation: ApiEvaluateResult | null = null;
       let campaignNote = "";
+      // Müşterinin seçtiği kupon/puan/hediye hakkı (yalnız platform modu): sipariş açılırken Suitable aynı işlemde harcar (test siparişinde harcanmaz)
+      const loyaltyState = mode === "platform" ? parseLoyalty((order as { loyaltyJson?: string | null }).loyaltyJson) : null;
+      const selection = loyaltyState && hasSelection(loyaltyState.sel) ? loyaltyState.sel : null;
       if (mode !== "server") {
         try {
-          evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", lines.lines, 8000, order.paymentLabel);
+          evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", lines.lines, 8000, order.paymentLabel, selection);
         } catch (err) {
           const e = err as SuitableApiError;
+          // Kupon/puan bu arada geçersiz olduysa (kullanıldı, puan değişti): seçim düşülür, sipariş indirimsiz (kampanyayla) yeniden denenir
+          if (selection && e instanceof SuitableApiError && e.code === "loyalty_invalid") {
+            const gone = loyaltyState?.discountKurus ?? 0;
+            await this.dropLoyalty(order.id, `Kupon/puan kullanımı geçersiz çıktı (${e.message.slice(0, 120)}); sipariş bu indirim olmadan gönderiliyor`);
+            await this.db.order.update({ where: { id: order.id }, data: { discountKurus: Math.max(0, order.discountKurus - gone) } });
+            return false;
+          }
           if (e instanceof SuitableApiError && e.code === "product_unavailable") {
             await this.fail(order.id, e, tries, now, true);
             return false;
@@ -376,7 +457,7 @@ export class SuitableSync {
           campaignNote = ` · kampanya sorgulanamadı${mode === "platform" ? ", kampanyasız yazıldı" : ""} (${e.message.slice(0, 120)})`;
         }
       }
-      const built = await buildApiOrder(this.db, order, snap, store, evaluation, mode);
+      const built = await buildApiOrder(this.db, order, snap, store, evaluation, mode, selection);
       if (!built.ok) {
         await this.fail(order.id, new Error(built.error), tries, now, true);
         return false;
@@ -396,13 +477,24 @@ export class SuitableSync {
       } else campaignKurus = Math.round((res.campaignDiscount ?? 0) * 100);
       const names = evaluation?.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) ?? "";
       const campaignName = campaignKurus > 0 ? names || "POS kampanyası" : "";
-      await this.db.order.update({ where: { id: order.id }, data: { suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null, discountKurus: campaignKurus, discountNote: campaignName } });
+      // Kupon/puan indirimi: siparişle gönderilen (Suitable'ın hesapladığı) tutar; toplam indirim = kampanya + kupon/puan
+      const loyaltyKurus = built.body.selection ? Math.round((built.body.pricing?.loyaltyDiscount ?? 0) * 100) : 0;
+      const loyaltyName = loyaltyKurus > 0 && loyaltyState ? selectionSummary({ ...loyaltyState, pointsUsed: evaluation?.loyalty?.pointsUsed ?? loyaltyState.sel.pointsToRedeem }) : "";
+      const noteText = [campaignName, loyaltyName].filter(Boolean).join(" + ").slice(0, 120);
+      const totalDiscountKurus = campaignKurus + loyaltyKurus;
+      await this.db.order.update({
+        where: { id: order.id },
+        data: {
+          suitableId: res.orderId, posRef: ref, posAt: new Date(), suitableError: null, suitableNextAt: null, discountKurus: totalDiscountKurus, discountNote: noteText,
+          ...(loyaltyState ? { loyaltyJson: serializeLoyalty({ ...loyaltyState, discountKurus: loyaltyKurus, pointsUsed: evaluation?.loyalty?.pointsUsed ?? loyaltyState.sel.pointsToRedeem ?? 0 }) } : {}),
+        },
+      });
       const warn = [...driftNotes, ...built.warnings];
-      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${campaignName ? ` · kampanya: ${campaignName} (-${(campaignKurus / 100).toFixed(2)} TL)` : ""}${campaignNote}${warn.length ? ` · uyarı: ${warn.join("; ")}`.slice(0, 400) : ""}`.slice(0, 600) } });
+      await this.db.orderChange.create({ data: { orderId: order.id, text: `Suitable'a yazıldı: ${ref}${test ? " (TEST siparişi: satış raporunda görünür, işiniz bitince iptal edin)" : ""}${res.duplicate ? " (zaten kayıtlıydı)" : ""}${campaignName ? ` · kampanya: ${campaignName} (-${(campaignKurus / 100).toFixed(2)} TL)` : ""}${loyaltyName ? ` · sadakat: ${loyaltyName} (-${(loyaltyKurus / 100).toFixed(2)} TL${test ? ", test: harcanmadı" : ""})` : ""}${campaignNote}${warn.length ? ` · uyarı: ${warn.join("; ")}`.slice(0, 400) : ""}`.slice(0, 600) } });
       const shownKurus = order.discountKurus;
       await markPosEntered(this.db, this.cloud, this.publicBaseUrl, order.id).catch((err: Error) => logger.warn({ orderId: order.id, err: err.message }, "POS girişi bildirilemedi"));
       // POS'un uyguladığı kampanya müşterinin gördüğünden farklıysa (ör. ödeme şekline bağlı kampanya) müşteriye bildirilir
-      if (campaignKurus > 0 && campaignKurus !== shownKurus) {
+      if (totalDiscountKurus > 0 && totalDiscountKurus !== shownKurus) {
         const fresh = await this.db.order.findUnique({ where: { id: order.id }, include: { brand: true, customer: true } });
         if (fresh) await notifyOrderStatus(this.db, this.cloud, fresh, "CAMPAIGN_APPLIED", this.publicBaseUrl).catch(() => undefined);
       }

@@ -13,6 +13,8 @@ import { itemLines } from "./order-edit";
 import { findMergeTarget, mergeOrderInto } from "./order-merge";
 import { requestPosLookup } from "./pos-bridge";
 import { addrOf, type Address, type Messenger } from "./messenger";
+import { hasSelection, introText, parseLoyalty, remainingChoices, selectionSummary, serializeLoyalty, type LoyaltyOffer, type LoyaltyState } from "./loyalty";
+import type { ApiSelection } from "./suitable-api";
 
 /** Müşteri bu süreden sonra yazarsa eski yarım sipariş artık beklemede sayılmaz (personel elle tamamlar). */
 export const OPEN_ORDER_WINDOW_MS = 3 * 60 * 60 * 1000;
@@ -31,7 +33,7 @@ export const kvkkId = (orderId: number, choice: "ok" | "text") => `kvkk:${orderI
 export const mergeId = (orderId: number, choice: "yes" | "no") => `merge:${orderId}:${choice}`;
 
 /** Müşteriden yanıt beklenen aşamalar (açık siparişe ekleme, KVKK bilgilendirme onayı, seçenek, ödeme, adres). */
-export const WAITING_STAGES = ["AWAITING_MERGE", "AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS"];
+export const WAITING_STAGES = ["AWAITING_MERGE", "AWAITING_NOTICE", "AWAITING_OPTIONS", "AWAITING_PAYMENT", "AWAITING_ADDRESS", "AWAITING_LOYALTY"];
 /** Müşteri "ekle" dedi ama sipariş bu arada yola çıktı */
 const MERGE_LATE_TEXT = "Önceki siparişiniz yola çıktığı için bu ürünleri ona ekleyemedik; ayrı sipariş olarak devam ediyoruz.";
 /** "Okudum, devam" butonu yerine yazıyla onay */
@@ -77,6 +79,7 @@ export async function resendPendingQuestion(db: PrismaClient, cloud: Messenger |
   if (!order || order.status !== "NEW") return;
   if (order.stage === "AWAITING_MERGE" || order.stage === "AWAITING_NOTICE" || order.stage === "AWAITING_OPTIONS" || order.stage === "AWAITING_PAYMENT") return startOrderConversation(db, cloud, orderId);
   if (order.stage === "AWAITING_ADDRESS") return askAddress(db, cloud, order);
+  if (order.stage === "AWAITING_LOYALTY") return resendLoyalty(db, cloud, order);
 }
 
 /**
@@ -418,15 +421,123 @@ async function askAddress(db: PrismaClient, cloud: Messenger | null, order: Full
   }
 }
 
-/** Ödeme ve adres tamam: sipariş hazır olur (panelde sesli uyarı), müşteriye onay gider, adres müşteriye kaydedilir. */
+/** Müşterinin kupon/puan/hediye haklarını sunan ve indirimini hesaplayan sağlayıcı (Suitable API yöntemi; yoksa ya da kullanılabilir hak yoksa akışa hiç girilmez). */
+export interface LoyaltyProvider {
+  options(orderId: number): Promise<LoyaltyOffer | null>;
+  preview(orderId: number, sel: ApiSelection): Promise<{ ok: true; campaignKurus: number; loyaltyKurus: number; pointsUsed: number } | { ok: false; reason: string }>;
+}
+let loyaltyProvider: LoyaltyProvider | null = null;
+export function setLoyaltyProvider(p: LoyaltyProvider | null): void {
+  loyaltyProvider = p;
+}
+export const loyId = (orderId: number, choice: string) => `loy:${orderId}:${choice}`;
+
+/** Ödeme ve adres tamam: kullanılabilir kupon/puan varsa önce onu sorar; yoksa sipariş hazır olur (panelde sesli uyarı), müşteriye onay gider, adres müşteriye kaydedilir. */
 async function finish(db: PrismaClient, cloud: Messenger | null, orderId: number, address: { text: string; lat?: number | null; lng?: number | null }): Promise<void> {
-  await db.order.update({ where: { id: orderId }, data: { stage: "READY", address: address.text, lat: address.lat ?? null, lng: address.lng ?? null } });
+  await db.order.update({ where: { id: orderId }, data: { address: address.text, lat: address.lat ?? null, lng: address.lng ?? null } });
   const order = (await load(db, orderId))!;
   await rememberAddress(db, order.customerId, address.text, address.lat, address.lng);
+  if (await offerLoyalty(db, cloud, order)) return;
+  await completeOrder(db, cloud, orderId);
+}
+
+async function completeOrder(db: PrismaClient, cloud: Messenger | null, orderId: number): Promise<void> {
+  await db.order.update({ where: { id: orderId }, data: { stage: "READY" } });
+  const order = (await load(db, orderId))!;
   if (!canSend(cloud, order)) return;
   const body = await render(db, order, "CONFIRMED");
   const id = await cloud.sendText(...addr(order), body);
   await log(db, order, "text", body, id);
+}
+
+/** Kullanılabilir hak varsa "kullanmak ister misiniz?" listesini gönderir ve true döner (sipariş AWAITING_LOYALTY'de bekler). */
+async function offerLoyalty(db: PrismaClient, cloud: Messenger | null, order: FullOrder): Promise<boolean> {
+  if (!loyaltyProvider || !canSend(cloud, order)) return false;
+  try {
+    const offer = await loyaltyProvider.options(order.id);
+    if (!offer) return false;
+    const state: LoyaltyState = { offer, sel: {}, discountKurus: 0 };
+    await db.order.update({ where: { id: order.id }, data: { stage: "AWAITING_LOYALTY", loyaltyJson: serializeLoyalty(state) } });
+    await askLoyalty(db, cloud, (await load(db, order.id))!, state, introText(state, order.customer.name));
+    return true;
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, orderId: order.id }, "Kupon/puan sorusu gönderilemedi, sipariş indirimsiz tamamlanıyor");
+    await db.order.update({ where: { id: order.id }, data: { stage: "READY", loyaltyJson: null } }).catch(() => undefined);
+    return false;
+  }
+}
+
+async function askLoyalty(db: PrismaClient, cloud: Messenger | null, order: FullOrder, state: LoyaltyState, body: string): Promise<void> {
+  if (!canSend(cloud, order)) return;
+  const rows = remainingChoices(state).map((r) => ({ id: loyId(order.id, r.id), title: r.title, description: r.description }));
+  const id = await cloud.sendList(...addr(order), { body, buttonText: "Seçenekler", rows });
+  await log(db, order, "text", body, id);
+}
+
+/** Soru yanıtsız kaldıysa yeniden sorar. */
+async function resendLoyalty(db: PrismaClient, cloud: Messenger | null, order: FullOrder): Promise<void> {
+  const state = parseLoyalty(order.loyaltyJson);
+  if (!state) return void (await completeOrder(db, cloud, order.id));
+  await askLoyalty(db, cloud, order, state, hasSelection(state.sel) ? "Başka bir hakkınızı kullanmak ister misiniz?" : introText(state, order.customer.name));
+}
+
+/** Müşteri kupon/puan sorusuna yanıt vermedi: sipariş indirimsiz tamamlanır (iptal edilmez; ödeme ve adres zaten tamam). */
+export async function skipLoyalty(db: PrismaClient, cloud: Messenger | null, orderId: number): Promise<void> {
+  const order = await load(db, orderId);
+  if (!order || order.stage !== "AWAITING_LOYALTY") return;
+  const state = parseLoyalty(order.loyaltyJson);
+  // Seçim yapıldıysa (indirim uygulanmış) olduğu gibi tamamlanır; hiç seçim yoksa indirimsiz
+  await db.orderChange.create({ data: { orderId, text: state && hasSelection(state.sel) ? "Müşteri kupon/puan sorusuna yanıt vermedi; seçtiği haklarla tamamlandı." : "Müşteri kupon/puan sorusuna yanıt vermedi; indirimsiz tamamlandı." } });
+  await completeOrder(db, cloud, orderId);
+}
+
+async function answerLoyalty(db: PrismaClient, cloud: Messenger | null, order: FullOrder, choice: string): Promise<void> {
+  const state = parseLoyalty(order.loyaltyJson);
+  if (!state || choice === "done" || !loyaltyProvider) return void (await completeOrder(db, cloud, order.id));
+  const sel: ApiSelection = { ...state.sel };
+  if (choice === "pts" && state.offer.points) {
+    // Önce seçilmiş kupon varsa onun indirimi de düşülür: gereğinden fazla puan istenmesin
+    const payableKurus = Math.max(0, order.totalKurus - order.discountKurus);
+    const needed = Math.ceil(payableKurus / 100 / state.offer.points.pointValue);
+    sel.pointsToRedeem = Math.max(0, Math.min(state.offer.points.redeemable, needed));
+  } else if (/^c\d+$/.test(choice)) {
+    const c = state.offer.coupons[Number(choice.slice(1))];
+    if (c) sel.couponId = c.id;
+  } else if (/^g\d+$/.test(choice)) {
+    const g = state.offer.gifts[Number(choice.slice(1))];
+    if (g) sel.giftIds = [...new Set([...(sel.giftIds ?? []), g.id])];
+  } else {
+    return void (await resendLoyalty(db, cloud, order)); // eski/bilinmeyen seçenek: soru yeniden gösterilir
+  }
+  const res = await loyaltyProvider.preview(order.id, sel);
+  if (!res.ok) {
+    if (canSend(cloud, order)) await askLoyalty(db, cloud, order, state, `${res.reason} Başka bir seçenek deneyebilir ya da "${hasSelection(state.sel) ? "Hayır, tamamla" : "Kullanmayacağım"}" diyebilirsiniz.`);
+    return;
+  }
+  const next: LoyaltyState = { ...state, sel, discountKurus: res.loyaltyKurus, pointsUsed: res.pointsUsed };
+  const note = [await orderCampaignNote(db, order.id), selectionSummary(next)].filter(Boolean).join(" + ").slice(0, 120);
+  await db.order.update({ where: { id: order.id }, data: { discountKurus: res.campaignKurus + res.loyaltyKurus, discountNote: note, loyaltyJson: serializeLoyalty(next) } });
+  const fresh = (await load(db, order.id))!;
+  const payable = formatTRY(fresh.totalKurus - fresh.discountKurus);
+  const applied = `✅ ${selectionSummary(next)} uygulandı: -${formatTRY(res.loyaltyKurus)}\nÖdenecek tutar: ${payable}`;
+  // Seçilecek başka bir şey kalmadıysa ya da tutar sıfırlandıysa doğrudan tamamlanır
+  if (remainingChoices(next).length <= 1 || fresh.totalKurus - fresh.discountKurus <= 0) {
+    if (canSend(cloud, fresh)) {
+      const id = await cloud.sendText(...addr(fresh), applied);
+      await log(db, fresh, "text", applied, id);
+    }
+    return void (await completeOrder(db, cloud, order.id));
+  }
+  await askLoyalty(db, cloud, fresh, next, `${applied}\n\nBaşka bir hakkınızı kullanmak ister misiniz?`);
+}
+
+/** İndirim notunun kampanya kısmı (kupon/puan eklenmeden önceki). */
+async function orderCampaignNote(db: PrismaClient, orderId: number): Promise<string> {
+  const o = await db.order.findUnique({ where: { id: orderId }, select: { discountNote: true, loyaltyJson: true } });
+  const st = parseLoyalty(o?.loyaltyJson);
+  const sumText = st && hasSelection(st.sel) ? selectionSummary(st) : "";
+  const note = o?.discountNote ?? "";
+  return sumText && note.endsWith(sumText) ? note.slice(0, note.length - sumText.length).replace(/\s*\+\s*$/, "") : sumText ? note : note;
 }
 
 const OPEN = { status: "NEW", stage: { in: WAITING_STAGES } };
@@ -442,6 +553,7 @@ async function orderForFreeText(db: PrismaClient, brandId: number, customerId: n
   const where = { brandId, customerId, channel, status: "NEW", createdAt: { gte: new Date(now.getTime() - OPEN_ORDER_WINDOW_MS) } };
   return (
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_MERGE" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
+    (await db.order.findFirst({ where: { ...where, stage: "AWAITING_LOYALTY" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_ADDRESS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_OPTIONS" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
     (await db.order.findFirst({ where: { ...where, stage: "AWAITING_PAYMENT" }, orderBy: { createdAt: "desc" }, include: { brand: true, customer: true } })) ??
@@ -490,6 +602,7 @@ export async function handleOrderReply(db: PrismaClient, cloud: Messenger | null
         return await askNotice(db, cloud, order);
       }
       if (kind === "pay" && order.stage === "AWAITING_PAYMENT") return await choosePayment(db, cloud, order, Number(arg));
+      if (kind === "loy" && order.stage === "AWAITING_LOYALTY") return await answerLoyalty(db, cloud, order, arg);
       if (kind === "addr" && order.stage === "AWAITING_ADDRESS") {
         const chosen = arg === "new" ? null : await db.customerAddress.findFirst({ where: { id: Number(arg), customerId: customer.id } });
         if (chosen) return await finish(db, cloud, order.id, { text: chosen.text, lat: chosen.lat, lng: chosen.lng });
@@ -512,6 +625,11 @@ export async function handleOrderReply(db: PrismaClient, cloud: Messenger | null
       return;
     }
 
+    if (order.stage === "AWAITING_LOYALTY") {
+      // Liste yerine yazı yazdı: kupon/puan sorusu yeniden gösterilir
+      if (message.type === "text") await resendLoyalty(db, cloud, order);
+      return;
+    }
     if (order.stage === "AWAITING_OPTIONS" && message.type === "text") return await answerOptionText(db, cloud, order, (m.text?.body ?? "").trim());
     if (order.stage === "AWAITING_MERGE" || order.stage === "AWAITING_PAYMENT" || order.stage === "AWAITING_OPTIONS") {
       // Liste/düğme yerine yazı yazdı: aynı soruyu (ekleme, seçenek ya da ödeme) yeniden gönder

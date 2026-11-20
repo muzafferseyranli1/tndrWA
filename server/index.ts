@@ -38,7 +38,7 @@ import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
-import { handleOrderReply, offerMergeOrStart, setCustomerLookup } from "./services/order-flow";
+import { handleOrderReply, offerMergeOrStart, setCustomerLookup, setLoyaltyProvider } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
@@ -110,6 +110,8 @@ async function main() {
   // API yönteminde kampanya/indirimi POS belirler (evaluate); yöntem eklentiyken sağlayıcı kullanılmaz
   setApiDiscountProvider((orderId) => suitableSync.evaluateOrder(orderId));
   setCustomerLookup((orderId) => suitableSync.lookupCustomer(orderId));
+  // Kupon/puan/hediye hakkı (loyalty:redeem): numara platform tarafından doğrulanmış müşterilere (WhatsApp; Telegram'da kişi kartı gönderenle aynı) sipariş sonunda sorulur
+  setLoyaltyProvider({ options: (orderId) => suitableSync.loyaltyOptions(orderId), preview: (orderId, sel) => suitableSync.loyaltyPreview(orderId, sel) });
   suitableSync.onPriceChange = (brandId) => posPriceChange(brandId);
   await suitableSync.reload();
   app.use(
