@@ -18,7 +18,8 @@ import path from "node:path";
 const RMS_URL = "https://suitablerms.com/app";
 const PANEL = (process.env.PANEL_URL || "https://yerinde.derinsoft.com.tr").replace(/\/+$/, "");
 const TOKEN = process.env.IMPORT_TOKEN || "";
-const EXPORT_TIMEOUT_MS = 6 * 60_000; // RMS 29 bin kaydı sunucuda hazırlıyor: 1-2 dk sürebilir
+// RMS 29 bin kaydı tarayıcıda hazırlıyor: güçlü bilgisayarda ~2 dk, küçük/yoğun VPS'te çok daha uzun sürebilir
+const EXPORT_TIMEOUT_MS = (Number(process.env.EXPORT_TIMEOUT_MIN) || 25) * 60_000;
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function need(name) {
@@ -110,7 +111,8 @@ async function downloadExcel(page, dir) {
       await openCustomers(page, dir);
       return await exportExcel(page, dir);
     } catch (e) {
-      if (attempt >= 3) throw e;
+      // İndirme zaman aşımı yeniden denemeyle düzelmez (iş baştan başlar): doğrudan hata ver
+      if (attempt >= 3 || /waitForEvent: Timeout/.test(e.message)) throw e;
       log(`Deneme ${attempt} başarısız (${e.message.split("\n")[0]}), yeniden deneniyor`);
       await page.goto(RMS_URL, { waitUntil: "domcontentloaded" }).catch(() => undefined);
     }
@@ -152,7 +154,7 @@ async function exportExcel(page, dir) {
   const progress = setInterval(() => {
     page
       .evaluate(() => [...document.querySelectorAll("button")].map((b) => b.innerText.trim()).filter((t) => /Hazırlan|Excel/.test(t)).join(" | "))
-      .then((s) => log("  export durumu:", s || "(düğme yok)"))
+      .then((s) => log("  export durumu:", s || "(düğme yok)", `| yük ${os.loadavg()[0].toFixed(1)}, boş bellek ${Math.round(os.freemem() / 1048576)} MB`))
       .catch((e) => log("  sayfa yanıt vermiyor:", e.message.split("\n")[0]));
   }, 30_000);
   let dl;
@@ -192,6 +194,8 @@ export async function runOnce() {
   const browser = await chromium.launch({ headless: process.env.HEADED !== "1", channel: process.env.HEADED === "1" ? undefined : "chromium", args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   try {
     const ctx = await browser.newContext({ acceptDownloads: true, locale: "tr-TR", viewport: { width: 1440, height: 900 } });
+    // Görsel/yazı tipi yüklenmesin: işlemciyi ve belleği gereksiz harcamasın
+    await ctx.route("**/*", (route) => (["image", "font", "media"].includes(route.request().resourceType()) ? route.abort() : route.continue()));
     const page = await ctx.newPage();
     page.setDefaultTimeout(30_000);
     let netLogs = 0;
