@@ -133,10 +133,16 @@ export default function HelpPage() {
 
         <Section id="indirim" title="5. İndirim ve kampanya">
           <p>
-            <B>Nakit</B> ve <B>kapıda kredi kartı</B> ödemelerinde liste fiyatından <B>%15</B> indirim otomatik uygulanır; yemek kartlarında (Edenred vb.) indirim yoktur. Kartta indirimli tutar büyük, liste tutarı küçük yazar.
+            Siparişler POS&apos;a <B>Suitable API</B> ile yazılır ve <B>indirimi POS/RMS kampanyaları belirler</B> (ör. nakit ve kapıda kartta paket servis %15; yemek kartlarında indirim yoktur). Müşteri ödeme şeklini seçince sistem POS&apos;a sorar, indirim siparişe yazılır ve karttaki tutarlar POS&apos;un tutarıyla aynıdır. Kampanyayı değiştirmek için <B>RMS&apos;te</B> kampanya tanımını düzenleyin; panelde kampanya düzenlenmez.
           </p>
           <p>
-            <B>Perşembe kampanyası</B> (yalnız Yerinde Tandır, 18:00&apos;e kadar gelen, 1.000 TL ve üstü siparişler, nakit/kapıda kart): <B>Et Tandırlar %50</B>, diğer ürünler %15. Kampanyalı siparişte kartta 🎉 notu görünür.
+            Ödeme şekline bağlı bir kampanya POS&apos;ta müşterinin gördüğünden farklı uygulanırsa müşteriye &quot;kampanya uygulandı&quot; mesajı gider. Panelde <B>Ödeme şekilleri</B> sayfasındaki &quot;İndirim %&quot; alanı yalnız Chrome eklentisi yönteminde kullanılır, Suitable API yönteminde işlevsizdir.
+          </p>
+          <p>
+            <B>Kupon ve puan:</B> müşterinin kullanabileceği bir kuponu, puanı ya da hediye hakkı varsa adres bilgisinden sonra WhatsApp&apos;ta kullanmak isteyip istemediği sorulur; yanıt vermezse sipariş indirimsiz tamamlanır. Kampanya kuponları (koşul sağlanınca kendiliğinden uygulananlar) sorulmaz.
+          </p>
+          <p>
+            <B>Fiyatlar:</B> ürün fiyatları POS&apos;un <B>Dış Kaynak</B> kanal fiyatından 10 dakikada bir eşitlenir. Fiyatı POS&apos;ta değiştirin; panelde elle yazılan fiyat POS&apos;taki ürünle eşleşiyorsa geri yazılır. POS&apos;ta <B>tükenen ya da pasife alınan ürün</B> panelde otomatik &quot;bugün tükendi&quot; olur, POS&apos;ta geri gelince açılır.
           </p>
         </Section>
 
@@ -193,13 +199,13 @@ export default function HelpPage() {
                 <B>Raporlar</B>: tarih aralığına göre günlük ciro, ödeme şekli dağılımı, en çok satan ürünler ve saate göre sipariş yoğunluğu.
               </li>
               <li>
-                <B>Ayarlar</B>: Saatler ve sepet (çalışma saatleri, minimum sepet), Ödeme şekilleri (indirim oranları), Mesajlar (müşteriye giden tüm metinler ve katalog mesajının görseli), Kanallar ve QR, Markalar, WhatsApp bağlantısı, İşletme/KVKK (gizlilik bilgileri, veri silme talepleri, saklama süreleri), Yedekler (her gece otomatik, indirilebilir).
+                <B>Ayarlar</B>: Saatler ve sepet (çalışma saatleri, minimum sepet), Ödeme şekilleri (sıra ve adlar; indirimi POS belirler), Mesajlar (müşteriye giden tüm metinler ve katalog mesajının görseli), Kanallar ve QR, Markalar, WhatsApp bağlantısı, İşletme/KVKK (gizlilik bilgileri, veri silme talepleri, saklama süreleri), Yedekler (her gece otomatik, indirilebilir).
               </li>
               <li>
                 <B>Personel</B>: her çalışana ayrı hesap açın. <B>Kullanıcı</B> rolü yalnız Siparişler, Yazışma ve bu kılavuzu görür; <B>Yönetici</B> her şeyi. Hesabı pasife alınan kişinin oturumu hemen kapanır.
               </li>
               <li>
-                Kampanyalar bilerek panelden değil kodda tanımlıdır; yeni kampanya ya da değişiklik için geliştiriciye iletin.
+                Kampanyalar panelde değil <B>POS/RMS&apos;te</B> tanımlanır (Suitable API yöntemi); yeni kampanya ya da değişiklik için RMS&apos;te düzenleyin.
               </li>
             </ul>
           </Section>

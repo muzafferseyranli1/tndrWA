@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
+import { useWriteMode } from "@/lib/useWriteMode";
 import ImageUploader from "@/components/ImageUploader";
 import type { CategoryDto, ProductDto } from "@shared/types";
 
 const input = "w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand-500";
 
 export default function ProductForm({ product: initial }: { product?: ProductDto }) {
+  const apiMode = useWriteMode() === "api";
   const router = useRouter();
   const { brand: selectedBrand, brands } = useBrands();
   const [product, setProduct] = useState<ProductDto | undefined>(initial);
@@ -96,7 +98,13 @@ export default function ProductForm({ product: initial }: { product?: ProductDto
       <label className="block text-sm">
         <span className="mb-1 block text-slate-600">Liste fiyatı (TL){product?.variantLabel ? ` · ${product.variantLabel}` : ""}</span>
         <input name="price" required inputMode="decimal" placeholder="949 veya 1.099,00" defaultValue={product ? (product.priceKurus / 100).toFixed(2).replace(".", ",") : ""} className={input} />
-        <span className="mt-1 block text-xs text-slate-500">İndirimsiz liste fiyatı. Nakit/kart indirimi sipariş sırasında uygulanır.</span>
+        {apiMode ? (
+          <span className="mt-1 block text-xs text-amber-800">
+            Suitable API yöntemi açık: fiyatı <b>POS</b> belirler. Bu ürün POS&apos;taki bir ürünle eşleşiyorsa buraya yazdığınız fiyat 10 dakikada bir POS&apos;taki (Dış Kaynak kanalı) fiyatla değiştirilir; fiyatı POS&apos;ta güncelleyin. İndirimi de POS kampanyaları belirler.
+          </span>
+        ) : (
+          <span className="mt-1 block text-xs text-slate-500">İndirimsiz liste fiyatı. Nakit/kart indirimi sipariş sırasında uygulanır.</span>
+        )}
       </label>
       <div className="text-sm">
         <span className="mb-1 block text-slate-600">Kategori</span>

@@ -331,9 +331,14 @@ export default function PosPage() {
                 </div>
               )}
             </section>
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
-              <h2 className="font-medium">Eklenti</h2>
-              <p className="mb-3 text-sm text-slate-500">
+            <details className="rounded-xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer font-medium">
+                Chrome eklentisi <span className="text-sm font-normal text-slate-500">· yedek yöntem, Suitable API yönteminde gerekmez</span>
+              </summary>
+              <p className="mt-2 text-sm text-amber-800">
+                Siparişler, menü ve fiyatlar Suitable API ile yönetiliyorsa eklentiye ihtiyaç yoktur. Yalnızca yazma yöntemini &quot;Chrome eklentisi&quot;ne çevirirseniz kullanılır.
+              </p>
+              <p className="mb-3 mt-3 text-sm text-slate-500">
                 Anahtar: {status.tokenSet ? <b className="text-green-700">tanımlı</b> : <b className="text-red-700">yok</b>}. Anahtar yalnız oluşturulduğunda bir kez gösterilir.
               </p>
               <button disabled={busy === "token"} onClick={makeToken} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
@@ -358,7 +363,7 @@ export default function PosPage() {
                 <li>Eklentinin <b>Seçenekler</b> sayfasına panel adresini ({typeof window !== "undefined" ? window.location.origin : ""}) ve anahtarı girin.</li>
                 <li>POS&apos;ta sağ alttaki <b>yrndWA</b> düğmesinden markayı seçip &quot;Menüyü gönder&quot;e basın.</li>
               </ol>
-            </section>
+            </details>
 
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="font-medium">POS şubesi</h2>

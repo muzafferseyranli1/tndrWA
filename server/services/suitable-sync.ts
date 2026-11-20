@@ -9,6 +9,8 @@ import { emptyOffer, hasSelection, offerFromCustomer, offerIsEmpty, parseLoyalty
 import { joinAddress } from "./customer-import";
 import type { DiscountResult } from "../../shared/campaigns";
 import { storeSnapshot, syncPricesFromPos } from "./pos-bridge";
+import { findPosProduct, type PosSnapshotData } from "./pos-map";
+import { DEFAULT_RESET_HOUR, nextResetAt } from "../../shared/availability";
 import { notifyOrderStatus } from "./order-messages";
 
 /**
@@ -188,6 +190,7 @@ export class SuitableSync {
         const snap = menuToSnapshot(await this.menuOf(store), store);
         if (!snap.products.length) continue;
         await storeSnapshot(this.db, brand.id, snap);
+        if ((await this.syncAvailability(brand.id, snap)) > 0) this.onPriceChange(brand.id);
         const prices = await syncPricesFromPos(this.db, brand.id, snap);
         if (prices.products.length || prices.choices) {
           this.onPriceChange(brand.id);
@@ -198,6 +201,63 @@ export class SuitableSync {
         logger.warn({ brand: brand.code, err: (err as Error).message }, "Suitable menüsü alınamadı");
       }
     }
+    return changed;
+  }
+
+  /**
+   * POS'ta tükenen ya da pasife alınan ürünü (menüde active/inStock: false) panelde "bugün tükendi" yapar, POS'ta geri gelince açar: müşteri WhatsApp menüsünde
+   * satılamayan ürünü görüp sipariş vermesin (Suitable reddeder, siparişi elle girmek gerekirdi). Yalnız bizim kapattığımız ürünleri açarız (personelin elle
+   * "tükendi" yaptığına dokunulmaz). Menü neredeyse tümüyle kapalı görünüyorsa (kanal kapalı, fiyatlar girilmemiş) hiçbir şey yapılmaz. Dönen: değişen ürün sayısı.
+   */
+  async syncAvailability(brandId: number, snap: PosSnapshotData, now = new Date()): Promise<number> {
+    const key = `suitable.posSoldOut.${brandId}`;
+    const products = await this.db.product.findMany({ where: { brandId, status: "ACTIVE" }, select: { id: true, name: true, sourceKey: true, variantLabel: true, soldOutUntil: true } });
+    const matched: { p: (typeof products)[number]; unavailable: boolean }[] = [];
+    for (const p of products) {
+      const found = findPosProduct(snap.products, p);
+      if (!("error" in found)) matched.push({ p, unavailable: found.product.active === false });
+    }
+    if (!matched.length) return 0;
+    const closed = matched.filter((x) => x.unavailable).length;
+    if (matched.length >= 5 && closed / matched.length > 0.8) {
+      logger.warn({ brandId, closed, total: matched.length }, "POS menüsünde ürünlerin çoğu kapalı görünüyor (kanal kapalı olabilir): tükendi eşitlemesi atlandı");
+      return 0;
+    }
+    const row = await this.db.setting.findUnique({ where: { key } });
+    let ours: number[] = [];
+    try {
+      ours = row ? (JSON.parse(row.value) as number[]) : [];
+    } catch {
+      ours = [];
+    }
+    const hourRow = await this.db.setting.findUnique({ where: { key: "dayResetHour" } });
+    const hour = Number(hourRow?.value);
+    const resetHour = Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : DEFAULT_RESET_HOUR;
+    const tracked = new Set(ours);
+    let changed = 0;
+    for (const { p, unavailable } of matched) {
+      const soldOut = !!p.soldOutUntil && p.soldOutUntil.getTime() > now.getTime();
+      if (unavailable) {
+        if (!soldOut) {
+          await this.db.product.update({ where: { id: p.id }, data: { soldOutUntil: nextResetAt(now, resetHour), metaSyncState: "PENDING" } });
+          tracked.add(p.id);
+          changed++;
+        } else if (tracked.has(p.id)) {
+          await this.db.product.update({ where: { id: p.id }, data: { soldOutUntil: nextResetAt(now, resetHour) } }); // POS'ta hâlâ kapalı: işaret gün sonunda bitmesin
+        }
+      } else if (tracked.has(p.id)) {
+        if (soldOut) {
+          await this.db.product.update({ where: { id: p.id }, data: { soldOutUntil: null, metaSyncState: "PENDING" } });
+          changed++;
+        }
+        tracked.delete(p.id);
+      }
+    }
+    const valid = new Set(products.map((p) => p.id));
+    for (const id of [...tracked]) if (!valid.has(id)) tracked.delete(id); // silinmiş/pasife alınmış ürünler izlemeden düşer
+    const value = JSON.stringify([...tracked].sort((a, b) => a - b));
+    if (value !== (row?.value ?? "[]")) await this.db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
+    if (changed) logger.info({ brandId, changed }, "POS stok durumu panele yansıtıldı");
     return changed;
   }
 

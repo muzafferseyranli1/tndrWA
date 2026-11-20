@@ -193,6 +193,11 @@ export function posAdminRouter(db: PrismaClient, sync: SuitableSync | null = nul
     res.json({ ok: true });
   });
 
+  // Hafif sorgu: panel sayfaları (ödeme şekilleri, ürün formu) API yönteminde hangi ayarların işlevsiz olduğunu göstermek için kullanır
+  router.get("/mode", async (_req, res) => {
+    res.json({ writeMode: await getWriteMode(db, sync?.cfg ?? null) });
+  });
+
   // POS'a yazma yöntemi: "api" (Suitable Dış Kaynak API'si) ya da "extension" (Chrome eklentisi)
   router.put("/mode", async (req, res) => {
     const parsed = z.object({ mode: z.enum(["api", "extension"]) }).safeParse(req.body ?? {});

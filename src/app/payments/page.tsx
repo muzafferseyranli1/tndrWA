@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import { api } from "@/lib/api";
 import { useBrands } from "@/lib/brand";
+import { useWriteMode } from "@/lib/useWriteMode";
 import type { PaymentTypeDto } from "@shared/types";
 
 const field = "rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500";
 
-function Row({ p, first, last, onMove, onSaved }: { p: PaymentTypeDto; first: boolean; last: boolean; onMove: (d: "up" | "down") => void; onSaved: () => void }) {
+function Row({ p, first, last, apiMode, onMove, onSaved }: { p: PaymentTypeDto; first: boolean; last: boolean; apiMode: boolean; onMove: (d: "up" | "down") => void; onSaved: () => void }) {
   const [draft, setDraft] = useState({ name: p.name, discountPercent: String(p.discountPercent), enabled: p.enabled });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,7 +42,7 @@ function Row({ p, first, last, onMove, onSaved }: { p: PaymentTypeDto; first: bo
       <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={24} aria-label="Ödeme şekli adı" className={`${field} min-w-40 flex-1`} />
       <label className="flex items-center gap-1 text-sm text-slate-600">
         İndirim %
-        <input type="number" min={0} max={90} value={draft.discountPercent} onChange={(e) => setDraft({ ...draft, discountPercent: e.target.value })} aria-label="İndirim yüzdesi" className={`${field} w-20`} />
+        <input type="number" min={0} max={90} value={draft.discountPercent} disabled={apiMode} title={apiMode ? "Suitable API yönteminde indirimi POS kampanyası belirler; bu alan kullanılmaz" : undefined} onChange={(e) => setDraft({ ...draft, discountPercent: e.target.value })} aria-label="İndirim yüzdesi" className={`${field} w-20 disabled:bg-slate-100 disabled:text-slate-400`} />
       </label>
       <button disabled={!dirty || busy} onClick={save} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">
         Kaydet
@@ -57,6 +58,7 @@ export default function PaymentsPage() {
   const [items, setItems] = useState<PaymentTypeDto[] | null>(null);
   const [error, setError] = useState("");
   const [newName, setNewName] = useState("");
+  const apiMode = useWriteMode() === "api";
 
   const load = useCallback(async () => {
     if (brandId === undefined) return;
@@ -101,11 +103,16 @@ export default function PaymentsPage() {
         <p className="mb-6 text-sm text-slate-500">
           Müşteri sepeti gönderince WhatsApp&apos;ta bu liste çıkar. İndirim, sepetin liste fiyatı toplamı üzerinden uygulanır. Açık ödeme şekilleri sıra buradaki sıradır (en fazla 10).
         </p>
+        {apiMode && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <b>Suitable API yöntemi açık:</b> indirimi (ör. nakit/kart %15) panel değil <b>POS kampanyaları</b> belirler; aşağıdaki &quot;İndirim %&quot; alanı kullanılmaz. Ödeme şekillerinin <b>adı</b> POS ödeme türüne eşlenir (Nakit, Kapıda kredi kartı, Edenred, Multinet, Pluxee, Setcard, Metropol…), adı değiştirirseniz POS&apos;ta karşılığı bulunamayabilir. Kampanyayı POS/RMS&apos;te düzenleyin.
+          </p>
+        )}
         {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {!items && !error && <p className="text-slate-500">Yükleniyor…</p>}
         <ul className="space-y-2">
           {items?.map((p, i) => (
-            <Row key={`${brandId}-${p.id}-${p.name}-${p.discountPercent}-${p.enabled}`} p={p} first={i === 0} last={i === items.length - 1} onMove={(d) => move(p.id, d)} onSaved={() => void load()} />
+            <Row key={`${brandId}-${p.id}-${p.name}-${p.discountPercent}-${p.enabled}`} p={p} apiMode={apiMode} first={i === 0} last={i === items.length - 1} onMove={(d) => move(p.id, d)} onSaved={() => void load()} />
           ))}
         </ul>
         <div className="mt-4 flex gap-2">

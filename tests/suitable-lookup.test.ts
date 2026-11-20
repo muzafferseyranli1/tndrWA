@@ -94,3 +94,59 @@ describe("SuitableSync.lookupCustomer", () => {
     assert.equal(s.created.length, 0);
   });
 });
+
+describe("SuitableSync.syncAvailability (POS'ta tükenen ürün panelde 'bugün tükendi')", () => {
+  type P = { id: number; name: string; sourceKey: string | null; variantLabel: string | null; soldOutUntil: Date | null };
+  function setup(products: P[], tracked: number[] = []) {
+    const updates: { id: number; data: { soldOutUntil: Date | null } }[] = [];
+    let saved: string | null = tracked.length ? JSON.stringify(tracked) : null;
+    const db = {
+      product: { findMany: async () => products, update: async (a: { where: { id: number }; data: { soldOutUntil: Date | null } }) => void updates.push({ id: a.where.id, data: a.data }) },
+      setting: {
+        findUnique: async ({ where }: { where: { key: string } }) => (where.key.startsWith("suitable.posSoldOut") ? (saved ? { value: saved } : null) : null),
+        upsert: async ({ update }: { update: { value: string } }) => void (saved = update.value),
+      },
+    } as unknown as PrismaClient;
+    const sync = new SuitableSync(db, null, null, null);
+    return { sync, updates, getSaved: () => saved };
+  }
+  const snapOf = (rows: [string, boolean][]) => ({ products: rows.map(([name, active]) => ({ name, active, price: 100, variants: [], options: [] })) }) as never;
+  const prod = (id: number, name: string, soldOutUntil: Date | null = null): P => ({ id, name, sourceKey: null, variantLabel: null, soldOutUntil });
+  const now = new Date("2026-11-20T12:00:00Z");
+  const names = ["Pide A", "Pide B", "Pide C", "Pide D", "Pide E", "Pide F"];
+
+  it("POS'ta kapalı ürün 'bugün tükendi' yapılır ve bizim işaretimiz olarak izlenir", async () => {
+    const s = setup(names.map((n, i) => prod(i + 1, n)));
+    const n = await s.sync.syncAvailability(1, snapOf(names.map((x, i) => [x, i !== 1] as [string, boolean])), now);
+    assert.equal(n, 1);
+    assert.equal(s.updates.length, 1);
+    assert.equal(s.updates[0].id, 2);
+    assert.ok(s.updates[0].data.soldOutUntil && s.updates[0].data.soldOutUntil.getTime() > now.getTime());
+    assert.equal(s.getSaved(), "[2]");
+  });
+
+  it("POS'ta geri gelince yalnız bizim kapattığımız ürün açılır; personelin elle kapattığına dokunulmaz", async () => {
+    const future = new Date(now.getTime() + 3600_000);
+    const s = setup([prod(1, "Pide A", future), prod(2, "Pide B", future), ...names.slice(2).map((n, i) => prod(i + 3, n))], [1]);
+    const n = await s.sync.syncAvailability(1, snapOf(names.map((x) => [x, true] as [string, boolean])), now);
+    assert.equal(n, 1);
+    assert.deepEqual(s.updates.map((u) => u.id), [1]);
+    assert.equal(s.updates[0].data.soldOutUntil, null);
+    assert.equal(s.getSaved(), "[]");
+  });
+
+  it("ürünlerin çoğu kapalı görünüyorsa (kanal kapalı) hiçbir şey yapılmaz", async () => {
+    const s = setup(names.map((n, i) => prod(i + 1, n)));
+    const n = await s.sync.syncAvailability(1, snapOf(names.map((x) => [x, false] as [string, boolean])), now);
+    assert.equal(n, 0);
+    assert.equal(s.updates.length, 0);
+  });
+
+  it("zaten tükendi işaretli ürün tekrar değiştirilmez", async () => {
+    const future = new Date(now.getTime() + 3600_000);
+    const s = setup([prod(1, "Pide A", future), ...names.slice(1).map((n, i) => prod(i + 2, n))]);
+    const n = await s.sync.syncAvailability(1, snapOf(names.map((x, i) => [x, i !== 0] as [string, boolean])), now);
+    assert.equal(n, 0);
+    assert.equal(s.updates.length, 0);
+  });
+});

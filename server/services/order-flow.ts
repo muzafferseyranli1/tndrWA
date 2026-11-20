@@ -91,7 +91,8 @@ export async function startOrderConversation(db: PrismaClient, cloud: Messenger 
     let order = await load(db, orderId);
     if (!order || order.stage === "READY") return;
     // Müşterinin POS'taki kaydı (adresleri) arka planda istenir; adres sorusuna gelene kadar eklenti getirir
-    await requestPosLookup(db, order.customer.waId).catch(() => undefined);
+    // (Suitable API yönteminde eklenti çalışmaz; müşteri adresleri API'den alınır, boşuna sorgu kuyruğu oluşturulmaz)
+    if ((await db.setting.findUnique({ where: { key: "pos.writeMode" } }))?.value !== "api") await requestPosLookup(db, order.customer.waId).catch(() => undefined);
     if (order.stage === "AWAITING_MERGE") return await askMerge(db, cloud, order);
 
     // İlk siparişte KVKK bilgilendirmesi: müşteri "Okudum, devam" deyince sipariş adımları başlar (bir kez sorulur)
