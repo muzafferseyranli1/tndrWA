@@ -12,7 +12,7 @@
 // Kullanım: `node rms-customers.mjs` günlük döngü, `node rms-customers.mjs --once` tek seferlik çalışma.
 import { chromium } from "playwright";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
 
 const RMS_URL = "https://suitablerms.com/app";
@@ -187,11 +187,17 @@ export async function runOnce() {
   need("RMS_PASS");
   const dir = await mkdtemp(path.join(tmpdir(), "rms-"));
   // Docker'da paylaşımlı bellek 64 MB: 29 bin kayıtlı ağır sayfada sekme çökmesin diye /dev/shm yerine disk kullanılır
-  const browser = await chromium.launch({ headless: process.env.HEADED !== "1", args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
+  // channel "chromium": eski "headless shell" yerine tam Chromium'un yeni headless kipi (görünür pencereli tarayıcıyla aynı davranış)
+  log(`Kaynak: bellek ${Math.round(os.freemem() / 1048576)}/${Math.round(os.totalmem() / 1048576)} MB boş, işlemci ${os.cpus().length}, yük ${os.loadavg()[0].toFixed(1)}`);
+  const browser = await chromium.launch({ headless: process.env.HEADED !== "1", channel: process.env.HEADED === "1" ? undefined : "chromium", args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   try {
     const ctx = await browser.newContext({ acceptDownloads: true, locale: "tr-TR", viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
     page.setDefaultTimeout(30_000);
+    let netLogs = 0;
+    const netLog = (m) => netLogs++ < 25 && log(m);
+    page.on("requestfailed", (r) => netLog(`  istek başarısız: ${new URL(r.url()).host}${new URL(r.url()).pathname.slice(0, 60)} ${r.failure()?.errorText ?? ""}`));
+    page.on("response", (r) => r.status() >= 400 && netLog(`  yanıt ${r.status()}: ${new URL(r.url()).host}${new URL(r.url()).pathname.slice(0, 60)}`));
     page.on("crash", () => log("  SEKME ÇÖKTÜ (bellek yetersiz olabilir)"));
     page.on("pageerror", (e) => log("  sayfa hatası:", String(e.message).slice(0, 150)));
     page.on("framenavigated", (f) => f === page.mainFrame() && log("  sayfa yenilendi/gitti:", new URL(f.url()).pathname));
