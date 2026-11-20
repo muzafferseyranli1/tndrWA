@@ -148,7 +148,19 @@ async function exportExcel(page, dir) {
   // "Excel'e Aktar": kapsamdaki TÜM müşteriler (ekrandaki limitli listeden bağımsız). "Excelden Aktar" ayrı düğme, karışmasın
   const exportBtn = page.getByRole("button", { name: /Excel'e Aktar|Kapsamdaki TÜM/ }).first();
   await exportBtn.waitFor({ state: "visible", timeout: 30_000 });
-  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: EXPORT_TIMEOUT_MS }), exportBtn.click({ timeout: 15_000 })]);
+  // Bekleme sırasında ne olduğu günlükte görünsün (düğme "Hazırlanıyor…" mu, sayfa yanıt veriyor mu)
+  const progress = setInterval(() => {
+    page
+      .evaluate(() => [...document.querySelectorAll("button")].map((b) => b.innerText.trim()).filter((t) => /Hazırlan|Excel/.test(t)).join(" | "))
+      .then((s) => log("  export durumu:", s || "(düğme yok)"))
+      .catch((e) => log("  sayfa yanıt vermiyor:", e.message.split("\n")[0]));
+  }, 30_000);
+  let dl;
+  try {
+    [dl] = await Promise.all([page.waitForEvent("download", { timeout: EXPORT_TIMEOUT_MS }), exportBtn.click({ timeout: 15_000 })]);
+  } finally {
+    clearInterval(progress);
+  }
   const file = path.join(dir, "musteri.xlsx");
   await dl.saveAs(file);
   return file;
@@ -174,11 +186,15 @@ export async function runOnce() {
   need("RMS_USER");
   need("RMS_PASS");
   const dir = await mkdtemp(path.join(tmpdir(), "rms-"));
-  const browser = await chromium.launch({ headless: process.env.HEADED !== "1", args: ["--no-sandbox"] });
+  // Docker'da paylaşımlı bellek 64 MB: 29 bin kayıtlı ağır sayfada sekme çökmesin diye /dev/shm yerine disk kullanılır
+  const browser = await chromium.launch({ headless: process.env.HEADED !== "1", args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
   try {
     const ctx = await browser.newContext({ acceptDownloads: true, locale: "tr-TR", viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
     page.setDefaultTimeout(30_000);
+    page.on("crash", () => log("  SEKME ÇÖKTÜ (bellek yetersiz olabilir)"));
+    page.on("pageerror", (e) => log("  sayfa hatası:", String(e.message).slice(0, 150)));
+    page.on("framenavigated", (f) => f === page.mainFrame() && log("  sayfa yenilendi/gitti:", new URL(f.url()).pathname));
     log("RMS'e giriliyor");
     await ensureLoggedIn(page);
     log("Müşteri Excel'i isteniyor (1-2 dk sürebilir)");
