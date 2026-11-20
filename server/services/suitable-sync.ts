@@ -397,6 +397,76 @@ export class SuitableSync {
 
   private customersBlockedUntil = 0;
 
+  private readonly pendingUpdates = new Map<number, NodeJS.Timeout>();
+
+  /**
+   * Sepet değişti (personel ürün ekledi/çıkardı ya da müşteri ek sepet gönderdi): POS'a (Suitable API ile) yazılmış siparişin sepeti kısa bir
+   * gecikmeyle PATCH ile güncellenir; arka arkaya yapılan değişiklikler tek güncellemede toplanır.
+   */
+  scheduleOrderUpdate(orderId: number, delayMs = Number(process.env.SUITABLE_UPDATE_DELAY_MS) || 4000): void {
+    if (!this.cfg) return;
+    const t = this.pendingUpdates.get(orderId);
+    if (t) clearTimeout(t);
+    const timer = setTimeout(() => {
+      this.pendingUpdates.delete(orderId);
+      void this.pushOrderUpdate(orderId);
+    }, delayMs);
+    timer.unref?.();
+    this.pendingUpdates.set(orderId, timer);
+  }
+
+  /**
+   * POS siparişinin sepetini günceller (PATCH /v1/orders/<id>; sepet ve tutarlar baştan gönderilir). Kuryeye çıkmış, iptal edilmiş ya da kupon/puan harcanmış
+   * siparişte, menüde karşılığı olmayan üründe ve kalıcı hatalarda değişiklik POS'a yansımaz: sipariş geçmişine ve panel uyarısına "POS'ta elle düzeltin" yazılır.
+   * Geçici hatada (ağ, 5xx, hız sınırı) birkaç kez yeniden denenir.
+   */
+  async pushOrderUpdate(orderId: number, attempt = 1): Promise<void> {
+    const manual = async (why: string) => {
+      const text = `POS siparişi otomatik güncellenemedi: ${why.slice(0, 200)}. Değişikliği POS'ta elle yapın.`;
+      await this.db.orderChange.create({ data: { orderId, text } });
+      await setPosAlert(this.db, "api", `Sipariş #${orderId}: ${text}`);
+      logger.warn({ orderId, why }, "Suitable sipariş güncellemesi yapılamadı");
+    };
+    try {
+      if (!this.cfg || (await getWriteMode(this.db, this.cfg)) !== "api") return;
+      const order = await this.db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true, items: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } } });
+      if (!order || !order.suitableId || !["NEW", "PREPARING"].includes(order.status)) return; // POS'a henüz yazılmamışsa gönderim güncel sepeti zaten yazar
+      const store = this.storeOf(order.brand);
+      if (!store) return;
+      const state = parseLoyalty(order.loyaltyJson);
+      if (state && hasSelection(state.sel)) return await manual("sipariş kupon/puan/hediye hakkı kullanıyor (Suitable bu siparişin güncellenmesine izin vermez)");
+      const snap = menuToSnapshot(await this.menuOf(store), store);
+      const mode = this.priceMode();
+      let evaluation: ApiEvaluateResult | null = null;
+      if (mode !== "server") {
+        const built0 = await buildApiLines(this.db, order, snap);
+        if (!built0.ok) return await manual(built0.error);
+        evaluation = await this.evaluateLines(store, apiPhone(order.customer.waId) ?? "", built0.lines, 8000, order.paymentLabel);
+      }
+      const built = await buildApiOrder(this.db, order, snap, store, evaluation, mode, null);
+      if (!built.ok) return await manual(built.error);
+      const patch = { lines: built.body.lines, ...(built.body.pricing ? { pricing: built.body.pricing } : {}), ...(built.body.campaignIds ? { campaignIds: built.body.campaignIds } : {}), ...(built.body.note ? { note: built.body.note } : {}) };
+      await this.api().updateOrder(order.suitableId, patch);
+      const campaignKurus = mode === "platform" ? Math.round((built.body.pricing?.campaignDiscount ?? 0) * 100) : order.discountKurus;
+      await this.db.order.update({ where: { id: orderId }, data: { discountKurus: campaignKurus, ...(mode === "platform" ? { discountNote: evaluation && campaignKurus > 0 ? evaluation.appliedCampaigns.map((c) => c.name).join(" + ").slice(0, 120) : "" } : {}), addedPending: false } });
+      await this.db.orderChange.create({ data: { orderId, text: `POS siparişi güncellendi (${order.posRef ?? "API"}): sepet Suitable'a otomatik yansıdı${built.warnings.length ? ` · uyarı: ${built.warnings.join("; ").slice(0, 200)}` : ""}` } });
+      logger.info({ orderId, suitableId: order.suitableId }, "Suitable siparişi güncellendi");
+    } catch (err) {
+      const e = err as Error | SuitableApiError;
+      if (e instanceof SuitableApiError && e.code === "not_updatable") {
+        const reason = String(e.details?.reason ?? "");
+        const why = reason === "dispatched" ? "sipariş kuryeye çıkmış" : reason === "cancelled" ? "sipariş iptal edilmiş" : reason === "loyalty_spent" ? "kupon/puan harcanmış" : e.message;
+        return void (await manual(why));
+      }
+      if (e instanceof SuitableApiError && e.retryable && attempt < 3) {
+        const t = setTimeout(() => void this.pushOrderUpdate(orderId, attempt + 1), attempt * 20_000);
+        t.unref?.();
+        return;
+      }
+      await manual(e.message).catch(() => undefined);
+    }
+  }
+
   private async fail(orderId: number, err: SuitableApiError | Error, tries: number, now: Date, permanent: boolean): Promise<void> {
     let text = err.message.slice(0, 300);
     // Fiyat/kampanya alanı hatası: çoğunlukla paneldeki fiyat modu ile POS'taki anahtarın modu uyuşmuyordur

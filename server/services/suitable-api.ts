@@ -74,6 +74,9 @@ export interface ApiOrderBody {
   note?: string;
 }
 
+/** PATCH /v1/orders/<id> gövdesi: yalnız sepet, tutarlar ve not (müşteri, adres, ödeme, teslimat şekli ve test işareti gönderilemez) */
+export type ApiOrderUpdate = Pick<ApiOrderBody, "lines" | "pricing" | "campaignIds" | "note">;
+
 export interface ApiOrderResult {
   orderId: string;
   externalId?: string;
@@ -164,7 +167,7 @@ export class SuitableClient {
     private readonly timeoutMs = 15_000,
   ) {}
 
-  private async requestFull<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<{ status: number; json: T | null; headers: Headers }> {
+  private async requestFull<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<{ status: number; json: T | null; headers: Headers }> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -196,7 +199,7 @@ export class SuitableClient {
     return { status: res.status, json: json as T, headers: res.headers };
   }
 
-  private async request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
     return (await this.requestFull<T>(method, path, body)).json as T;
   }
 
@@ -230,6 +233,10 @@ export class SuitableClient {
   }
   createOrder(body: ApiOrderBody): Promise<ApiOrderResult> {
     return this.request("POST", "/orders", body);
+  }
+  /** Sepeti günceller (ürün ekleme/çıkarma, adet, seçenek): sepet ve tutarlar baştan gönderilir; kuryeye çıkmamış siparişte çalışır, müşteri/adres/ödeme değişmez. */
+  updateOrder(orderId: string, body: ApiOrderUpdate): Promise<ApiOrderStatus & { updatedAt?: string }> {
+    return this.request("PATCH", `/orders/${encodeURIComponent(orderId)}`, body);
   }
   getOrder(orderId: string): Promise<ApiOrderStatus> {
     return this.request("GET", `/orders/${encodeURIComponent(orderId)}`);

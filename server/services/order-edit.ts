@@ -33,6 +33,19 @@ async function editable(db: Db, orderId: number): Promise<Order> {
   return order;
 }
 
+/** Sepet değişti (ürün eklendi/çıkarıldı, adet değişti, ek sepet birleşti): POS siparişi otomatik güncellenebilsin diye bildirilir (Suitable API yöntemi). */
+let cartChangedHook: ((orderId: number) => void) | null = null;
+export function setCartChangedHook(fn: ((orderId: number) => void) | null): void {
+  cartChangedHook = fn;
+}
+export function notifyCartChanged(orderId: number): void {
+  try {
+    cartChangedHook?.(orderId);
+  } catch {
+    /* kanca hatası düzenlemeyi bozmaz */
+  }
+}
+
 /** Ürünlerden toplamı, ödeme şekli oranı ve kampanyalardan indirimi yeniden hesaplar. */
 export async function recalc(db: Db, orderId: number): Promise<void> {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
@@ -70,6 +83,7 @@ export async function addItem(db: Db, orderId: number, productId: number, quanti
   }
   await recalc(db, orderId);
   await needsNotice(db, orderId);
+  notifyCartChanged(orderId);
 }
 
 async function itemOf(db: Db, orderId: number, itemId: number): Promise<OrderItem> {
@@ -87,6 +101,7 @@ export async function setQuantity(db: Db, orderId: number, itemId: number, quant
   await note(db, orderId, `Adet değişti: ${item.name} ${item.quantity} → ${quantity}`);
   await recalc(db, orderId);
   await needsNotice(db, orderId);
+  notifyCartChanged(orderId);
 }
 
 export async function removeItem(db: Db, orderId: number, itemId: number): Promise<void> {
@@ -97,6 +112,7 @@ export async function removeItem(db: Db, orderId: number, itemId: number): Promi
   await note(db, orderId, `Ürün çıkarıldı: ${item.quantity}× ${item.name}`);
   await recalc(db, orderId);
   await needsNotice(db, orderId);
+  notifyCartChanged(orderId);
 }
 
 export interface DetailsPatch {

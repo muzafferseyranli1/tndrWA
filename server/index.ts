@@ -51,6 +51,7 @@ import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
 import { cancelMoreCategories, handleMenuReply } from "./services/menu-message";
+import { setCartChangedHook } from "./services/order-edit";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
@@ -110,6 +111,8 @@ async function main() {
   // API yönteminde kampanya/indirimi POS belirler (evaluate); yöntem eklentiyken sağlayıcı kullanılmaz
   setApiDiscountProvider((orderId) => suitableSync.evaluateOrder(orderId));
   setCustomerLookup((orderId) => suitableSync.lookupCustomer(orderId));
+  // Sepet değişince (ürün ekleme/çıkarma, ek sepet) POS'a yazılmış sipariş PATCH ile güncellenir
+  setCartChangedHook((orderId) => suitableSync.scheduleOrderUpdate(orderId));
   // Kupon/puan/hediye hakkı (loyalty:redeem): numara platform tarafından doğrulanmış müşterilere (WhatsApp; Telegram'da kişi kartı gönderenle aynı) sipariş sonunda sorulur
   setLoyaltyProvider({ options: (orderId) => suitableSync.loyaltyOptions(orderId), preview: (orderId, sel) => suitableSync.loyaltyPreview(orderId, sel) });
   suitableSync.onPriceChange = (brandId) => posPriceChange(brandId);

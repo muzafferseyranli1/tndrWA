@@ -1,7 +1,7 @@
 import type { Order, PrismaClient } from "@prisma/client";
 import { formatTRY } from "../../shared/money";
 import { describeOptions } from "./option-format";
-import { recalc } from "./order-edit";
+import { notifyCartChanged, recalc } from "./order-edit";
 
 /** Müşteri sipariş verdikten sonra yeni sepet gönderirse, ürünler bu durumlardaki siparişine eklenebilir (yola çıkmadan önce). */
 export const MERGE_TARGET_STATUSES = ["NEW", "PREPARING"];
@@ -56,6 +56,9 @@ export async function mergeOrderInto(db: PrismaClient, sourceId: number, targetI
     await tx.order.update({ where: { id: target.id }, data: { addedPending: true } });
     return { added };
   });
-  if (result) await recalc(db, targetId); // toplam, ödeme şekli indirimi ve kampanya eklenen ürünlerle yeniden
+  if (result) {
+    await recalc(db, targetId); // toplam, ödeme şekli indirimi ve kampanya eklenen ürünlerle yeniden
+    notifyCartChanged(targetId); // POS'a (Suitable API ile) yazılmış sipariş ise ek ürünler otomatik güncellenir
+  }
   return result;
 }
