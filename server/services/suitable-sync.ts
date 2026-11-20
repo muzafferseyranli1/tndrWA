@@ -3,7 +3,9 @@ import type { PriceMode, SuitableEnv } from "../lib/env";
 import { logger } from "../lib/logger";
 import type { Messenger } from "./messenger";
 import { applyPosEvents, markPosEntered, setPosAlert, type PosEvent } from "./pos-tracking";
-import { apiPayment, apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
+import { apiPayment, apiPhone, buildApiLines, buildApiOrder, menuToSnapshot, SuitableApiError, SuitableClient, type ApiCustomer, type ApiEvaluateResult, type ApiMenu, type ApiOrderLine } from "./suitable-api";
+import { addressKey } from "./addresses";
+import { joinAddress } from "./customer-import";
 import type { DiscountResult } from "../../shared/campaigns";
 import { storeSnapshot, syncPricesFromPos } from "./pos-bridge";
 import { notifyOrderStatus } from "./order-messages";
@@ -268,6 +270,62 @@ export class SuitableSync {
     }
   }
 
+  /**
+   * Müşteri sorgusu (customers:read): siparişin müşterisini telefonla Suitable'da arar. Kayıtlı adreslerini müşterinin adres listesine ekler
+   * (var olanı yinelemez, mevcut adreslerin sırasını bozmaz), boş adını doldurur, sadakat durumunu sipariş geçmişine not düşer.
+   * Yalnız API yönteminde çalışır; kısa zaman aşımı, hata ya da yetki yoksa sessizce atlanır (adres sorusu normal sürer). Sonuç saklanmaz.
+   */
+  async lookupCustomer(orderId: number, timeoutMs = 4000): Promise<ApiCustomer | null> {
+    if (!this.cfg || Date.now() < this.customersBlockedUntil) return null;
+    try {
+      if ((await getWriteMode(this.db, this.cfg)) !== "api") return null;
+      const order = await this.db.order.findUnique({ where: { id: orderId }, include: { brand: true, customer: true } });
+      if (!order) return null;
+      const store = this.storeOf(order.brand);
+      const wa = order.customer.waId;
+      if (!store || !wa) return null;
+      const found = await Promise.race([
+        this.api().getCustomer(store, wa),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error("zaman aşımı")), timeoutMs).unref?.()),
+      ]);
+      if (!found) return null;
+      let added = 0;
+      const existing = (await this.db.customerAddress.findMany({ where: { customerId: order.customerId }, select: { key: true } })).map((a) => a.key);
+      for (const a of found.addresses ?? []) {
+        const text = [joinAddress(a.neighborhood ?? "", a.text ?? "") ?? "", a.detail, a.district && !(a.text ?? "").includes(a.district) ? a.district : "", a.city && !(a.text ?? "").includes(a.city) ? a.city : ""].filter(Boolean).join(", ");
+        const key = addressKey(text);
+        const base = addressKey(joinAddress(a.neighborhood ?? "", a.text ?? "") ?? "");
+        if (!key || !base || existing.some((k) => k.includes(base) || base.includes(k))) continue;
+        await this.db.customerAddress.create({ data: { customerId: order.customerId, text: text.trim(), key, lat: a.lat ?? null, lng: a.lng ?? null, lastUsedAt: new Date(0) } });
+        existing.push(key);
+        added++;
+      }
+      if (found.name && !order.customer.name?.trim()) await this.db.customer.update({ where: { id: order.customerId }, data: { name: found.name.slice(0, 120) } });
+      const l = found.loyalty;
+      if (l && (l.points || l.tier || l.stampCards?.length || l.coupons?.length || l.giftRights?.length)) {
+        const parts = [
+          l.tier ? `seviye ${l.tier}` : "",
+          typeof l.points === "number" ? `${l.points} puan` : "",
+          l.coupons?.length ? `${l.coupons.length} kupon` : "",
+          l.giftRights?.length ? `${l.giftRights.length} hediye hakkı` : "",
+          ...(l.stampCards ?? []).map((s) => `${s.name} ${s.progress}/${s.target}`),
+        ].filter(Boolean);
+        const text = `Suitable müşteri kaydı: ${parts.join(", ")}`;
+        if (!(await this.db.orderChange.findFirst({ where: { orderId, text } }))) await this.db.orderChange.create({ data: { orderId, text } });
+      }
+      if (added) logger.info({ orderId, added }, "Suitable'dan müşteri adresleri eklendi");
+      return found;
+    } catch (err) {
+      const e = err as Error;
+      // Anahtarda customers:read yoksa (403) her siparişte boşuna denemeyelim
+      if (err instanceof SuitableApiError && (err.status === 403 || err.status === 401)) this.customersBlockedUntil = Date.now() + 10 * 60_000;
+      logger.warn({ orderId, err: e.message }, "Suitable müşteri sorgusu yapılamadı");
+      return null;
+    }
+  }
+
+  private customersBlockedUntil = 0;
+
   private async fail(orderId: number, err: SuitableApiError | Error, tries: number, now: Date, permanent: boolean): Promise<void> {
     let text = err.message.slice(0, 300);
     // Fiyat/kampanya alanı hatası: çoğunlukla paneldeki fiyat modu ile POS'taki anahtarın modu uyuşmuyordur
@@ -368,7 +426,8 @@ export class SuitableSync {
     if (!order) return false;
     const event: PosEvent | null = status === "on_the_way" ? "ON_THE_WAY" : status === "delivered" ? "DELIVERED" : status === "cancelled" ? "CANCELLED" : null;
     let changed = false;
-    if (event) changed = (await applyPosEvents(this.db, this.cloud, this.publicBaseUrl, [{ id: order.id, event }])) > 0;
+    // POS'ta iptal edilen sipariş için müşteriye iptal mesajı gider (panelden iptalde sipariş zaten iptal durumunda olduğundan ikinci mesaj çıkmaz)
+    if (event) changed = (await applyPosEvents(this.db, this.cloud, this.publicBaseUrl, [{ id: order.id, event }], { notifyCancel: true })) > 0;
     if (status === "cancelled" && cancelReason) {
       const text = `Suitable iptal nedeni${cancelledBy === "client" ? " (bizim iptalimiz)" : ""}: ${cancelReason.slice(0, 200)}`;
       const seen = await this.db.orderChange.findFirst({ where: { orderId: order.id, text } });

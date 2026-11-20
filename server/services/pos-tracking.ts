@@ -86,11 +86,13 @@ export async function trackingList(db: PrismaClient): Promise<{ id: number; posR
 }
 
 /** Eklentinin POS'ta gördüğü durum değişiklikleri (yalnız ileri yönde işlenir). */
-export async function applyPosEvents(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, updates: { id: number; event: PosEvent }[]): Promise<number> {
+export async function applyPosEvents(db: PrismaClient, cloud: Messenger | null, publicBaseUrl: string | null, updates: { id: number; event: PosEvent }[], opts: { notifyCancel?: boolean } = {}): Promise<number> {
   let n = 0;
   for (const u of updates) {
-    const why = u.event === "ON_THE_WAY" ? "POS: kuryeye verildi, müşteriye 'yola çıktı' bildirildi" : u.event === "DELIVERED" ? "POS: teslim edildi, müşteriye afiyet olsun + değerlendirme gönderildi" : "POS'ta iptal edildi";
-    if (await setStatus(db, cloud, publicBaseUrl, u.id, u.event, why, u.event !== "CANCELLED")) n++;
+    // POS'tan iptal: eklenti yolunda müşteriye bildirilmez; Suitable API yolunda (notifyCancel) müşteriye iptal mesajı gider
+    const notifyCancel = u.event === "CANCELLED" && opts.notifyCancel === true;
+    const why = u.event === "ON_THE_WAY" ? "POS: kuryeye verildi, müşteriye 'yola çıktı' bildirildi" : u.event === "DELIVERED" ? "POS: teslim edildi, müşteriye afiyet olsun + değerlendirme gönderildi" : notifyCancel ? "POS'ta iptal edildi, müşteriye iptal bildirildi" : "POS'ta iptal edildi";
+    if (await setStatus(db, cloud, publicBaseUrl, u.id, u.event, why, u.event !== "CANCELLED" || notifyCancel)) n++;
   }
   return n;
 }

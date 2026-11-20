@@ -126,6 +126,23 @@ export interface ApiEvaluateResult {
   warnings: string[];
 }
 
+/** GET /v1/customers: telefonla tek müşteri (kayıtlı adresler en çok 10, sadakat cüzdanı). Anahtarda customers:read gerekir. */
+export interface ApiCustomer {
+  name?: string;
+  phone?: string;
+  orderCount?: number;
+  addresses?: { title?: string; text?: string; neighborhood?: string; district?: string; city?: string; detail?: string; lat?: number | null; lng?: number | null }[];
+  loyalty?: {
+    points?: number;
+    redeemablePoints?: number;
+    pointValue?: number;
+    tier?: string | null;
+    coupons?: { id: string; name: string; type: string; percent?: number; maxAmount?: number; amount?: number; validTo?: string; selectable?: boolean }[];
+    giftRights?: { id: string; name: string; items?: { name: string; qty: number }[]; selectable?: boolean }[];
+    stampCards?: { campaignId: string; name: string; type: string; label?: string; target: number; progress: number; completedCycles?: number }[];
+  } | null;
+}
+
 export class SuitableClient {
   constructor(
     private readonly cfg: { baseUrl: string; apiKey: string },
@@ -185,6 +202,17 @@ export class SuitableClient {
     if (o.limit) q.set("limit", String(o.limit));
     if (o.cursor) q.set("cursor", o.cursor);
     return this.request("GET", `/orders?${q.toString()}`);
+  }
+  /** Telefonla tek müşteri; işletmede kayıtlı değilse (404) null. Telefon 905XXXXXXXXX ya da +90… olabilir. */
+  async getCustomer(store: string, phone: string): Promise<ApiCustomer | null> {
+    const digits = phone.replace(/\D/g, "");
+    const q = new URLSearchParams({ store, phone: digits.startsWith("0") ? digits : `+${digits}` });
+    try {
+      return await this.request<ApiCustomer>("GET", `/customers?${q.toString()}`);
+    } catch (err) {
+      if (err instanceof SuitableApiError && err.status === 404) return null;
+      throw err;
+    }
   }
   createOrder(body: ApiOrderBody): Promise<ApiOrderResult> {
     return this.request("POST", "/orders", body);

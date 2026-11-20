@@ -107,7 +107,7 @@ export function categoryPage(sections: MenuSection[], page: number): { rows: { i
   const start = starts[p - 1];
   const last = p === pages;
   const slice = withId.slice(start, last ? start + LIST_MAX_SECTIONS : start + CATEGORY_PAGE_SIZE);
-  const rows = slice.map((s) => ({ id: menuCatId(s.categoryId!), title: s.title, description: `${s.retailerIds.length} ürün` }));
+  const rows = slice.map((s) => ({ id: menuCatId(s.categoryId!), title: s.title, description: `${s.retailerIds.length} Ürün Listeleniyor...` }));
   if (!last) rows.push({ id: menuPageId(p + 1), title: "Diğer kategoriler ▶", description: `${withId.length - start - CATEGORY_PAGE_SIZE} kategori daha` });
   return { rows, pages };
 }
@@ -151,6 +151,42 @@ export async function sendMenu(db: PrismaClient, cloud: Messenger, brand: Brand,
   return cloud.sendCatalog(brand.waPhoneNumberId, to, text, await getCatalogThumbnail(db, brand.code));
 }
 
+const MORE_DELAY_MS = (): number => {
+  const v = Number(process.env.MENU_MORE_DELAY_MS);
+  return Number.isFinite(v) && v >= 0 && process.env.MENU_MORE_DELAY_MS !== undefined && process.env.MENU_MORE_DELAY_MS !== "" ? v : 40_000;
+};
+const pendingMore = new Map<string, NodeJS.Timeout>();
+const moreKey = (brandId: number, customerId: number) => `${brandId}:${customerId}`;
+
+/** Müşteri yazdıysa bekleyen "başka kategoriden ekleyin" mesajını iptal eder. */
+export function cancelMoreCategories(brandId: number, customerId: number): void {
+  const key = moreKey(brandId, customerId);
+  const t = pendingMore.get(key);
+  if (t) {
+    clearTimeout(t);
+    pendingMore.delete(key);
+  }
+}
+
+function scheduleMoreCategories(db: PrismaClient, cloud: Messenger, brand: Brand, customer: Customer, plan: MenuListPlan): void {
+  cancelMoreCategories(brand.id, customer.id);
+  const key = moreKey(brand.id, customer.id);
+  const timer = setTimeout(() => {
+    pendingMore.delete(key);
+    void (async () => {
+      const more = "Başka kategoriden eklemek için seçin (sepetiniz korunur). Bitince sepeti gönderin.";
+      try {
+        const wa = await sendCategoryList(cloud, brand, customer.waId!, more, plan, 1);
+        await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: more, waMessageId: wa });
+      } catch (err) {
+        logger.warn({ err: (err as Error).message, brand: brand.code }, "Kategori listesi yeniden gönderilemedi");
+      }
+    })();
+  }, MORE_DELAY_MS());
+  timer.unref?.();
+  pendingMore.set(key, timer);
+}
+
 /**
  * Kategori listesinden seçim (menu:cat:<id>) ya da sonraki sayfa (menu:page:<n>): o kategorinin ürün listesi
  * (30'dan fazlaysa parçalar halinde) ya da kategori listesinin sonraki sayfası gider. Menü seçimi değilse false.
@@ -183,14 +219,9 @@ export async function handleMenuReply(db: PrismaClient, cloud: Messenger | null,
       const wa = await cloud.sendProductList(brand.waPhoneNumberId, customer.waId, { catalogId: brand.metaCatalogId, header: header(brand, ` · ${section.name}${part}`), body, sections: [{ title: section.title, retailerIds: ids }] });
       await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: `${section.name}${part}`, waMessageId: wa });
     }
-    // Ürünlerin hemen altına kategori listesi yeniden: müşteri yukarı kaydırmadan başka kategoriden ekleyebilsin
-    const more = "Başka kategoriden eklemek için seçin (sepetiniz korunur). Bitince sepeti gönderin.";
-    try {
-      const wa = await sendCategoryList(cloud, brand, customer.waId, more, plan, 1);
-      await recordOutbound(db, { brandId: brand.id, customerId: customer.id, type: "catalog", body: more, waMessageId: wa });
-    } catch (err) {
-      logger.warn({ err: (err as Error).message, brand: brand.code }, "Kategori listesi yeniden gönderilemedi");
-    }
+    // Kategori listesi ürünlerin hemen altında DEĞİL: müşteri ürünleri seçip sepete ekleyip sohbete döndüğünde görünsün diye
+    // kısa bir gecikmeyle gönderilir; bu arada müşteri yazarsa (sepeti gönderdi, başka seçim yaptı, mesaj attı) iptal edilir
+    scheduleMoreCategories(db, cloud, brand, customer, plan);
   } catch (err) {
     const reason = (err as Error).message;
     logger.warn({ err: reason, brand: brand.code, id }, "Kategori menüsü gönderilemedi");

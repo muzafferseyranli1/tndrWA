@@ -84,7 +84,7 @@ test("kategori listesi: 10 kategoriye kadar tek sayfa; fazlasında 9 kategori + 
   assert.equal(p1.pages, 2);
   assert.equal(p1.rows.length, 10);
   assert.deepEqual(p1.rows.at(-1), { id: "menu:page:2", title: "Diğer kategoriler ▶", description: "4 kategori daha" });
-  assert.equal(p1.rows[0].description, "2 ürün");
+  assert.equal(p1.rows[0].description, "2 Ürün Listeleniyor...");
   const p2 = categoryPage(secs(13), 2);
   assert.deepEqual(p2.rows.map((r) => r.id), ["menu:cat:10", "menu:cat:11", "menu:cat:12", "menu:cat:13"]);
   const big = categoryPage(secs(25), 2);

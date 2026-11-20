@@ -38,7 +38,7 @@ import { BackupService, backupDue } from "./services/backup";
 import { purgeExpired } from "./services/business";
 import { configureNotice } from "./services/notice";
 import { ensureDefaultChannels } from "./services/channels";
-import { handleOrderReply, offerMergeOrStart } from "./services/order-flow";
+import { handleOrderReply, offerMergeOrStart, setCustomerLookup } from "./services/order-flow";
 import { sendClosedNotice, sendMinBasketNotice, sendPreorderNoticeIfNeeded } from "./services/hours";
 import { applyBundledImages } from "./services/bundled-images";
 import { startOrderTimeouts } from "./services/order-timeouts";
@@ -50,7 +50,7 @@ import { configureTelegramBots } from "./services/telegram-bot";
 import { repeatOrderIfAsked } from "./services/repeat-order";
 import { ensureDefaultPaymentTypes } from "./services/payment";
 import { sendWelcomeIfNeeded } from "./services/chat";
-import { handleMenuReply } from "./services/menu-message";
+import { cancelMoreCategories, handleMenuReply } from "./services/menu-message";
 import { WahaClient } from "./services/waha";
 import { WhatsappCloudClient } from "./services/whatsapp-cloud";
 import { bootstrapBrands } from "./services/brands";
@@ -109,6 +109,7 @@ async function main() {
   const suitableSync = new SuitableSync(db, env.suitable, cloudForAck, env.publicBaseUrl);
   // API yönteminde kampanya/indirimi POS belirler (evaluate); yöntem eklentiyken sağlayıcı kullanılmaz
   setApiDiscountProvider((orderId) => suitableSync.evaluateOrder(orderId));
+  setCustomerLookup((orderId) => suitableSync.lookupCustomer(orderId));
   suitableSync.onPriceChange = (brandId) => posPriceChange(brandId);
   await suitableSync.reload();
   app.use(
@@ -117,12 +118,22 @@ async function main() {
       gateway,
       suitable: suitableSync ?? undefined,
       // Yeni sepet: ödeme şeklini sor (hata sipariş kaydını etkilemez)
-      onOrderCreated: (orderId) =>
-        void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => offerMergeOrStart(db, cloudForAck, orderId)),
-      onRejected: (r) => void (r.reason === "closed" ? sendClosedNotice(db, cloudForAck, r.brand, r.customer) : sendMinBasketNotice(db, cloudForAck, r.brand, r.customer, r.totalKurus, r.minKurus)),
+      onOrderCreated: (orderId) => {
+        // Sepet geldi: bekleyen "başka kategoriden ekleyin" mesajı gönderilmez
+        void db.order
+          .findUnique({ where: { id: orderId }, select: { brandId: true, customerId: true } })
+          .then((o) => o?.customerId && cancelMoreCategories(o.brandId, o.customerId))
+          .catch(() => undefined);
+        void sendPreorderNoticeIfNeeded(db, cloudForAck, orderId).then(() => offerMergeOrStart(db, cloudForAck, orderId));
+      },
+      onRejected: (r) => {
+        cancelMoreCategories(r.brand.id, r.customer.id);
+        void (r.reason === "closed" ? sendClosedNotice(db, cloudForAck, r.brand, r.customer) : sendMinBasketNotice(db, cloudForAck, r.brand, r.customer, r.totalKurus, r.minKurus));
+      },
       // Müşteri yazdı: bekleyen siparişin ödeme/adres adımını işle, yoksa uzun süre sonra ilk mesajsa hoş geldin gönder
       onInbound: (i) =>
         void (async () => {
+          cancelMoreCategories(i.brand.id, i.customer.id); // müşteri yazdı: bekleyen "başka kategoriden ekleyin" mesajı gönderilmez
           if (await repeatOrderIfAsked(db, cloudForAck, i.brand, i.customer, i.message)) return; // "1" = son siparişi tekrarla
           if (await handleMenuReply(db, cloudForAck, i.brand, i.customer, i.raw)) return; // kategori listesinden seçim
           await handleOrderReply(db, cloudForAck, i.brand, i.customer, i.message, i.raw);

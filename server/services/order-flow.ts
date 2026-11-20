@@ -370,9 +370,17 @@ async function reportFailure(db: PrismaClient, o: FullOrder, what: string, body:
   await recordFailedOutbound(db, { brandId: o.brandId, customerId: o.customerId, type: "text", body, waMessageId: null, orderId: o.id, channel: o.channel }, `${what}: ${reason}`).catch(() => undefined);
 }
 
+let customerLookup: ((orderId: number) => Promise<unknown>) | null = null;
+/** Adres sorulmadan önce çağrılır (Suitable müşteri sorgusu); API yöntemi kapalıysa ya da yetki yoksa kendisi atlar. */
+export function setCustomerLookup(fn: ((orderId: number) => Promise<unknown>) | null): void {
+  customerLookup = fn;
+}
+
 /** Adres soru mesajı: kayıtlı adres(ler)e göre düğme/liste; olmazsa ya da gönderilemezse düz metinle adres ister (akış asla susmaz). */
 async function askAddress(db: PrismaClient, cloud: Messenger | null, order: FullOrder): Promise<void> {
   if (!canSend(cloud, order)) return;
+  // Suitable'da kayıtlı adresleri (varsa) müşterinin listesine ekler; hata/yetki yoksa sessizce atlanır
+  if (customerLookup) await customerLookup(order.id).catch(() => undefined);
   const [phoneId, to] = addr(order);
   const saved = await db.customerAddress.findMany({ where: { customerId: order.customerId }, orderBy: [{ lastUsedAt: "desc" }, { id: "desc" }], take: 9 });
 
