@@ -6,6 +6,7 @@
 //   PANEL_URL              varsayılan https://yerinde.derinsoft.com.tr
 //   RUN_AT                 günlük çalışma saati (Türkiye saati, "HH:MM"), varsayılan 04:30
 //   RUN_ON_START=1         açılışta bir kez hemen çalış
+//   SETTLE_MS              girişten sonra uygulamanın oturması için bekleme (ms), varsayılan 30000
 //   HEADED=1               (yalnız kendi bilgisayarınızda deneme) tarayıcıyı görünür aç
 //
 // Kullanım: `node rms-customers.mjs` günlük döngü, `node rms-customers.mjs --once` tek seferlik çalışma.
@@ -97,7 +98,7 @@ async function settle(page) {
     await page.waitForEvent("load", { timeout: 45_000 }).catch(() => undefined);
   }
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-  await page.waitForTimeout(20_000);
+  await page.waitForTimeout(Number(process.env.SETTLE_MS) || 30_000); // uygulamanın oturması için (RMS ~20 sn istiyor, pay bırakıldı)
   await page.addStyleTag({ content: ".Toastify{display:none !important}" }).catch(() => undefined);
 }
 
